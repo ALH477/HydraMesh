@@ -1,0 +1,43 @@
+FROM alpine:edge
+
+# Install required packages for compiling the C SDK
+RUN apk update && apk add --no-cache \
+    cmake \
+    make \
+    g++ \
+    protobuf-c-dev \
+    util-linux-dev \
+    grpc-dev \
+    ncurses-dev \
+    pkgconf \
+    git \
+    wget \
+    unzip \
+    linux-headers && \
+    rm -rf /var/cache/apk/*
+
+# Build and install cJSON from source (since not available as apk package)
+RUN wget https://github.com/DaveGamble/cJSON/archive/refs/tags/v1.7.18.zip && \
+    unzip v1.7.18.zip && \
+    cd cJSON-1.7.18 && \
+    mkdir build && cd build && \
+    cmake .. && \
+    make && \
+    make install && \
+    cd ../.. && \
+    rm -rf cJSON-1.7.18 v1.7.18.zip
+
+# Clone the DCF monorepo and navigate to C SDK
+RUN git clone https://github.com/ALH477/DeMoD-Communication-Framework /dcf && \
+    cd /dcf/c_sdk
+
+# Set working directory to C SDK
+WORKDIR /dcf/c_sdk
+
+# Build the C SDK
+RUN mkdir build && cd build && \
+    cmake .. && \
+    make
+
+# Run the dcf CLI version command as entrypoint (for testing)
+ENTRYPOINT ["./build/dcf", "version", "--json"]
