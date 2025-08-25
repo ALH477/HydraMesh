@@ -1,0 +1,9 @@
+grpcio
+grpcio-tools
+protobuf
+jsonschema
+importlib-resources
+click
+networkx
+pytest
+pytest-cov
