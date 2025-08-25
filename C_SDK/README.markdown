@@ -112,7 +112,7 @@ Use a Nix shell for a declarative, reproducible environment.
 2. **Clone and Build**:
    ```bash
    git clone https://github.com/ALH477/DeMoD-Communication-Framework
-   cd DeMoD-Communication-Framework/c_sdk
+   cd DeMoD-Communication-Framework/C_SDK
    mkdir build && cd build
    cmake .. && make
    ../bin/dcf version --json
