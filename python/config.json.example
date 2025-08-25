@@ -1,0 +1,10 @@
+{
+  "transport": "gRPC",
+  "host": "localhost",
+  "port": 50051,
+  "mode": "auto",
+  "node_id": "node1",
+  "peers": ["localhost:50052"],
+  "group_rtt_threshold": 50,
+  "plugins": {"transport": null}
+}
