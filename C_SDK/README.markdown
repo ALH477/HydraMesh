@@ -41,7 +41,7 @@ Use an Alpine Linux Docker container for a lightweight, reproducible build envir
 
 2. **Build and Run**:
    ```bash
-   cd c_sdk
+   cd C_SDK
    docker build -t dcf-c-sdk .
    docker run --rm dcf-c-sdk
    ```
