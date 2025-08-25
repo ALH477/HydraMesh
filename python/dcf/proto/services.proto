@@ -1,0 +1,9 @@
+syntax = "proto3";
+package dcf;
+import "messages.proto";
+service DCFService {
+    rpc SendMessage(DCFMessage) returns (DCFMessage);
+    rpc ReceiveStream(Empty) returns (stream DCFMessage);
+    rpc HealthCheck(HealthRequest) returns (HealthResponse);
+}
+message Empty {}
