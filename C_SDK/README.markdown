@@ -85,7 +85,7 @@ Use a Nix shell for a declarative, reproducible environment.
 
 2. **Enter Shell and Build**:
    ```bash
-   cd c_sdk
+   cd C_SDK
    nix-shell
    mkdir build && cd build
    cmake .. && make
