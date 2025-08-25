@@ -1,0 +1,17 @@
+syntax = "proto3";
+message DCFMessage {
+    string sender = 1;
+    string recipient = 2;
+    bytes data = 3;
+    int64 timestamp = 4;
+    bool sync = 5;
+    uint32 sequence = 6;
+    string redundancy_path = 7;
+    string group_id = 8;
+    string command = 9;
+    string role = 10;
+    string key = 11;
+    string value = 12;
+}
+message HealthRequest { string peer = 1; }
+message HealthResponse { bool healthy = 1; string status = 2; int32 rtt = 3; }
