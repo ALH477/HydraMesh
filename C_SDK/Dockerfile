@@ -1,4 +1,4 @@
-FROM alpine:edge
+FROM alpine:3.20
 
 # Install required packages for compiling the C SDK
 RUN apk update && apk add --no-cache \
