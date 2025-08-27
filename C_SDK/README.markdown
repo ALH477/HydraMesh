@@ -157,7 +157,7 @@ The `dcf` binary provides a CLI for scripting and operation. All commands suppor
 ### Example secondary Config (`secondary_config.json`)
 ```json
 {
-  "transport": "bluetooth_transport.c",
+  "transport": "gRPC.c",
   "host": "unified.dcf.example",
   "port": 50053,
   "peers": ["unified.dcf.example:50053", "backup.dcf.example:50054"],
