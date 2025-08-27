@@ -141,13 +141,17 @@ The `dcf` binary provides a CLI for scripting and operation. All commands suppor
 ### Example Config (`config.json`)
 ```json
 {
-  "mode": "auto",
-  "node_id": "node1",
-  "peers": ["peer1", "peer2"],
+  "transport": "gRPC",
   "host": "localhost",
   "port": 50051,
-  "rtt_threshold": 50,
-  "plugins": "libcustom.so"
+  "mode": "auto",
+  "node_id": "node1",
+  "peers": ["localhost:50051", "localhost:50052"],
+  "group_rtt_threshold": 50,
+  "plugins": {
+    "transport": "libconfig_unifier.so",
+    "secondary_config": "secondary_config.json"
+  }
 }
 ```
 
