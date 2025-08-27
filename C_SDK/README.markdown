@@ -149,7 +149,7 @@ The `dcf` binary provides a CLI for scripting and operation. All commands suppor
   "peers": ["localhost:50051", "localhost:50052"],
   "group_rtt_threshold": 50,
   "plugins": {
-    "transport": "quic_transport.so",
+    "transport": "bluetooth_transport.so",
     "secondary_config": "secondary_config.json"
   }
 }
