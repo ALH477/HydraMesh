@@ -149,11 +149,12 @@ The `dcf` binary provides a CLI for scripting and operation. All commands suppor
   "peers": ["localhost:50051", "localhost:50052"],
   "group_rtt_threshold": 50,
   "plugins": {
-    "transport": "bluetooth_transport.c",
+    "transport": "libconfig_unifier.so",
     "secondary_config": "secondary_config.json"
   }
 }
 ```
+### Example secondary Config (`secondary_config.json`)
 ```json
 {
   "transport": "bluetooth_transport.c",
