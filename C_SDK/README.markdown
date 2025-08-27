@@ -149,9 +149,18 @@ The `dcf` binary provides a CLI for scripting and operation. All commands suppor
   "peers": ["localhost:50051", "localhost:50052"],
   "group_rtt_threshold": 50,
   "plugins": {
-    "transport": "bluetooth_transport.so",
+    "transport": "bluetooth_transport.c",
     "secondary_config": "secondary_config.json"
   }
+}
+```
+```json
+{
+  "transport": "bluetooth_transport.c",
+  "host": "unified.dcf.example",
+  "port": 50053,
+  "peers": ["unified.dcf.example:50053", "backup.dcf.example:50054"],
+  "group_rtt_threshold": 40
 }
 ```
 
