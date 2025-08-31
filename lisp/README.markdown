@@ -1,5 +1,3 @@
-
-
 # DeMoD-LISP (D-LISP) SDK for DeMoD Communication Framework (DCF)
 
 **Version 1.7.0** | **Updated: September 3, 2025**  
