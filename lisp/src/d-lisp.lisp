@@ -1,28 +1,19 @@
 ;; DeMoD-LISP (D-LISP) SDK Implementation
-;; Version 1.4.0 | September 2, 2025
+;; Version 1.7.0 | September 3, 2025
 ;; License: GNU General Public License v3.0 (GPL-3.0)
 ;; Part of the DCF mono repo: https://github.com/ALH477/DeMoD-Communication-Framework
 ;; This SDK provides a robust, production-ready Lisp implementation for DCF,
 ;; with full support for modular components, plugins, AUTO mode, master node,
 ;; self-healing P2P redundancy, gRPC/Protobuf interoperability, CLI/TUI,
 ;; comprehensive error handling, logging, and performance optimizations.
-;; Enhanced in v1.4.0 with:
-;; - Middleware system for protocol customization.
-;; - Formal type system for network messages using CLOS.
-;; - Additional diagnostic and debugging tools (e.g., trace-message, debug-network).
-;; - Simpler facade API for common use cases (e.g., quick-start-client).
-;; - More automated testing for network scenarios in FiveAM.
-;; - Improved documentation with more examples in comments and help.
-;; - Static analysis support via type declarations.
-;; - Connection pooling for gRPC and native transports.
-;; - Metrics and monitoring capabilities (e.g., get-metrics).
-;; - Visual debugger for network topology using Graphviz DOT output.
+;; Enhanced in v1.7.0 with:
+;; - Support for LoRaWAN transport plugin via CFFI bindings.
 
 ;; Dependencies: Install via Quicklisp
-(ql:quickload '(:cl-protobufs :cl-grpc :cffi :uuid :cl-json :jsonschema :cl-ppcre :cl-csv :usocket :bordeaux-threads :curses :log4cl :trivial-backtrace :cl-store :mgl :hunchensocket :fiveam :cl-dot))
+(ql:quickload '(:cl-protobufs :cl-grpc :cffi :uuid :cl-json :jsonschema :cl-ppcre :cl-csv :usocket :bordeaux-threads :curses :log4cl :trivial-backtrace :cl-store :mgl :hunchensocket :fiveam :cl-dot :cl-lsquic :cl-serial :cl-can :cl-sctp :cl-zigbee :cl-lorawan))
 
 (defpackage :d-lisp
-  (:use :cl :cl-protobufs :cl-grpc :cffi :uuid :cl-json :jsonschema :cl-ppcre :cl-csv :usocket :bordeaux-threads :curses :log4cl :trivial-backtrace :cl-store :mgl :hunchensocket :fiveam :cl-dot)
+  (:use :cl :cl-protobufs :cl-grpc :cffi :uuid :cl-json :jsonschema :cl-ppcre :cl-csv :usocket :bordeaux-threads :curses :log4cl :trivial-backtrace :cl-store :mgl :hunchensocket :fiveam :cl-dot :cl-lsquic :cl-serial :cl-can :cl-sctp :cl-zigbee :cl-lorawan)
   (:export :dcf-init :dcf-start :dcf-stop :dcf-send :dcf-receive :dcf-status
            :dcf-health-check :dcf-list-peers :dcf-heal :dcf-version :dcf-benchmark
            :dcf-group-peers :dcf-simulate-failure :dcf-log-level :dcf-load-plugin
@@ -72,7 +63,7 @@
   (unless (stringp (group-id msg)) (signal-dcf-error :type-error "Group-id must be a string")))
 
 ;; Configuration Structure with Serialization and Type Declarations
-(deftype transport-type () '(member "gRPC" "native-lisp" "WebSocket"))
+(deftype transport-type () '(member "gRPC" "native-lisp" "WebSocket" "udp" "quic" "bluetooth" "serial" "can" "sctp" "zigbee" "lorawan"))
 (defstruct (dcf-config (:constructor make-dcf-config%)
                        (:conc-name dcf-config-))
   (transport "gRPC" :type transport-type)
@@ -83,7 +74,14 @@
   (peers '() :type list)
   (group-rtt-threshold 50 :type (integer 0 1000))
   (plugins (make-hash-table :test 'equal) :type hash-table)
-  (state-file "dcf-state.bin" :type string))
+  (state-file "dcf-state.bin" :type string)
+  (serial-port "/dev/ttyUSB0" :type string)
+  (baud-rate 9600 :type (integer 300 115200))
+  (can-interface "can0" :type string)
+  (zigbee-device "/dev/ttyACM0" :type string)
+  (lorawan-device "/dev/ttyACM1" :type string)
+  (lorawan-app-eui "0000000000000000" :type string)
+  (lorawan-app-key "00000000000000000000000000000000" :type string))
 
 (defun make-dcf-config (&rest args)
   "Create and persist configuration."
@@ -108,7 +106,14 @@
            :node-id (or (cdr (assoc :node-id json)) (uuid:print-bytes nil (uuid:make-v4-uuid)))
            :peers (cdr (assoc :peers json))
            :group-rtt-threshold (or (cdr (assoc :group-rtt-threshold json)) 50)
-           :plugins (or (cdr (assoc :plugins json)) (make-hash-table :test 'equal)))))
+           :plugins (or (cdr (assoc :plugins json)) (make-hash-table :test 'equal))
+           :serial-port (or (cdr (assoc :serial-port json)) "/dev/ttyUSB0")
+           :baud-rate (or (cdr (assoc :baud-rate json)) 9600)
+           :can-interface (or (cdr (assoc :can-interface json)) "can0")
+           :zigbee-device (or (cdr (assoc :zigbee-device json)) "/dev/ttyACM0")
+           :lorawan-device (or (cdr (assoc :lorawan-device json)) "/dev/ttyACM1")
+           :lorawan-app-eui (or (cdr (assoc :lorawan-app-eui json)) "0000000000000000")
+           :lorawan-app-key (or (cdr (assoc :lorawan-app-key json)) "00000000000000000000000000000000"))))
     (file-error (e) (signal-dcf-error :file-not-found (format nil "Config file not found: ~A" path)))
     (jsonschema:validation-error (e) (signal-dcf-error :schema-violation (format nil "Schema violation: ~A" e)))))
 
@@ -143,8 +148,8 @@
 (defun initialize-node (config)
   "Initialize node based on mode, with native transport option."
   (let ((node (make-instance 'dcf-node :mode (dcf-config-mode config) :config config)))
-    (when (string= (dcf-config-transport config) "native-lisp")
-      (setup-native-transport node))
+    (when (member (dcf-config-transport config) '("native-lisp" "udp" "quic" "bluetooth" "serial" "can" "sctp" "zigbee" "lorawan") :test #'string=)
+      (setup-transport node (dcf-config-transport config)))
     (initialize-connection-pool node)
     (case (intern (string-upcase (dcf-config-mode config)))
       (:server (setup-server node))
@@ -155,6 +160,28 @@
       (t (signal-dcf-error :invalid-mode (format nil "Unknown mode: ~A" (dcf-config-mode config)))))
     (log:info *dcf-logger* "Node initialized in ~A mode with transport ~A" (mode node) (dcf-config-transport config))
     node))
+
+(defun setup-transport (node transport)
+  "Setup specific transport based on config."
+  (cond
+    ((string= transport "native-lisp") (setup-native-transport node))
+    ((string= transport "udp") (setup-udp-transport node))
+    ((string= transport "quic") (setup-quic-transport node))
+    ((string= transport "bluetooth") (setup-bluetooth-transport node))
+    ((string= transport "serial") (setup-serial-transport node))
+    ((string= transport "can") (setup-can-transport node))
+    ((string= transport "sctp") (setup-sctp-transport node))
+    ((string= transport "zigbee") (setup-zigbee-transport node))
+    ((string= transport "lorawan") (setup-lorawan-transport node))))
+
+(defun setup-lorawan-transport (node)
+  "Setup LoRaWAN transport using cl-lorawan."
+  (let ((lorawan (lorawan-initialize (dcf-config-lorawan-device (config node))
+                                     :app-eui (dcf-config-lorawan-app-eui (config node))
+                                     :app-key (dcf-config-lorawan-app-key (config node)))))
+    (lorawan-join-network lorawan)
+    (setf (gethash "lorawan" (plugins node)) lorawan)
+    (log:info *dcf-logger* "LoRaWAN transport setup on device ~A" (dcf-config-lorawan-device (config node)))))
 
 ;; Connection Pooling
 (defun initialize-connection-pool (node)
@@ -438,7 +465,7 @@ Example: (dcf-heal \"localhost:50052\")"
 (defun dcf-version ()
   "Get version information.
 Example: (dcf-version)"
-  `(:version "1.4.0" :dcf-version "5.0.0"))
+  `(:version "1.7.0" :dcf-version "5.0.0"))
 
 (defun dcf-benchmark (peer &key iterations)
   "Benchmark RTT over iterations.
@@ -483,7 +510,7 @@ Example: (dcf-log-level 0) ; Debug mode"
 
 (defun dcf-load-plugin (path)
   "Load a plugin.
-Example: (dcf-load-plugin \"websocket-transport.lisp\")"
+Example: (dcf-load-plugin \"lisp/plugins/udp-transport.lisp\")"
   (load-plugin *node* path)
   `(:status "plugin-loaded" :path ,path))
 
@@ -547,7 +574,7 @@ Example: (dcf-tui)"
         (let ((main-win (curses:newwin (curses:lines) (curses:cols) 0 0))
               (input-win (curses:newwin 3 (curses:cols) (- (curses:lines) 3) 0)))
           (curses:wborder main-win)
-          (curses:mvwprintw main-win 1 1 "DeMoD-LISP TUI v1.4.0")
+          (curses:mvwprintw main-win 1 1 "DeMoD-LISP TUI v1.7.0")
           (curses:mvwprintw main-win 2 1 "Status: ~A" (getf (dcf-status) :status))
           (curses:wrefresh main-win)
           (loop
@@ -847,7 +874,7 @@ Example: (dcf-master-optimize-network)"
 
 #+fiveam
 (fiveam:test version-test
-  (fiveam:is (equal (dcf-version) '(:version "1.4.0" :dcf-version "5.0.0"))))
+  (fiveam:is (equal (dcf-version) '(:version "1.7.0" :dcf-version "5.0.0"))))
 
 #+fiveam
 (fiveam:test middleware-test
@@ -887,6 +914,68 @@ Example: (dcf-master-optimize-network)"
     (delete-file "test.dot")))
 
 #+fiveam
+(fiveam:test config-validation-test
+  (let ((valid-config-path "test-config.json"))
+    (with-open-file (stream valid-config-path :direction :output :if-exists :supersede)
+      (cl-json:encode-json
+       '((:transport . "gRPC") (:host . "localhost") (:port . 50051) (:mode . "client") (:node-id . "test-node"))
+       stream))
+    (fiveam:is (equal (getf (dcf-init valid-config-path) :status) "success"))
+    (delete-file valid-config-path)))
+
+#+fiveam
+(fiveam:test websocket-plugin-test
+  (fiveam:is (equal (plugin-interface-version websocket-transport) "1.0")))
+
+#+fiveam
+(fiveam:test udp-plugin-test
+  (let ((config (make-dcf-config :transport "udp")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "udp-socket" (plugins *node*)))))))
+
+#+fiveam
+(fiveam:test quic-plugin-test
+  (let ((config (make-dcf-config :transport "quic")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "quic-engine" (plugins *node*)))))))
+
+#+fiveam
+(fiveam:test bluetooth-plugin-test
+  (let ((config (make-dcf-config :transport "bluetooth")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "bt-dd" (plugins *node*)))))))
+
+#+fiveam
+(fiveam:test serial-plugin-test
+  (let ((config (make-dcf-config :transport "serial")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "serial-port" (plugins *node*)))))))
+
+#+fiveam
+(fiveam:test can-plugin-test
+  (let ((config (make-dcf-config :transport "can")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "can" (plugins *node*)))))))
+
+#+fiveam
+(fiveam:test sctp-plugin-test
+  (let ((config (make-dcf-config :transport "sctp")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "sctp" (plugins *node*)))))))
+
+#+fiveam
+(fiveam:test zigbee-plugin-test
+  (let ((config (make-dcf-config :transport "zigbee")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "zigbee" (plugins *node*)))))))
+
+#+fiveam
+(fiveam:test lorawan-plugin-test
+  (let ((config (make-dcf-config :transport "lorawan")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "lorawan" (plugins *node*)))))))
+
+#+fiveam
 (defun run-tests ()
   "Run all FiveAM tests."
   (fiveam:run! 'd-lisp-suite)
@@ -903,7 +992,7 @@ DCF is a free, open-source (FOSS) framework for low-latency data exchange in app
 
 **Key Concepts for Beginners:**
 - **Modes**: Client (send/receive), Server (host), P2P (peer-to-peer with self-healing), AUTO (dynamic role switching via master node), Master (controls AUTO nodes).
-- **Transports**: gRPC (default), Native Lisp (lightweight TCP), WebSocket (web-friendly via plugin).
+- **Transports**: gRPC (default), Native Lisp (lightweight TCP), WebSocket (web-friendly via plugin), UDP (low-latency datagrams), QUIC (multiplexed UDP), Bluetooth (wireless short-range), Serial (embedded hardware), CAN (automotive/industrial), SCTP (reliable multi-stream), Zigbee (low-power mesh), LoRaWAN (long-range low-power).
 - **Plugins**: Extend functionality, e.g., custom transports. Define with (def-dcf-plugin ...).
 - **Middleware**: Customize protocols by adding functions to process messages, e.g., (add-middleware (lambda (msg dir) ...)).
 - **Type System**: Messages use CLOS classes with type checks for safety.
@@ -918,11 +1007,16 @@ DCF is a free, open-source (FOSS) framework for low-latency data exchange in app
 3. **Load D-LISP**: sbcl --load lisp/src/d-lisp.lisp
 4. **Quick Start**: (dcf-quick-start-client \"config.json\")
 5. **Send Message**: (dcf-quick-send \"Hello\" \"localhost:50052\")
-6. **Add Middleware**: (add-middleware (lambda (msg dir) (format t \"Processing ~A\" dir) msg))
-7. **Visualize**: (dcf-visualize-topology)
-8. **Help in CLI**: sbcl --eval '(d-lisp:main \"help\")'
-9. **TUI**: (dcf-tui) for interactive mode.
-10. **Run Tests**: (run-tests) or CLI \"run-tests\".
+6. **Load UDP Plugin**: (dcf-load-plugin \"lisp/plugins/udp-transport.lisp\")
+7. **Load QUIC Plugin**: (dcf-load-plugin \"lisp/plugins/quic-transport.lisp\")
+8. **Load Bluetooth Plugin**: (dcf-load-plugin \"lisp/plugins/bluetooth-transport.lisp\")
+9. **Load Serial Plugin**: (dcf-load-plugin \"lisp/plugins/serial-transport.lisp\")
+10. **Load CAN Plugin**: (dcf-load-plugin \"lisp/plugins/can-transport.lisp\")
+11. **Load SCTP Plugin**: (dcf-load-plugin \"lisp/plugins/sctp-transport.lisp\")
+12. **Load Zigbee Plugin**: (dcf-load-plugin \"lisp/plugins/zigbee-transport.lisp\")
+13. **Load LoRaWAN Plugin**: (dcf-load-plugin \"lisp/plugins/lorawan-transport.lisp\")
+14. **Visualize**: (dcf-visualize-topology)
+15. **Run Tests**: (run-tests) or CLI \"run-tests\".
 
 **Common Commands (CLI/TUI):**
 - init [config.json]: Load config.
@@ -938,7 +1032,7 @@ DCF is a free, open-source (FOSS) framework for low-latency data exchange in app
 - group-peers: Regroup by RTT.
 - simulate-failure [peer]: Test failover.
 - log-level [0/1/2]: Set logging (debug/info/error).
-- load-plugin [path]: Load plugin.
+- load-plugin [path]: Load plugin (e.g., udp-transport.lisp).
 - add-middleware [fn]: Add protocol customizer.
 - trace-message [msg]: Trace through middleware.
 - debug-network: Debug network state.
@@ -954,7 +1048,7 @@ DCF is a free, open-source (FOSS) framework for low-latency data exchange in app
 **Tips for New Users:**
 - Start with 'client' mode and gRPC transport.
 - Use facade APIs for simplicity, then explore advanced features.
-- For customization, add middlewares or plugins.
+- For customization, add middlewares or plugins like UDP for low-latency.
 - Monitor with metrics; visualize topology for debugging.
 - Read docs/dcf_design_spec.md in repo for architecture.
 - For errors, check logs (set log-level 0 for debug).
