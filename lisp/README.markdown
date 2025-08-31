@@ -1,143 +1,58 @@
-# DeMoD-LISP (D-LISP) SDK
+DeMoD-LISP (D-LISP) SDK for DeMoD Communication Framework (DCF)
+Version 1.7.0 | Updated: August 30, 2025Developed by DeMoD LLC with contributions from Grok 4 Heavy (xAI)License: GNU General Public License v3.0 (GPL-3.0)Repository: https://github.com/ALH477/DeMoD-Communication-Framework
+Overview
+DeMoD-LISP (D-LISP) is a high-performance, production-ready Common Lisp implementation of the DeMoD Communication Framework (DCF), a free and open-source (FOSS) framework designed for low-latency, modular, and interoperable data exchange. Tailored for applications in IoT, gaming, distributed computing, and edge networking, D-LISP provides a robust Domain-Specific Language (DSL) for seamless integration with DCF's modular architecture. It supports multiple transport protocols, self-healing P2P redundancy, and AI-driven network optimization, making it ideal for developers building scalable, fault-tolerant communication systems.
+This SDK, developed by DeMoD LLC with significant contributions from Grok 4 Heavy (xAI's advanced AI model), emphasizes reliability, extensibility, and compliance with U.S. export regulations (no encryption by default). It is part of the DCF mono repository and interoperates with other language SDKs (e.g., C, Python) for cross-platform compatibility.
+Key Features
 
-**Version 1.7.0 | August 30, 2025**  
-**Developed by DeMoD LLC with contributions from Grok 4**  
-**Contact:** info@demod.ltd  
-**License:** GNU General Public License v3.0 (GPL-3.0)  
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)  
+Modular Transport Support: Includes gRPC (default), Native Lisp (TCP), WebSocket, UDP, QUIC, Bluetooth, Serial, CAN, SCTP, Zigbee, and LoRaWAN via plugins.
+Operating Modes: Supports Client, Server, P2P, AUTO (dynamic role switching), and Master modes for flexible network configurations.
+Self-Healing P2P: Implements Dijkstra-based routing with RTT-based peer grouping (<50ms threshold) for automatic failover and redundancy.
+Plugin System: Extensible via def-dcf-plugin macro, allowing custom transports (e.g., LoRaWAN plugin for long-range IoT).
+Middleware Framework: Customizable message processing with a chainable middleware system.
+Type Safety: Leverages CLOS with strict type declarations for messages and configurations.
+AI-Driven Optimization: Uses MGL neural networks for dynamic network topology optimization in Master mode.
+Monitoring & Debugging: Comprehensive metrics collection, Graphviz topology visualization, and an interactive TUI (ncurses-based).
+Interoperability: Supports gRPC/Protobuf for cross-language communication with other DCF SDKs.
+Testing: Integrated FiveAM test suite for robust validation.
+Configuration: JSON-based configuration with schema validation for reliability.
 
-## Overview
-The DeMoD-LISP (D-LISP) SDK is a Common Lisp-based implementation of the DeMoD Communications Framework (DCF), an open-source, modular framework for low-latency data exchange in applications such as IoT messaging, real-time gaming synchronization, distributed computing, and edge networking. D-LISP leverages Lisp's expressive S-expression syntax, macro system, and dynamic typing to provide a flexible, extensible, and high-performance interface for DCF's networking capabilities.
-
-D-LISP is hardware and language agnostic, supporting embedded devices (e.g., Raspberry Pi), cloud servers, and mobile platforms. It is fully interoperable with other DCF SDKs (e.g., C, Python) via Protocol Buffers and gRPC. Version 1.7.0 introduces support for additional transport plugins, including LoRaWAN for long-range, low-power IoT communication.
-
-Developed by DeMoD LLC with heavy contributions from Grok 4, D-LISP is licensed under GPL-3.0, ensuring open-source derivatives. It includes CLI, TUI, middleware, type safety, connection pooling, metrics, and visualization tools, making it versatile for standalone tools, libraries, or networked services.
-
-> **Important**: D-LISP complies with U.S. export regulations (EAR and ITAR). It avoids encryption to remain export-control-free. Users must ensure custom extensions comply; consult legal experts for specific use cases. DeMoD LLC disclaims liability for non-compliant modifications.
-
-## Features
-- **Modularity**: Independent components with standardized APIs; plugin system for custom transports (e.g., UDP, QUIC, Bluetooth, Serial, CAN, SCTP, Zigbee, LoRaWAN).
-- **Interoperability**: Protocol Buffers and gRPC ensure cross-language compatibility with Perl, Python, C, C++, JS, Go, Rust, Java, Swift.
-- **Low Latency**: Sub-millisecond exchanges with handshakeless design; supports multiple transports for real-time applications.
-- **Flexibility**: Compatibility layer for gRPC, native Lisp, WebSocket, and custom plugins; middleware for protocol customization.
-- **Dynamic Role Assignment**: AUTO mode for role switching under master node control, with AI-driven optimization using MGL.
-- **Self-Healing P2P**: RTT-based grouping (<50ms clusters), Dijkstra routing, and failover.
-- **Type Safety**: CLOS-based messages with type declarations and validation.
-- **Diagnostics**: Middleware tracing, network debugging, metrics monitoring, and Graphviz topology visualization.
-- **Usability**: CLI for automation, TUI for monitoring; facade API for simple use cases; FiveAM testing.
-- **Open Source**: GPL-3.0 ensures transparency and community contributions.
-
-## Architecture
-```mermaid
-graph TD
-    A[D-LISP SDK] --> B[CLI]
-    A --> C[TUI]
-    A --> D[Networking Layer]
-    
-    D --> E[Server Mode]
-    D --> F[Client Mode]
-    D --> G[P2P Mode]
-    D --> H[AUTO Mode]
-    H --> I[Master Node]
-    I --> J[Role Assignment]
-    I --> K[Config Management]
-    I --> L[Metrics Collection]
-    L --> M[AI Optimization (MGL)]
-    G --> N[Self-Healing Redundancy]
-    N --> O[Peer Discovery]
-    N --> P[Failure Detection]
-    N --> Q[RTT-Based Grouping]
-    
-    D --> R[Transport Layer]
-    R --> S[gRPC]
-    R --> T[Native Lisp (USocket)]
-    R --> U[WebSocket (Hunchensocket)]
-    R --> V[UDP]
-    R --> W[QUIC (cl-lsquic)]
-    R --> X[Bluetooth]
-    R --> Y[Serial]
-    R --> Z[CAN]
-    R --> AA[SCTP]
-    R --> AB[Zigbee]
-    R --> AC[LoRaWAN]
-    R --> AD[Custom Plugins]
-    
-    D --> AE[Middleware Chain]
-    AE --> AF[Protocol Customization]
-    
-    D --> AG[Protocol Buffers]
-    AG --> AH[Serialization/Deserialization]
-    
-    A --> AI[Language Bindings]
-    AI --> AJ[Common Lisp (SBCL)]
-    
-    A --> AK[Platform Support]
-    AK --> AL[Embedded Devices (RPi)]
-    AK --> AM[Cloud Servers]
-    AK --> AN[Mobile (via Plugins)]
-    
-    A --> AO[Tools]
-    AO --> AP[CLI/TUI]
-    AO --> AQ[Facade API]
-    AO --> AR[Diagnostics (Trace, Debug)]
-    AO --> AS[Metrics & Monitoring]
-    AO --> AT[Visualization (Graphviz)]
-    AO --> AU[FiveAM Testing]
-
-Installation
-Clone the repository with submodules:
-git clone --recurse-submodules https://github.com/ALH477/DeMoD-Communication-Framework.git
-cd DeMoD-Communication-Framework/lisp
-
+Getting Started
 Prerequisites
 
-Common Lisp: SBCL (recommended).
-Quicklisp: For dependency management.
-Libraries: cl-protobufs, cl-grpc, cffi, uuid, cl-json, jsonschema, cl-ppcre, cl-csv, usocket, bordeaux-threads, curses, log4cl, trivial-backtrace, cl-store, mgl, hunchensocket, fiveam, cl-dot, cl-lsquic, cl-serial, cl-can, cl-sctp, cl-zigbee, cl-lorawan.
-
-Build Steps
-
-Generate Protobuf/gRPC Stubs:protoc --lisp_out=lisp/src proto/messages.proto proto/services.proto
+Common Lisp Environment: SBCL (recommended) or another compatible Lisp implementation.
+Quicklisp: For dependency management (install Quicklisp).
+Dependencies: Install via Quicklisp:(ql:quickload '(:cl-protobufs :cl-grpc :cffi :uuid :cl-json :jsonschema :cl-ppcre :cl-csv :usocket :bordeaux-threads :curses :log4cl :trivial-backtrace :cl-store :mgl :hunchensocket :fiveam :cl-dot :cl-lsquic :cl-serial :cl-can :cl-sctp :cl-zigbee :cl-lorawan))
 
 
-Load Dependencies:(ql:quickload :d-lisp)
-
-
-Build ASDF System:(asdf:load-system :d-lisp)
+Optional: For specific transports:
+Serial: libserialport
+CAN: libsocketcan
+SCTP: libsctp
+Zigbee: libzigbee
+LoRaWAN: liblorawan (e.g., LMIC or Semtech stack)
 
 
 
-Usage Examples
-Quick Start Client
-(dcf-quick-start-client "config.json")
-(dcf-quick-send "Hello, DCF!" "localhost:50052")
+Installation
 
-Load Plugin (e.g., LoRaWAN)
-(dcf-load-plugin "lisp/plugins/lorawan-transport.lisp")
-(dcf-set-mode "p2p")
-(dcf-start)
+Clone the Repository:
+git clone https://github.com/ALH477/DeMoD-Communication-Framework --recurse-submodules
+cd DeMoD-Communication-Framework
 
-Send Message with Middleware
-(add-middleware (lambda (msg dir) (format t "Processing ~A~%" dir) msg))
-(dcf-send "Test" "recipient")
 
-Visualize Topology
-(dcf-visualize-topology "network.dot")
+Load D-LISP:Start SBCL and load the SDK:
+(load "lisp/src/d-lisp.lisp")
 
-Run Tests
-(run-tests)
 
-Configuration
-Create config.json based on config.json.example:
+Create a Configuration File (config.json):
 {
   "transport": "gRPC",
   "host": "localhost",
   "port": 50051,
   "mode": "client",
-  "node-id": "node1",
+  "node-id": "node-1",
   "peers": ["localhost:50052"],
-  "group-rtt-threshold": 50,
-  "plugins": {},
   "serial-port": "/dev/ttyUSB0",
   "baud-rate": 9600,
   "can-interface": "can0",
@@ -147,30 +62,101 @@ Create config.json based on config.json.example:
   "lorawan-app-key": "00000000000000000000000000000000"
 }
 
-For LoRaWAN:
-{
-  "transport": "lorawan",
-  "lorawan-device": "/dev/ttyACM1",
-  "lorawan-app-eui": "0000000000000000",
-  "lorawan-app-key": "00000000000000000000000000000000"
-}
 
-Testing
-Run tests with:
+Quick Start:Initialize and start a client node:
+(in-package :d-lisp)
+(dcf-quick-start-client "config.json")
 
-Lisp: (asdf:test-system :d-lisp)
-CLI: sbcl --eval "(asdf:test-system :d-lisp)" --quit
+
+Send a Test Message:
+(dcf-quick-send "Hello, DCF!" "localhost:50052")
+
+
+
+Example Usage
+
+Load a Plugin (e.g., LoRaWAN for IoT):
+(dcf-load-plugin "lisp/plugins/lorawan-transport.lisp")
+
+
+Visualize Network Topology:
+(dcf-visualize-topology "topology.dot")
+
+
+Run Tests:
+(run-tests)
+
+
+Launch TUI:
+(dcf-tui)
+
+
+
+CLI Commands
+D-LISP provides a robust CLI interface for managing nodes and debugging:
+
+init [config.json]: Initialize with a configuration file.
+start: Start the node.
+stop: Stop the node gracefully.
+send [data] [recipient]: Send a message.
+receive: Receive messages.
+status: Display node status.
+health-check [peer]: Check peer health and RTT.
+list-peers: List peers with group information.
+heal [peer]: Trigger failover for a peer.
+benchmark [peer]: Measure RTT over iterations.
+group-peers: Regroup peers by RTT.
+simulate-failure [peer]: Test failover by simulating peer failure.
+log-level [0/1/2]: Set logging level (debug/info/error).
+load-plugin [path]: Load a plugin (e.g., lisp/plugins/lorawan-transport.lisp).
+trace-message [msg]: Trace a message through middleware.
+debug-network: Debug network state.
+quick-start-client [config]: Initialize and start a client.
+quick-send [data] [recipient]: Simple message send.
+get-metrics: Retrieve monitoring metrics.
+visualize-topology [file]: Generate Graphviz DOT file for topology.
+master-assign-role [peer] [role]: Assign role in Master mode.
+master-optimize-network: Optimize topology using AI.
+run-tests: Run FiveAM tests.
+help: Display beginner-friendly guidance.
+
+Run commands via:
+sbcl --load lisp/src/d-lisp.lisp --eval '(d-lisp:main "command" "arg1" "arg2")'
+
+LoRaWAN Plugin
+The LoRaWAN plugin enables long-range, low-power communication for IoT applications. It uses CFFI bindings to liblorawan (e.g., LMIC or Semtech stack) and supports OTAA/ABP activation. Configuration parameters include:
+
+lorawan-device: Serial device path (e.g., /dev/ttyACM1).
+lorawan-app-eui: Application EUI (16 hex digits).
+lorawan-app-key: Application key (32 hex digits).
+
+Example:
+(dcf-load-plugin "lisp/plugins/lorawan-transport.lisp")
+(dcf-quick-send "Sensor data" "lorawan:device-address")
 
 Contributing
-Contributions are welcome! Follow these steps:
+We welcome contributions! Please follow these steps:
 
-Fork the repo.
-Create a feature branch (git checkout -b feature/xyz).
-Add tests and code (follow Lisp style guidelines).
-Submit a PR with a clear description.
-Discuss issues via GitHub Issues.
+Fork the repository.
+Create a feature branch (git checkout -b feature/your-feature).
+Commit changes (git commit -m "Add your feature").
+Push to the branch (git push origin feature/your-feature).
+Open a Pull Request.
 
-New plugins and transports are encouraged; ensure GPL-3.0 compliance and FiveAM tests.
-Documentation
-See docs/dcf_design_spec.md for detailed architecture, SDK guidelines, plugin system, AUTO mode, and testing.
-Developed by DeMoD LLC with heavy contributions from Grok 4.```
+See CONTRIBUTING.md in the repository for detailed guidelines.
+Support
+
+Issues: Report bugs or feature requests on GitHub Issues.
+Documentation: Read docs/dcf_design_spec.md for architecture details.
+Community: Join discussions on the DeMoD LLC community forum (link TBD).
+
+Acknowledgments
+
+DeMoD LLC: Core development and project leadership.
+Grok 4 Heavy (xAI): AI-driven optimizations and code contributions.
+Open-Source Community: For libraries like cl-grpc, cffi, and mgl.
+
+License
+This project is licensed under the GNU General Public License v3.0 (GPL-3.0). See LICENSE for details.
+
+DeMoD LLC | Empowering Scalable, Fault-Tolerant CommunicationBuilt with ❤️ and Lisp | Powered by Grok 4 Heavy
