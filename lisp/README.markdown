@@ -4,7 +4,7 @@
 **Developed by DeMoD LLC** with contributions from **Grok 4 Heavy** (xAI)  
 **License**: GNU General Public License v3.0 (GPL-3.0)  
 **Repository**: [https://github.com/ALH477/DeMoD-Communication-Framework](https://github.com/ALH477/DeMoD-Communication-Framework)
-
+(https://youtu.be/IXbIB8jCvDE)
 ## Overview
 
 DeMoD-LISP (D-LISP) is a high-performance, production-ready Common Lisp implementation of the DeMoD Communication Framework (DCF), a free and open-source (FOSS) framework designed for low-latency, modular, and interoperable data exchange. Tailored for applications in IoT, gaming, distributed computing, and edge networking, D-LISP provides a robust Domain-Specific Language (DSL) for seamless integration with DCF's modular architecture. It supports multiple transport protocols, self-healing P2P redundancy, and AI-driven network optimization, making it ideal for developers building scalable, fault-tolerant communication systems.
