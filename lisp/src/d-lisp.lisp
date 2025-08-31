@@ -52,28 +52,41 @@
 (defclass dcf-message ()
   ((sender :initarg :sender :accessor sender :type string)
    (recipient :initarg :recipient :accessor recipient :type string)
-   (data :initarg :data :accessor data :type (or string bytes))
+   (data :initarg :data :accessor data :type (or string (simple-array (unsigned-byte 8) (*))))
    (timestamp :initarg :timestamp :accessor timestamp :type integer)
    (sync :initarg :sync :accessor sync :type boolean)
-   (sequence :initarg :sequence :accessor sequence :type unsigned-byte)
+   (sequence :initarg :sequence :accessor sequence :type (unsigned-byte 32))
    (redundancy-path :initarg :redundancy-path :accessor redundancy-path :type string)
    (group-id :initarg :group-id :accessor group-id :type string))
   (:documentation "Formal CLOS class for DCF messages with type declarations."))
 
 (defmethod initialize-instance :after ((msg dcf-message) &key)
   (unless (stringp (sender msg)) (signal-dcf-error :type-error "Sender must be a string"))
-  ;; Add similar type checks for other slots
-  )
+  (unless (stringp (recipient msg)) (signal-dcf-error :type-error "Recipient must be a string"))
+  (unless (or (stringp (data msg)) (typep (data msg) '(simple-array (unsigned-byte 8) (*))))
+    (signal-dcf-error :type-error "Data must be a string or byte array"))
+  (unless (integerp (timestamp msg)) (signal-dcf-error :type-error "Timestamp must be an integer"))
+  (unless (booleanp (sync msg)) (signal-dcf-error :type-error "Sync must be a boolean"))
+  (unless (typep (sequence msg) '(unsigned-byte 32)) (signal-dcf-error :type-error "Sequence must be an unsigned 32-bit integer"))
+  (unless (stringp (redundancy-path msg)) (signal-dcf-error :type-error "Redundancy-path must be a string"))
+  (unless (stringp (group-id msg)) (signal-dcf-error :type-error "Group-id must be a string")))
 
 ;; Configuration Structure with Serialization and Type Declarations
 (deftype transport-type () '(member "gRPC" "native-lisp" "WebSocket"))
 (defstruct (dcf-config (:constructor make-dcf-config%)
                        (:conc-name dcf-config-))
   (transport "gRPC" :type transport-type)
-  host port mode node-id peers group-rtt-threshold plugins
+  (host "localhost" :type string)
+  (port 50051 :type (integer 0 65535))
+  (mode "client" :type string)
+  (node-id (uuid:print-bytes nil (uuid:make-v4-uuid)) :type string)
+  (peers '() :type list)
+  (group-rtt-threshold 50 :type (integer 0 1000))
+  (plugins (make-hash-table :test 'equal) :type hash-table)
   (state-file "dcf-state.bin" :type string))
 
 (defun make-dcf-config (&rest args)
+  "Create and persist configuration."
   (let ((config (apply #'make-dcf-config% args)))
     (cl-store:store config (dcf-config-state-file config))
     config))
@@ -114,16 +127,16 @@
   ((channel :initarg :channel :accessor channel :initform nil)
    (stub :initarg :stub :accessor stub :initform nil)
    (server :initarg :server :accessor server :initform nil)
-   (mode :initarg :mode :accessor mode)
-   (config :initarg :config :accessor config)
-   (plugins :initform (make-hash-table :test 'equal) :accessor plugins)
-   (peer-groups :initform (make-hash-table :test 'equal) :accessor peer-groups)
+   (mode :initarg :mode :accessor mode :type string)
+   (config :initarg :config :accessor config :type dcf-config)
+   (plugins :initform (make-hash-table :test 'equal) :accessor plugins :type hash-table)
+   (peer-groups :initform (make-hash-table :test 'equal) :accessor peer-groups :type hash-table)
    (thread-pool :initform (bt:make-thread-pool 4) :accessor thread-pool)
    (master-connection :initform nil :accessor master-connection)
    (native-transport :initform nil :accessor native-transport)
-   (connection-pool :initform (make-hash-table :test 'equal) :accessor connection-pool) ; New: Connection pool
-   (middlewares :initform nil :accessor middlewares) ; New: Middleware chain
-   (metrics :initform (make-hash-table :test 'equal) :accessor metrics))) ; New: Metrics
+   (connection-pool :initform (make-hash-table :test 'equal) :accessor connection-pool) ; Connection pool
+   (middlewares :initform nil :accessor middlewares) ; Middleware chain
+   (metrics :initform (make-hash-table :test 'equal) :accessor metrics))) ; Metrics
 
 (defvar *node* nil "Global DCF node instance.")
 
@@ -177,7 +190,47 @@
   "Apply middleware chain to message (send or receive)."
   (reduce (lambda (m f) (funcall f m direction)) (middlewares *node*) :initial-value msg))
 
-;; Setup Functions (Updated for Pooling)
+;; Setup Functions
+(defun setup-native-transport (node)
+  "Setup native Lisp transport using USocket."
+  (let ((socket (usocket:socket-listen (dcf-config-host (config node)) (dcf-config-port (config node)) :reuse-address t :element-type '(unsigned-byte 8))))
+    (setf (native-transport node) socket)
+    (bt:make-thread (lambda () (native-transport-listener node)) :name "native-transport-listener")
+    (log:info *dcf-logger* "Native Lisp transport setup on ~A:~A" (dcf-config-host (config node)) (dcf-config-port (config node)))))
+
+(defun native-transport-listener (node)
+  "Listener loop for native transport."
+  (loop
+    (let ((client (usocket:socket-accept (native-transport node))))
+      (bt:make-thread (lambda () (handle-native-connection node client)) :name "native-client-handler"))))
+
+(defun handle-native-connection (node client)
+  "Handle incoming native connection."
+  (handler-case
+      (with-open-stream (stream (usocket:socket-stream client))
+        (let ((data (read-line stream)))
+          (log:debug *dcf-logger* "Native received: ~A" data)
+          (format stream "Echo: ~A~%" data)))
+    (error (e) (log:error *dcf-logger* "Native connection error: ~A" e))
+    (finally (usocket:socket-close client))))
+
+(defun native-send (node data recipient)
+  "Send via native transport."
+  (let* ((parts (cl-ppcre:split ":" recipient))
+         (host (first parts))
+         (port (parse-integer (second parts))))
+    (let ((socket (acquire-connection node :native (format nil "~A:~A" host port))))
+      (with-open-stream (stream (usocket:socket-stream socket))
+        (format stream "~A~%" data))
+      (release-connection node :native socket))))
+
+(defun setup-server (node)
+  "Setup server mode with gRPC server."
+  (let* ((address (format nil "~A:~A" (dcf-config-host (config node)) (dcf-config-port (config node))))
+         (server (cl-grpc:server address)))
+    (cl-grpc:register-service server 'dcf-service (make-instance 'dcf-service-impl :node node))
+    (setf (server node) server)))
+
 (defun setup-client (node)
   "Setup client mode with gRPC channel from pool."
   (let* ((address (format nil "~A:~A" (dcf-config-host (config node)) (dcf-config-port (config node))))
@@ -185,9 +238,26 @@
     (setf (channel node) channel
           (stub node) (cl-grpc:stub 'dcf-service channel))))
 
-;; ... (Similar updates for other setups, using acquire/release-connection)
+(defun setup-p2p (node)
+  "Setup P2P mode with multiple channels."
+  (setup-client node)
+  (dolist (peer (dcf-config-peers (config node)))
+    (add-peer-channel node peer))
+  (bt:make-thread (lambda () (monitor-peers node)) :name "p2p-monitor"))
 
-;; Plugin System with Version Checking and WebSocket Example
+(defun setup-auto (node)
+  "Setup AUTO mode with master connection."
+  (setup-p2p node)
+  (connect-to-master node)
+  (bt:make-thread (lambda () (listen-for-master-commands node)) :name "auto-listener"))
+
+(defun setup-master (node)
+  "Setup master mode for controlling AUTO nodes."
+  (setup-server node)
+  (cl-grpc:register-service (server node) 'dcf-master-service (make-instance 'dcf-master-service-impl :node node))
+  (bt:make-thread (lambda () (collect-metrics-periodically node)) :name "master-metrics-collector"))
+
+;; Plugin System
 (defstruct plugin-interface
   setup send receive destroy version)
 
@@ -219,7 +289,7 @@
       (remhash path (plugins node))
       (log:info *dcf-logger* "Unloaded plugin: ~A" path))))
 
-;; Example Lisp-specific Plugin: WebSocket Transport
+;; Example Plugin: WebSocket Transport
 (def-dcf-plugin websocket-transport :version "1.0"
   :setup (lambda (self config)
            (hunchensocket:websocket-server (dcf-config-port config) :handler (lambda (ws) (setf (gethash "ws" self) ws))))
@@ -230,7 +300,7 @@
   :destroy (lambda (self)
              (hunchensocket:close (gethash "ws" self))))
 
-;; Core DCF Functions with Middleware, Types, Pooling, and Metrics
+;; Core DCF Functions
 (defun dcf-init (config-path &key restore-state)
   "Initialize DCF with config, optionally restoring state.
 Example: (dcf-init \"config.json\" :restore-state t)"
@@ -240,7 +310,7 @@ Example: (dcf-init \"config.json\" :restore-state t)"
           (let ((restored (restore-state (dcf-config-state-file config))))
             (when restored (setf config restored))))
         (setf *node* (initialize-node config))
-        (incf (gethash :inits (metrics *node*) 0)) ; Metric
+        (incf (gethash :inits (metrics *node*) 0))
         (log:info *dcf-logger* "Initialized with config: ~A" config-path)
         `(:status "success" :config ,config-path :mode ,(mode *node*)))
     (dcf-error (e) (log:error *dcf-logger* "~A" e) `(:status "error" :message ,(dcf-error-message e)))))
@@ -255,7 +325,7 @@ Example: (dcf-start)"
           (:server (cl-grpc:start-server (server *node*)))
           (:master (cl-grpc:start-server (server *node*)))
           (t (log:info *dcf-logger* "Starting client/P2P/AUTO mode")))
-        (incf (gethash :starts (metrics *node*) 0)) ; Metric
+        (incf (gethash :starts (metrics *node*) 0))
         (log:info *dcf-logger* "Node started in ~A mode" (mode *node*))
         `(:status "started"))
     (error (e) (log:error *dcf-logger* "Start failed: ~A" e) `(:status "error" :message ,(princ-to-string e)))))
@@ -292,7 +362,7 @@ Example: (dcf-send \"Hello\" \"localhost:50052\" :sync t)"
                                 :redundancy-path (or redundancy-path "")
                                 :group-id (or group-id ""))))
         (setf msg (apply-middlewares msg :send))
-        (incf (gethash :sends (metrics *node*) 0)) ; Metric
+        (incf (gethash :sends (metrics *node*) 0))
         (if (string= (dcf-config-transport (config *node*)) "native-lisp")
             (progn
               (native-send *node* (data msg) recipient)
@@ -317,7 +387,7 @@ Example: (dcf-receive :timeout 30)"
             (loop with end-time = (+ (get-internal-real-time) (or timeout (* 10 internal-time-units-per-second)))
                   for msg = (cl-grpc:next stream)
                   while (and msg (< (get-internal-real-time) end-time))
-                  do (incf (gethash :receives (metrics *node*) 0)) ; Metric
+                  do (incf (gethash :receives (metrics *node*) 0))
                   collect (progn
                             (setf msg (apply-middlewares msg :receive))
                             (log:debug *dcf-logger* "Received message from ~A: ~A" (sender msg) (data msg))
@@ -341,7 +411,7 @@ Example: (dcf-health-check \"localhost:50052\")"
              (start-time (get-internal-real-time))
              (response (cl-grpc:call (get-peer-stub *node* peer) 'health-check request))
              (rtt (- (get-internal-real-time) start-time)))
-        (incf (gethash :health-checks (metrics *node*) 0)) ; Metric
+        (incf (gethash :health-checks (metrics *node*) 0))
         (log:debug *dcf-logger* "Health check for ~A: healthy=~A, RTT=~Ams" peer (slot-value response 'healthy) (/ rtt internal-time-units-per-second 0.001))
         `(:peer ,peer :healthy ,(slot-value response 'healthy) :status ,(slot-value response 'status) :rtt ,rtt))
     (error (e) (log:warn *dcf-logger* "Health check failed for ~A: ~A" peer e) `(:peer ,peer :healthy nil :rtt -1))))
@@ -366,6 +436,8 @@ Example: (dcf-heal \"localhost:50052\")"
           `(:status "healed" :peer ,peer)))))
 
 (defun dcf-version ()
+  "Get version information.
+Example: (dcf-version)"
   `(:version "1.4.0" :dcf-version "5.0.0"))
 
 (defun dcf-benchmark (peer &key iterations)
@@ -427,7 +499,10 @@ Example: (dcf-trace-message (make-instance 'dcf-message :data \"Test\"))"
 (defun dcf-debug-network ()
   "Debug network state: peers, groups, metrics.
 Example: (dcf-debug-network)"
-  (format t "Debug: Peers: ~A~%Groups: ~A~%Metrics: ~A~%" (dcf-config-peers (config *node*)) (peer-groups *node*) (metrics *node*)))
+  (format t "Debug: Peers: ~A~%Groups: ~A~%Metrics: ~A~%" 
+          (dcf-config-peers (config *node*)) 
+          (peer-groups *node*) 
+          (metrics *node*)))
 
 ;; Simpler Facade API
 (defun dcf-quick-start-client (config-path)
@@ -442,33 +517,6 @@ Example: (dcf-quick-start-client \"config.json\")"
 Example: (dcf-quick-send \"Hello\" \"localhost:50052\")"
   (dcf-send data recipient))
 
-;; TUI Implementation with ncurses (Updated to Support New Commands)
-(defun execute-tui-command (input)
-  "Execute command in TUI context."
-  (handler-case
-      (with-input-from-string (stream input)
-        (let ((cmd (read stream)))
-          (case cmd
-            (trace-message (dcf-trace-message (read stream)))
-            (debug-network (dcf-debug-network))
-            (quick-start-client (dcf-quick-start-client (read stream)))
-            (quick-send (dcf-quick-send (read stream) (read stream)))
-            ;; ... (other cases)
-            (t "Unknown command"))))
-    (error () "Invalid command syntax")))
-
-;; AUTO Mode and Master Node Functions (Unchanged)
-;; ...
-
-;; P2P Redundancy with Dijkstra Routing (Unchanged)
-;; ...
-
-;; gRPC Service Implementations (Unchanged)
-;; ...
-
-;; Advanced AI-driven Network Optimization in Master Mode using MGL (Unchanged)
-;; ...
-
 ;; Metrics and Monitoring
 (defun dcf-get-metrics ()
   "Get collected metrics.
@@ -479,12 +527,317 @@ Example: (dcf-get-metrics)"
 (defun dcf-visualize-topology (&optional file)
   "Generate Graphviz DOT file for network topology.
 Example: (dcf-visualize-topology \"topology.dot\")"
-  (let ((graph (cl-dot:generate-graph-from-roots (peer-groups *node*) (hash-table-keys (peer-groups *node*)))))
+  (let ((graph (cl-dot:generate-graph-from-roots (list (peer-groups *node*)) 
+                                                 (hash-table-keys (peer-groups *node*)))))
     (with-open-file (stream (or file "topology.dot") :direction :output :if-exists :supersede)
       (cl-dot:print-graph graph :stream stream))
     (log:info *dcf-logger* "Topology visualized in ~A" (or file "topology.dot"))))
 
-;; FiveAM Integration for Robust Testing (Enhanced with Network Scenarios)
+;; TUI Implementation with ncurses
+(defun dcf-tui ()
+  "Interactive TUI for monitoring and commands.
+Example: (dcf-tui)"
+  (handler-case
+      (curses:with-curses ()
+        (curses:initscr)
+        (curses:curs-set 0)
+        (curses:cbreak)
+        (curses:noecho)
+        (curses:keypad t)
+        (let ((main-win (curses:newwin (curses:lines) (curses:cols) 0 0))
+              (input-win (curses:newwin 3 (curses:cols) (- (curses:lines) 3) 0)))
+          (curses:wborder main-win)
+          (curses:mvwprintw main-win 1 1 "DeMoD-LISP TUI v1.4.0")
+          (curses:mvwprintw main-win 2 1 "Status: ~A" (getf (dcf-status) :status))
+          (curses:wrefresh main-win)
+          (loop
+            (curses:mvwprintw input-win 1 1 "Command: ")
+            (curses:wclrtoeol input-win)
+            (curses:wrefresh input-win)
+            (let ((input (read-line-from-curses input-win)))
+              (when (string= input "quit") (return))
+              (let ((result (execute-tui-command input)))
+                (curses:mvwprintw main-win 4 1 "Result: ~A" result)
+                (curses:wrefresh main-win)))))
+        (curses:endwin))
+    (error (e) (log:error *dcf-logger* "TUI failed: ~A" e))))
+
+(defun read-line-from-curses (win)
+  "Read input line in curses window."
+  (let ((str "") (ch))
+    (loop
+      (setf ch (curses:getch))
+      (case ch
+        (10 (return str))
+        (127 (when (> (length str) 0) (setf str (subseq str 0 (1- (length str))))))
+        (t (setf str (concatenate 'string str (string (code-char ch))))))
+      (curses:mvwprintw win 1 10 "~A" str)
+      (curses:wrefresh win))))
+
+(defun execute-tui-command (input)
+  "Execute command in TUI context."
+  (handler-case
+      (with-input-from-string (stream input)
+        (let ((cmd (read stream)))
+          (case cmd
+            (help (dcf-help))
+            (status (dcf-status))
+            (send (dcf-send (read stream) (read stream)))
+            (receive (dcf-receive))
+            (health-check (dcf-health-check (read stream)))
+            (list-peers (dcf-list-peers))
+            (heal (dcf-heal (read stream)))
+            (benchmark (dcf-benchmark (read stream)))
+            (group-peers (dcf-group-peers))
+            (simulate-failure (dcf-simulate-failure (read stream)))
+            (log-level (dcf-log-level (read stream)))
+            (load-plugin (dcf-load-plugin (read stream)))
+            (trace-message (dcf-trace-message (read stream)))
+            (debug-network (dcf-debug-network))
+            (quick-start-client (dcf-quick-start-client (read stream)))
+            (quick-send (dcf-quick-send (read stream) (read stream)))
+            (get-metrics (dcf-get-metrics))
+            (visualize-topology (dcf-visualize-topology (read stream)))
+            (t "Unknown command"))))
+    (error () "Invalid command syntax")))
+
+;; AUTO Mode and Master Node Functions
+(defun connect-to-master (node)
+  "Establish connection to master."
+  (let* ((master-address (format nil "~A:~A" (dcf-config-host (config node)) (dcf-config-port (config node))))
+         (channel (acquire-connection node :grpc master-address)))
+    (setf (master-connection node) (cl-grpc:stub 'dcf-master-service channel))
+    (log:info *dcf-logger* "Connected to master at ~A" master-address)))
+
+(defun listen-for-master-commands (node)
+  "Listen for commands from master."
+  (let ((stream (cl-grpc:call (master-connection node) 'receive-commands (make-instance 'empty))))
+    (loop for command = (cl-grpc:next stream)
+          while command
+          do (process-master-command node command))))
+
+(defun process-master-command (node command)
+  "Process incoming master command."
+  (let ((cmd (slot-value command 'command)))
+    (cond
+      ((string= cmd "set_role") (dcf-set-mode (slot-value command 'role)))
+      ((string= cmd "update_config") (dcf-update-config (slot-value command 'key) (slot-value command 'value)))
+      ((string= cmd "collect_metrics") (send-metrics-to-master node))
+      ((string= cmd "optimize_network") (dcf-group-peers))
+      (t (log:warn *dcf-logger* "Unknown master command: ~A" cmd)))))
+
+(defun dcf-set-mode (new-mode)
+  "Dynamically set node mode.
+Example: (dcf-set-mode \"client\")"
+  (handler-case
+      (progn
+        (dcf-stop)
+        (setf (mode *node*) new-mode)
+        (initialize-node (config *node*))
+        (dcf-start)
+        (log:info *dcf-logger* "Mode set to ~A" new-mode)
+        `(:status "mode-set" :mode ,new-mode))
+    (error (e) (log:error *dcf-logger* "Mode set failed: ~A" e) `(:status "error"))))
+
+(defun dcf-update-config (key value)
+  "Update config key-value.
+Example: (dcf-update-config \"port\" 50052)"
+  (handler-case
+      (progn
+        (setf (slot-value (config *node*) (intern (string-upcase key) :keyword)) value)
+        (save-state (config *node*))
+        (log:info *dcf-logger* "Updated config ~A to ~A" key value)
+        `(:status "updated" :key ,key :value ,value))
+    (error (e) (log:error *dcf-logger* "Config update failed: ~A" e) `(:status "error"))))
+
+;; Master Node Specific Functions
+(defun dcf-master-assign-role (peer role)
+  "Master assigns role to peer.
+Example: (dcf-master-assign-role \"localhost:50052\" \"client\")"
+  (handler-case
+      (let ((request (make-instance 'master-command :command "set_role" :role role :peer peer)))
+        (cl-grpc:call (get-peer-stub *node* peer) 'assign-role request)
+        (log:info *dcf-logger* "Assigned role ~A to ~A" role peer)
+        `(:status "assigned" :peer ,peer :role ,role))
+    (error (e) `(:status "error" :message ,(princ-to-string e)))))
+
+(defun dcf-master-update-config (peer key value)
+  "Master updates config for peer.
+Example: (dcf-master-update-config \"localhost:50052\" \"port\" 50053)"
+  (handler-case
+      (let ((request (make-instance 'master-command :command "update_config" :key key :value value :peer peer)))
+        (cl-grpc:call (get-peer-stub *node* peer) 'update-config request)
+        (log:info *dcf-logger* "Updated ~A=~A for ~A" key value peer)
+        `(:status "updated" :peer ,peer :key ,key :value ,value))
+    (error (e) `(:status "error" :message ,(princ-to-string e)))))
+
+(defun dcf-master-collect-metrics ()
+  "Master collects metrics from peers.
+Example: (dcf-master-collect-metrics)"
+  (let ((metrics (make-hash-table :test 'equal)))
+    (dolist (peer (dcf-config-peers (config *node*)))
+      (let ((response (cl-grpc:call (get-peer-stub *node* peer) 'collect-metrics (make-instance 'empty))))
+        (setf (gethash peer metrics) (parse-metrics response))))
+    (log:info *dcf-logger* "Collected metrics from ~A peers" (hash-table-count metrics))
+    metrics))
+
+(defun dcf-master-optimize-network ()
+  "Master optimizes network topology with AI.
+Example: (dcf-master-optimize-network)"
+  (let ((metrics (dcf-master-collect-metrics)))
+    (optimize-topology metrics)
+    (dolist (peer (hash-table-keys metrics))
+      (cl-grpc:call (get-peer-stub *node* peer) 'optimize-network (make-instance 'empty)))
+    (log:info *dcf-logger* "AI-driven network optimized")
+    `(:status "optimized")))
+
+(defun collect-metrics-periodically (node)
+  "Periodic metrics collection in master mode."
+  (loop
+    (sleep 60)
+    (dcf-master-collect-metrics)))
+
+(defun send-metrics-to-master (node)
+  "Send local metrics to master."
+  (let ((metrics (collect-local-metrics node)))
+    (cl-grpc:call (master-connection node) 'submit-metrics metrics)
+    (log:debug *dcf-logger* "Sent metrics to master")))
+
+(defun collect-local-metrics (node)
+  "Collect local RTT and group data."
+  (make-instance 'metrics
+                 :node-id (dcf-config-node-id (config node))
+                 :rtts (mapcar (lambda (p) (cons p (getf (dcf-health-check p) :rtt))) (dcf-config-peers (config node)))
+                 :groups (hash-table-alist (peer-groups node))))
+
+;; P2P Redundancy with Dijkstra Routing
+(defun add-peer-channel (node peer)
+  "Add channel for P2P peer."
+  (let ((channel (acquire-connection node :grpc peer)))
+    (setf (gethash peer (plugins node)) (cl-grpc:stub 'dcf-service channel))))
+
+(defun get-peer-stub (node peer)
+  "Get stub for peer."
+  (or (gethash peer (plugins node))
+      (signal-dcf-error :peer-not-found (format nil "Peer not found: ~A" peer))))
+
+(defun monitor-peers (node)
+  "Monitor peers for failures."
+  (loop
+    (sleep 10)
+    (dolist (peer (dcf-config-peers (config node)))
+      (unless (getf (dcf-health-check peer) :healthy)
+        (dcf-heal peer)))))
+
+(defun compute-rtt-groups (peers threshold)
+  "Compute groups using RTT."
+  (let ((graph (build-graph peers))
+        (groups (make-hash-table :test 'equal)))
+    (multiple-value-bind (distances predecessors) (dijkstra graph (dcf-config-node-id (config *node*)))
+      (dolist (peer peers)
+        (let ((dist (gethash peer distances)))
+          (when (< dist threshold)
+            (push peer (gethash (floor dist (/ threshold 10)) groups)))))
+      groups)))
+
+(defun build-graph (peers)
+  "Build graph with RTT weights."
+  (let ((graph (make-hash-table :test 'equal)))
+    (dolist (p1 peers)
+      (dolist (p2 peers)
+        (unless (string= p1 p2)
+          (setf (gethash (cons p1 p2) graph) (getf (dcf-health-check p2) :rtt)))))
+    graph))
+
+(defun dijkstra (graph start)
+  "Dijkstra's algorithm for shortest paths."
+  (let ((distances (make-hash-table :test 'equal))
+        (predecessors (make-hash-table :test 'equal))
+        (queue (make-instance 'priority-queue)))
+    (setf (gethash start distances) 0)
+    (enqueue queue start 0)
+    (loop while (not (empty-p queue))
+          do (let ((u (dequeue queue)))
+               (dolist (v (neighbors u graph))
+                 (let ((alt (+ (gethash u distances) (gethash (cons u v) graph))))
+                   (when (< alt (or (gethash v distances) most-positive-fixnum))
+                     (setf (gethash v distances) alt
+                           (gethash v predecessors) u)
+                     (enqueue queue v alt)))))
+    (values distances predecessors)))
+
+(defun reconstruct-path (predecessors target)
+  "Reconstruct path from predecessors."
+  (let ((path '()))
+    (loop for u = target then (gethash u predecessors)
+          while u
+          do (push u path))
+    path))
+
+(defun reroute-to-alternative (node failed-peer)
+  "Reroute using Dijkstra predecessors."
+  (multiple-value-bind (distances predecessors) (dijkstra (build-graph (dcf-config-peers (config node))) (dcf-config-node-id (config node)))
+    (let ((alt-path (reconstruct-path predecessors failed-peer)))
+      (when alt-path
+        (let ((alt-peer (car (last alt-path))))
+          (setf (dcf-config-peers (config node)) (substitute alt-peer failed-peer (dcf-config-peers (config node)) :test #'string=))
+          (add-peer-channel node alt-peer)
+          (log:info *dcf-logger* "Rerouted ~A to ~A via path ~A" failed-peer alt-peer alt-path))))))
+
+(defun get-group-id (peer groups)
+  "Get group ID for peer."
+  (loop for (id . peers) in (hash-table-alist groups)
+        when (member peer peers :test #'string=)
+        return id))
+
+;; gRPC Service Implementations
+(defclass dcf-service-impl (cl-grpc:service)
+  ((node :initarg :node :accessor node)))
+
+(defmethod cl-grpc:send-message ((self dcf-service-impl) context request response)
+  "Implement SendMessage RPC."
+  (setf (slot-value response 'data) (format nil "Echo: ~A" (slot-value request 'data)))
+  :ok)
+
+(defmethod cl-grpc:receive-stream ((self dcf-service-impl) context request stream)
+  "Implement ReceiveStream RPC."
+  (loop for msg in (some-message-queue)
+        do (cl-grpc:send stream msg)))
+
+(defclass dcf-master-service-impl (cl-grpc:service)
+  ((node :initarg :node :accessor node)))
+
+;; Advanced AI-driven Network Optimization
+(defun optimize-topology (metrics)
+  "Use MGL neural network for AI-driven optimization of network topology."
+  (let ((nn (make-instance 'mgl-bp:bpnn :layers '(10 5 2))))
+    (mgl-bp:train nn (prepare-training-data metrics) :max-iterations 100)
+    (let ((optimal-groups (mgl-bp:predict nn (prepare-input metrics))))
+      (apply-optimized-groups optimal-groups)
+      (log:info *dcf-logger* "AI-optimized topology applied"))
+    `(:status "ai-optimized")))
+
+(defun prepare-training-data (metrics)
+  "Prepare data for NN training."
+  (loop for (peer . rtt) in metrics collect (vector rtt (random 2))))
+
+(defun prepare-input (metrics)
+  "Prepare input for prediction."
+  (loop for (peer . rtt) in metrics collect (vector rtt)))
+
+(defun apply-optimized-groups (predictions)
+  "Apply predicted groups to node."
+  (setf (peer-groups *node*) (group-from-predictions predictions)))
+
+(defun group-from-predictions (predictions)
+  "Convert NN predictions to groups."
+  (let ((groups (make-hash-table :test 'equal)))
+    (loop for pred across predictions
+          for peer in (hash-table-keys (peer-groups *node*))
+          do (push peer (gethash (round (aref pred 0)) groups)))
+    groups))
+
+;; FiveAM Integration for Testing
 #+fiveam
 (fiveam:def-suite d-lisp-suite
   :description "Test suite for D-LISP SDK.")
@@ -499,11 +852,12 @@ Example: (dcf-visualize-topology \"topology.dot\")"
 #+fiveam
 (fiveam:test middleware-test
   (add-middleware (lambda (msg dir) (declare (ignore dir)) msg))
-  (fiveam:is (equal (apply-middlewares (make-instance 'dcf-message) :send) (make-instance 'dcf-message))))
+  (fiveam:is (equal (apply-middlewares (make-instance 'dcf-message :sender "test" :recipient "test" :data "test" :timestamp 0 :sync t :sequence 0 :redundancy-path "" :group-id "") :send)
+                    (make-instance 'dcf-message :sender "test" :recipient "test" :data "test" :timestamp 0 :sync t :sequence 0 :redundancy-path "" :group-id ""))))
 
 #+fiveam
 (fiveam:test type-system-test
-  (fiveam:signals dcf-error (make-instance 'dcf-message :sender 123))) ; Type error
+  (fiveam:signals dcf-error (make-instance 'dcf-message :sender 123)))
 
 #+fiveam
 (fiveam:test connection-pool-test
@@ -514,7 +868,7 @@ Example: (dcf-visualize-topology \"topology.dot\")"
 #+fiveam
 (fiveam:test network-scenario-test
   (let ((node (make-instance 'dcf-node :config (make-dcf-config :peers '("peer1" "peer2")))))
-    (dcf-group-peers) ; Simulate grouping
+    (dcf-group-peers)
     (dcf-simulate-failure "peer1")
     (fiveam:is (= (length (dcf-config-peers (config node))) 1))))
 
@@ -538,7 +892,7 @@ Example: (dcf-visualize-topology \"topology.dot\")"
   (fiveam:run! 'd-lisp-suite)
   (log:info *dcf-logger* "FiveAM tests completed."))
 
-;; Help Command for Newcomers (Updated with New Features)
+;; Help Command for Newcomers
 (defun dcf-help ()
   "Provide beginner-friendly guidance for new users of DeMoD Communications Framework (DCF)."
   (format nil "~
@@ -563,7 +917,7 @@ DCF is a free, open-source (FOSS) framework for low-latency data exchange in app
 2. **Clone Repo**: git clone https://github.com/ALH477/DeMoD-Communication-Framework --recurse-submodules
 3. **Load D-LISP**: sbcl --load lisp/src/d-lisp.lisp
 4. **Quick Start**: (dcf-quick-start-client \"config.json\")
-5. **Send Message**: (dcf-quick-send \"Hello\" \"peer1\")
+5. **Send Message**: (dcf-quick-send \"Hello\" \"localhost:50052\")
 6. **Add Middleware**: (add-middleware (lambda (msg dir) (format t \"Processing ~A\" dir) msg))
 7. **Visualize**: (dcf-visualize-topology)
 8. **Help in CLI**: sbcl --eval '(d-lisp:main \"help\")'
@@ -608,7 +962,7 @@ DCF is a free, open-source (FOSS) framework for low-latency data exchange in app
 
 For more, visit the repo or run (dcf-help) again!"))
 
-;; CLI Entry Point with JSON Support (Updated for New Commands)
+;; CLI Entry Point
 (defun main (&rest args)
   "CLI entry point with robust parsing."
   (handler-case
@@ -618,7 +972,7 @@ For more, visit the repo or run (dcf-help) again!"))
              (json-output (not (null json-flag)))
              (result (cond
                        ((string= command "help") (dcf-help))
-                       ((string= command "trace-message") (dcf-trace-message (second cmd-args)))
+                       ((string= command "trace-message") (dcf-trace-message (eval (read-from-string (second cmd-args)))))
                        ((string= command "debug-network") (dcf-debug-network))
                        ((string= command "quick-start-client") (dcf-quick-start-client (second cmd-args)))
                        ((string= command "quick-send") (dcf-quick-send (second cmd-args) (third cmd-args)))
