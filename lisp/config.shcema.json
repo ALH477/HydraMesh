@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "transport": { "type": "string", "enum": ["gRPC", "native-lisp", "WebSocket"] },
+    "host": { "type": "string" },
+    "port": { "type": "integer", "minimum": 0, "maximum": 65535 },
+    "mode": { "type": "string", "enum": ["client", "server", "p2p", "auto", "master"] },
+    "node-id": { "type": "string" },
+    "peers": { "type": "array", "items": { "type": "string" } },
+    "group-rtt-threshold": { "type": "integer", "minimum": 0, "maximum": 1000 },
+    "plugins": { "type": "object" }
+  },
+  "required": ["transport", "host", "port", "mode"],
+  "additionalProperties": false
+}
