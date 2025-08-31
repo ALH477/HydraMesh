@@ -1,6 +1,6 @@
 # DeMoD-LISP (D-LISP) SDK for DeMoD Communication Framework (DCF)
 
-**Version 1.7.0** | **Updated: September 3, 2025**  
+**Version 1.7.0** | 
 **Developed by DeMoD LLC** with contributions from **Grok 4 Heavy** (xAI)  
 **License**: GNU General Public License v3.0 (GPL-3.0)  
 **Repository**: [https://github.com/ALH477/DeMoD-Communication-Framework](https://github.com/ALH477/DeMoD-Communication-Framework)
