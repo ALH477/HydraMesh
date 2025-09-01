@@ -2,7 +2,7 @@
 
 **Version 5.0.0 | August 31, 2025**  
 **Developed by DeMoD LLC**  
-**Contact:** info@demodllc.com  
+**Contact:** info@demod.ltd  
 **License:** GNU General Public License v3.0 (GPL-3.0)  
 [![Build Status](https://github.com/ALH477/DeMoD-Communication-Framework/workflows/DOOM-CI/badge.svg)](https://github.com/ALH477/DeMoD-Communication-Framework/actions)  
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)  
