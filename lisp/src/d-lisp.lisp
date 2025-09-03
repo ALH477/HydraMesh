@@ -12,16 +12,10 @@
 ;;   version checking (>=1.1), JSON parameters, robust error handling.
 
 ;; Dependencies: Install via Quicklisp
-(ql:quickload '(:cl-protobufs :cl-grpc :cffi :uuid :cl-json :jsonschema :cl-ppcre
-                :cl-csv :usocket :bordeaux-threads :curses :log4cl :trivial-backtrace
-                :cl-store :mgl :hunchensocket :fiveam :cl-dot :cl-lsquic :cl-serial
-                :cl-can :cl-sctp :cl-zigbee :cl-lorawan :split-sequence))
+(ql:quickload '(:cl-protobufs :cl-grpc :cffi :uuid :cl-json :jsonschema :cl-ppcre :cl-csv :usocket :bordeaux-threads :curses :log4cl :trivial-backtrace :cl-store :mgl :hunchensocket :fiveam :cl-dot :cl-lsquic :cl-serial :cl-can :cl-sctp :cl-zigbee :cl-lorawan))
 
 (defpackage :d-lisp
-  (:use :cl :cl-protobufs :cl-grpc :cffi :uuid :cl-json :jsonschema :cl-ppcre
-        :cl-csv :usocket :bordeaux-threads :curses :log4cl :trivial-backtrace
-        :cl-store :mgl :hunchensocket :fiveam :cl-dot :cl-lsquic :cl-serial
-        :cl-can :cl-sctp :cl-zigbee :cl-lorawan :split-sequence)
+  (:use :cl :cl-protobufs :cl-grpc :cffi :uuid :cl-json :jsonschema :cl-ppcre :cl-csv :usocket :bordeaux-threads :curses :log4cl :trivial-backtrace :cl-store :mgl :hunchensocket :fiveam :cl-dot :cl-lsquic :cl-serial :cl-can :cl-sctp :cl-zigbee :cl-lorawan)
   (:export :dcf-init :dcf-start :dcf-stop :dcf-send :dcf-receive :dcf-status
            :dcf-health-check :dcf-list-peers :dcf-heal :dcf-version :dcf-benchmark
            :dcf-group-peers :dcf-simulate-failure :dcf-log-level :dcf-load-plugin
@@ -45,29 +39,15 @@
              (format stream "DCF Error [~A]: ~A" (dcf-error-code condition) (dcf-error-message condition)))))
 
 (defun signal-dcf-error (code message)
-  "Signal a DCF-specific error with code and message."
   (error 'dcf-error :code code :message message))
 
 ;; Formal Type System for Network Messages
 (defclass dcf-message ()
   ((sender :initarg :sender :accessor sender :type string)
    (recipient :initarg :recipient :accessor recipient :type string)
-   (data :initarg :data :accessor data :type (or string (vector (unsigned-byte 8))))
+   (data :initarg :data :accessor data :type (or string array))
    (timestamp :initarg :timestamp :accessor timestamp :type integer :initform (get-universal-time))
-   (group-id :initarg :group-id :accessor group-id :type integer :initform 0))
-  (:documentation "Network message with sender, recipient, data, timestamp, and group ID."))
-
-;; Configuration
-(defclass dcf-config ()
-  ((transport :initarg :transport :accessor transport :type string)
-   (host :initarg :host :accessor host :type string)
-   (port :initarg :port :accessor port :type integer)
-   (mode :initarg :mode :accessor mode :type string)
-   (node-id :initarg :node-id :accessor node-id :type string)
-   (peers :initarg :peers :accessor peers :type list)
-   (group-rtt-threshold :initarg :group-rtt-threshold :accessor group-rtt-threshold :type integer)
-   (plugins :initarg :plugins :accessor plugins :type list))
-  (:documentation "Configuration for DCF node."))
+   (group-id :initarg :group-id :accessor group-id :type integer)))
 
 ;; Plugin Interfaces (mirroring C ITransport and IHardwarePlugin)
 (defclass itransport ()
@@ -75,88 +55,67 @@
    (send :initarg :send :accessor send :type function)    ; (self data target retries) -> boolean
    (receive :initarg :receive :accessor receive :type function)  ; (self timeout-ms) -> data or nil
    (health-check :initarg :health-check :accessor health-check :type function)  ; (self target rtt-ms) -> boolean
-   (destroy :initarg :destroy :accessor destroy :type function))  ; (self) -> void
-  (:documentation "Interface for transport plugins (e.g., gRPC, UDP, LoRaWAN)."))
+   (destroy :initarg :destroy :accessor destroy :type function)))  ; (self) -> void
 
 (defclass ihardware-plugin ()
   ((setup :initarg :setup :accessor setup :type function)  ; (self params) -> boolean
    (execute :initarg :execute :accessor execute :type function)  ; (self command-data) -> data or nil
-   (destroy :initarg :destroy :accessor destroy :type function))  ; (self) -> void
-  (:documentation "Interface for hardware plugins (e.g., I2C, USB)."))
+   (destroy :initarg :destroy :accessor destroy :type function)))  ; (self) -> void
 
-;; Plugin Manager Class (refined for thread-safety, robustness)
+;; Plugin Manager Class
 (defclass dcf-plugin-manager ()
-  ((transport :initform nil :accessor dcf-transport :documentation "Singleton transport plugin instance")
-   (hardware :initform (make-hash-table :test #'equal) :accessor dcf-hardware :documentation "Hash-table: id -> (cons path instance)")
-   (lock :initform (bt:make-lock "plugin-manager-lock") :accessor dcf-lock :documentation "Lock for thread-safety"))
-  (:documentation "Manages transport and hardware plugins with thread-safety."))
+  ((transport :initform nil :accessor dcf-transport)
+   (hardware :initform (make-hash-table :test #'equal) :accessor dcf-hardware)
+   (lock :initform (bt:make-lock "plugin-lock") :accessor plugin-lock)))  ; Added for thread-safety
 
 (defun dcf-plugin-manager-new ()
-  "Create a new plugin manager instance."
   (make-instance 'dcf-plugin-manager))
 
-(defun version>= (v1 v2)
-  "Compare version strings (e.g., '1.1.0' >= '1.1')."
-  (let ((parts1 (mapcar #'parse-integer (split-sequence:split-sequence #\. v1 :remove-empty-subseqs t)))
-        (parts2 (mapcar #'parse-integer (split-sequence:split-sequence #\. v2 :remove-empty-subseqs t))))
-    (loop for p1 in parts1
-          for p2 in parts2
-          if (> p1 p2) return t
-          if (< p1 p2) return nil
-          finally return t)))
-
 (defun dcf-plugin-manager-load (manager config-path)
-  "Load transport and hardware plugins from config.json, thread-safe."
-  (bt:with-lock-held ((dcf-lock manager))
+  (bt:with-lock-held ((plugin-lock manager))
     (handler-case
-        (with-open-file (stream config-path :direction :input :if-does-not-exist :error)
+        (with-open-file (stream config-path :direction :input)
           (let* ((config-json (json:decode-json stream))
                  (plugins (cdr (assoc :plugins config-json)))
                  (transport-path (cdr (assoc :transport plugins)))
                  (hardware-obj (cdr (assoc :hardware plugins))))
-            ;; Validate config against schema
-            (unless (probe-file "config.schema.json")
-              (signal-dcf-error :file-not-found "Config schema file not found"))
-            (unless (jsonschema:validate (json:encode-json-to-string config-json) (read-file "config.schema.json"))
-              (signal-dcf-error :config-invalid "Invalid config.json schema"))
             ;; Load Transport
             (when transport-path
               (unless (probe-file transport-path)
                 (signal-dcf-error :file-not-found (format nil "Transport plugin ~A not found" transport-path)))
               (load transport-path :if-does-not-exist :error)
-              (let* ((pkg (find-package (string-upcase (pathname-name (pathname transport-path)))))
-                     (create (when pkg (find-symbol "CREATE-PLUGIN" pkg)))
-                     (get-version (when pkg (find-symbol "GET-PLUGIN-VERSION" pkg))))
+              (let ((pkg (find-package (pathname-name (pathname transport-path))))
+                    (create (find-symbol "CREATE-PLUGIN" pkg))
+                    (get-version (find-symbol "GET-PLUGIN-VERSION" pkg)))
                 (unless (and create get-version)
-                  (signal-dcf-error :plugin-fail (format nil "Missing create/version functions in ~A" transport-path)))
+                  (signal-dcf-error :plugin-fail "Missing create/version functions in transport plugin"))
                 (let ((version (funcall get-version)))
-                  (unless (and (stringp version) (version>= version "1.1"))
-                    (signal-dcf-error :invalid-version (format nil "Invalid version ~A for ~A (requires >=1.1)" version transport-path))))
+                  (unless (and (stringp version) (>= (parse-integer (subseq version 0 3) :radix 10 :junk-allowed t) 1.1))
+                    (signal-dcf-error :invalid-version (format nil "Invalid version ~A for ~A" version transport-path))))
                 (let ((instance (funcall create)))
                   (unless (typep instance 'itransport)
                     (signal-dcf-error :plugin-fail (format nil "Invalid transport instance type for ~A" transport-path)))
                   (let ((params (cdr (assoc :transport-params config-json)))
                         (timeout (or (cdr (assoc :timeout-ms config-json)) 5000)))
                     (unless (funcall (setup instance) instance params timeout)
-                      (signal-dcf-error :plugin-fail (format nil "Transport setup failed for ~A" transport-path))))
+                      (signal-dcf-error :plugin-fail "Transport setup failed")))
                   (setf (dcf-transport manager) instance))))
-            ;; Load Hardware (multiple, non-fatal per plugin)
+            ;; Load Hardware (multiple)
             (when hardware-obj
               (loop for (id . path) in hardware-obj
                     do (handler-case
                            (progn
                              (unless (probe-file path)
-                               (log:warn *dcf-logger* "Hardware plugin ~A not found" path)
-                               (continue))
+                               (signal-dcf-error :file-not-found (format nil "Hardware plugin ~A not found" path)))
                              (load path :if-does-not-exist :error)
-                             (let* ((pkg (find-package (string-upcase (pathname-name (pathname path)))))
-                                    (create (when pkg (find-symbol "CREATE-PLUGIN" pkg)))
-                                    (get-version (when pkg (find-symbol "GET-PLUGIN-VERSION" pkg))))
+                             (let ((pkg (find-package (pathname-name (pathname path))))
+                                   (create (find-symbol "CREATE-PLUGIN" pkg))
+                                   (get-version (find-symbol "GET-PLUGIN-VERSION" pkg)))
                                (unless (and create get-version)
                                  (log:warn *dcf-logger* "Skipping ~A: missing create/version functions" path)
                                  (continue))
                                (let ((version (funcall get-version)))
-                                 (unless (and (stringp version) (version>= version "1.1"))
+                                 (unless (and (stringp version) (>= (parse-integer (subseq version 0 3) :radix 10 :junk-allowed t) 1.1))
                                    (log:warn *dcf-logger* "Skipping ~A: invalid version ~A" path version)
                                    (continue)))
                                (let ((instance (funcall create)))
@@ -177,22 +136,19 @@
         (log:error *dcf-logger* "Config file error: ~A" e)
         :error)
       (error (e)
-        (log:error *dcf-logger* "Plugin load error: ~A" e)
+        (log:error *dcf-logger* "Load error: ~A" e)
         :error))))
 
 (defun dcf-plugin-manager-get-transport (manager)
-  "Get the loaded transport plugin instance, thread-safe."
-  (bt:with-lock-held ((dcf-lock manager))
+  (bt:with-lock-held ((plugin-lock manager))
     (dcf-transport manager)))
 
 (defun dcf-plugin-manager-get-hardware (manager plugin-id)
-  "Get a hardware plugin instance by ID, thread-safe."
-  (bt:with-lock-held ((dcf-lock manager))
+  (bt:with-lock-held ((plugin-lock manager))
     (cdr (gethash plugin-id (dcf-hardware manager)))))
 
 (defun dcf-plugin-manager-free (manager)
-  "Free all loaded plugins, thread-safe."
-  (bt:with-lock-held ((dcf-lock manager))
+  (bt:with-lock-held ((plugin-lock manager))
     (when (dcf-transport manager)
       (handler-case
           (funcall (destroy (dcf-transport manager)) (dcf-transport manager))
@@ -209,28 +165,26 @@
                  (remhash id (dcf-hardware manager))))
              (dcf-hardware manager))))
 
-;; Manual Plugin Loading (for CLI or single loads)
+;; Update Existing dcf-load-plugin to Use Manager (for manual/single loads)
 (defun dcf-load-plugin (path)
-  "Load a single plugin (hardware by default) manually, thread-safe."
-  (bt:with-lock-held ((dcf-lock *global-manager*))
+  (bt:with-lock-held ((plugin-lock *global-manager*))
     (handler-case
         (progn
           (unless (probe-file path)
             (signal-dcf-error :file-not-found (format nil "Plugin ~A not found" path)))
           (load path :if-does-not-exist :error)
-          (let* ((pkg (find-package (string-upcase (pathname-name (pathname path)))))
-                 (create (when pkg (find-symbol "CREATE-PLUGIN" pkg)))
-                 (get-version (when pkg (find-symbol "GET-PLUGIN-VERSION" pkg))))
+          (let ((create (find-symbol "CREATE-PLUGIN" (find-package (pathname-name (pathname path)))))
+                (get-version (find-symbol "GET-PLUGIN-VERSION" (find-package (pathname-name (pathname path))))))
             (unless (and create get-version)
-              (signal-dcf-error :plugin-fail (format nil "Missing create/version functions in ~A" path)))
+              (signal-dcf-error :plugin-fail "Missing create/version functions"))
             (let ((version (funcall get-version)))
-              (unless (and (stringp version) (version>= version "1.1"))
-                (signal-dcf-error :invalid-version (format nil "Invalid version ~A in ~A (requires >=1.1)" version path))))
+              (unless (and (stringp version) (>= (parse-integer (subseq version 0 3) :radix 10 :junk-allowed t) 1.1))
+                (signal-dcf-error :invalid-version (format nil "Invalid version ~A" version))))
             (let ((instance (funcall create)))
               (unless (typep instance 'ihardware-plugin)
                 (signal-dcf-error :plugin-fail (format nil "Invalid hardware instance type for ~A" path)))
-              (unless (funcall (setup instance) instance nil)  ; Default params
-                (signal-dcf-error :plugin-fail (format nil "Setup failed for ~A" path)))
+              (unless (funcall (setup instance) instance nil)
+                (signal-dcf-error :plugin-fail "Setup failed"))
               (let ((id (pathname-name (pathname path))))
                 (setf (gethash id (dcf-hardware *global-manager*)) (cons path instance)))
               instance)))
@@ -241,38 +195,20 @@
         (log:error *dcf-logger* "Load plugin error: ~A" e)
         nil))))
 
-;; Global Manager (thread-safe)
+;; Global Manager (for simplicity; thread-safe with locks)
 (defvar *global-manager* (dcf-plugin-manager-new) "Global plugin manager instance.")
 
-;; Utility Functions
-(defun read-file (path)
-  "Read file contents as a string."
-  (with-open-file (stream path :direction :input :if-does-not-exist :error)
-    (let ((contents (make-string (file-length stream))))
-      (read-sequence contents stream)
-      contents)))
-
-;; Core Functionality
+;; Core Functionality (minimal implementations for CLI/export compatibility)
 (defun dcf-init (config-path)
   "Initialize DCF with config.json, including plugin loading."
   (handler-case
       (progn
         (unless (probe-file config-path)
           (signal-dcf-error :file-not-found (format nil "Config file ~A not found" config-path)))
-        (let* ((config-json (json:decode-json-from-string (read-file config-path)))
-               (config (make-instance 'dcf-config
-                                      :transport (cdr (assoc :transport config-json))
-                                      :host (cdr (assoc :host config-json))
-                                      :port (cdr (assoc :port config-json))
-                                      :mode (cdr (assoc :mode config-json))
-                                      :node-id (cdr (assoc :node-id config-json))
-                                      :peers (cdr (assoc :peers config-json))
-                                      :group-rtt-threshold (cdr (assoc :group-rtt-threshold config-json))
-                                      :plugins (cdr (assoc :plugins config-json)))))
-          (when (eq (dcf-plugin-manager-load *global-manager* config-path) :error)
-            (signal-dcf-error :init-fail "Plugin loading failed during init"))
-          (log:info *dcf-logger* "Initialized with config: ~A" config-path)
-          config))
+        (when (eq (dcf-plugin-manager-load *global-manager* config-path) :error)
+          (signal-dcf-error :init-fail "Plugin loading failed during init"))
+        (log:info *dcf-logger* "Initialized with config: ~A" config-path)
+        :success)
       (error (e)
         (log:error *dcf-logger* "Init error: ~A" e)
         :error)))
@@ -283,7 +219,6 @@
   (let ((transport (dcf-plugin-manager-get-transport *global-manager*)))
     (unless transport
       (signal-dcf-error :no-transport "No transport plugin loaded"))
-    ;; Initialize gRPC or other transport (stub)
     :success))
 
 (defun dcf-stop ()
@@ -297,7 +232,7 @@
   (let ((transport (dcf-plugin-manager-get-transport *global-manager*)))
     (unless transport
       (signal-dcf-error :no-transport "No transport plugin loaded"))
-    (unless (funcall (send transport) transport data recipient 3) ; Default 3 retries
+    (unless (funcall (send transport) transport data recipient 3)
       (signal-dcf-error :send-fail "Failed to send message"))
     (log:info *dcf-logger* "Sent message to ~A" recipient)
     :success))
@@ -307,7 +242,7 @@
   (let ((transport (dcf-plugin-manager-get-transport *global-manager*)))
     (unless transport
       (signal-dcf-error :no-transport "No transport plugin loaded"))
-    (let ((data (funcall (receive transport) transport 5000))) ; 5s timeout
+    (let ((data (funcall (receive transport) transport 5000)))
       (if data
           (log:info *dcf-logger* "Received message: ~A" data)
           (log:warn *dcf-logger* "No message received"))
@@ -316,7 +251,7 @@
 (defun dcf-status ()
   "Get node status."
   (log:info *dcf-logger* "Retrieving status")
-  `(:status "running" :peers (dcf-list-peers) :mode "auto")) ; Stub
+  `(:status "running" :peers (dcf-list-peers) :mode "auto"))
 
 (defun dcf-health-check (peer)
   "Check peer health and RTT."
@@ -332,12 +267,12 @@
 (defun dcf-list-peers ()
   "List peers with group information."
   (log:info *dcf-logger* "Listing peers")
-  '("peer1" "peer2")) ; Stub
+  '("peer1" "peer2"))
 
 (defun dcf-heal (peer)
   "Trigger failover for a peer."
   (log:info *dcf-logger* "Healing peer: ~A" peer)
-  :success) ; Stub
+  :success)
 
 (defun dcf-version ()
   "Return SDK version."
@@ -346,17 +281,17 @@
 (defun dcf-benchmark (peer)
   "Benchmark RTT to a peer."
   (log:info *dcf-logger* "Benchmarking peer: ~A" peer)
-  `(:peer ,peer :rtt-ms 10)) ; Stub
+  `(:peer ,peer :rtt-ms 10))
 
 (defun dcf-group-peers ()
   "Regroup peers by RTT."
   (log:info *dcf-logger* "Regrouping peers")
-  :success) ; Stub
+  :success)
 
 (defun dcf-simulate-failure (peer)
   "Simulate peer failure for testing."
   (log:info *dcf-logger* "Simulating failure for peer: ~A" peer)
-  :success) ; Stub
+  :success)
 
 (defun dcf-log-level (level)
   "Set logging level (0=debug, 1=info, 2=error)."
@@ -376,7 +311,7 @@
     (curses:addstr "DCF TUI: Monitoring peers...")
     (curses:refresh)
     (curses:getch))
-  :success) ; Basic TUI stub
+  :success)
 
 (defun def-dcf-plugin (name superclasses slots &rest methods)
   "Macro to define a plugin (transport or hardware)."
@@ -393,7 +328,7 @@
 (defun dcf-master-assign-role (peer role)
   "Assign a role to a peer in master mode."
   (log:info *dcf-logger* "Assigning role ~A to peer ~A" role peer)
-  :success) ; Stub
+  :success)
 
 (defun dcf-master-update-config (config-path)
   "Update configuration in master mode."
@@ -403,12 +338,12 @@
 (defun dcf-master-collect-metrics ()
   "Collect network metrics in master mode."
   (log:info *dcf-logger* "Collecting metrics")
-  `(:metrics (:peer-count 2 :avg-rtt 10))) ; Stub
+  `(:metrics (:peer-count 2 :avg-rtt 10)))
 
 (defun dcf-master-optimize-network ()
   "Optimize network topology using AI (MGL)."
   (log:info *dcf-logger* "Optimizing network")
-  (mgl:optimize nil) ; Stub for MGL-based optimization
+  (mgl:optimize nil)
   :success)
 
 (defun dcf-set-mode (mode)
@@ -426,22 +361,22 @@
 (defun add-middleware (fn)
   "Add middleware function for message processing."
   (log:info *dcf-logger* "Adding middleware: ~A" fn)
-  :success) ; Stub
+  :success)
 
 (defun remove-middleware (fn)
   "Remove middleware function."
   (log:info *dcf-logger* "Removing middleware: ~A" fn)
-  :success) ; Stub
+  :success)
 
 (defun dcf-trace-message (msg)
   "Trace a message through middleware."
   (log:info *dcf-logger* "Tracing message: ~A" msg)
-  `(:message ,msg :trace "middleware1 -> middleware2")) ; Stub
+  `(:message ,msg :trace "middleware1 -> middleware2"))
 
 (defun dcf-debug-network ()
   "Debug network state."
   (log:info *dcf-logger* "Debugging network")
-  `(:peers ,(dcf-list-peers) :status "ok")) ; Stub
+  `(:peers ,(dcf-list-peers) :status "ok"))
 
 (defun dcf-quick-start-client (config-path)
   "Facade to initialize and start a client."
@@ -458,7 +393,7 @@
 (defun dcf-get-metrics ()
   "Retrieve monitoring metrics."
   (log:info *dcf-logger* "Retrieving metrics")
-  `(:peer-count 2 :avg-rtt 10)) ; Stub
+  `(:peer-count 2 :avg-rtt 10))
 
 (defun dcf-visualize-topology (file)
   "Generate Graphviz DOT file for topology."
@@ -532,8 +467,8 @@
         (if json-output
             (cl-json:encode-json-to-string result)
             (format t "~A~%" result)))
-      (error (e)
-        (log:error *dcf-logger* "CLI error: ~A~%Backtrace: ~A" e (trivial-backtrace:backtrace-string))
-        (if (position "--json" args :test #'string=)
-            (cl-json:encode-json-to-string `(:status "error" :message ,(princ-to-string e)))
-            (format t "Error: ~A~%" e)))))
+    (error (e)
+      (log:error *dcf-logger* "CLI error: ~A~%Backtrace: ~A" e (trivial-backtrace:backtrace-string))
+      (if (position "--json" args :test #'string=)
+          (cl-json:encode-json-to-string `(:status "error" :message ,(princ-to-string e)))
+          (format t "Error: ~A~%" e)))))
