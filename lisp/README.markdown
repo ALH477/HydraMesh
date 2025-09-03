@@ -15,9 +15,9 @@ This SDK, developed by **DeMoD LLC** with significant contributions from **Grok 
 D-LISP achieves its extensive functionality in just **653 non-comment, non-blank lines of code** (verified across the core implementation and plugins). This remarkable efficiency is made possible by Common Lisp's expressive features, such as macros (e.g., `def-dcf-plugin` for concise plugin definitions) and CLOS for type-safe abstractions. The codebase remains lean while delivering a full SDK/DSL, with plugins like LoRaWAN fitting in under 30 lines each. This compactness ensures maintainability, reduces deployment overhead, and highlights Lisp's power for building complex systems with minimal verbosity.
 
 - **Core Breakdown**:
-  - `d-lisp.lisp` (main SDK/DSL): 536 lines
+  - `d-lisp.lisp` (main SDK/DSL): 672 lines
   - Plugins (e.g., LoRaWAN, Serial, CAN, SCTP, Zigbee): 117 lines total (21-26 lines each)
-- **Why It's Impressive**: Comparable frameworks often span thousands of lines, but D-LISP packs in transports, AI optimization, self-healing P2P, and more without bloat, making it ideal for resource-constrained environments.
+
 
 ## Key Features
 
