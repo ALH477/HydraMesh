@@ -8,20 +8,12 @@
 ;; comprehensive error handling, logging, and performance optimizations.
 ;; Enhanced in v1.7.0 with:
 ;; - Support for LoRaWAN transport plugin via CFFI bindings.
-;; - Refined plugin manager: thread-safe, multi-hardware support by ID,
-;;   version checking (>=1.1), JSON parameters, robust error handling.
 
 ;; Dependencies: Install via Quicklisp
-(ql:quickload '(:cl-protobufs :cl-grpc :cffi :uuid :cl-json :jsonschema :cl-ppcre
-                :cl-csv :usocket :bordeaux-threads :curses :log4cl :trivial-backtrace
-                :cl-store :mgl :hunchensocket :fiveam :cl-dot :cl-lsquic :cl-serial
-                :cl-can :cl-sctp :cl-zigbee :cl-lorawan))
+(ql:quickload '(:cl-protobufs :cl-grpc :cffi :uuid :cl-json :jsonschema :cl-ppcre :cl-csv :usocket :bordeaux-threads :curses :log4cl :trivial-backtrace :cl-store :mgl :hunchensocket :fiveam :cl-dot :cl-lsquic :cl-serial :cl-can :cl-sctp :cl-zigbee :cl-lorawan))
 
 (defpackage :d-lisp
-  (:use :cl :cl-protobufs :cl-grpc :cffi :uuid :cl-json :jsonschema :cl-ppcre
-        :cl-csv :usocket :bordeaux-threads :curses :log4cl :trivial-backtrace
-        :cl-store :mgl :hunchensocket :fiveam :cl-dot :cl-lsquic :cl-serial
-        :cl-can :cl-sctp :cl-zigbee :cl-lorawan)
+  (:use :cl :cl-protobufs :cl-grpc :cffi :uuid :cl-json :jsonschema :cl-ppcre :cl-csv :usocket :bordeaux-threads :curses :log4cl :trivial-backtrace :cl-store :mgl :hunchensocket :fiveam :cl-dot :cl-lsquic :cl-serial :cl-can :cl-sctp :cl-zigbee :cl-lorawan)
   (:export :dcf-init :dcf-start :dcf-stop :dcf-send :dcf-receive :dcf-status
            :dcf-health-check :dcf-list-peers :dcf-heal :dcf-version :dcf-benchmark
            :dcf-group-peers :dcf-simulate-failure :dcf-log-level :dcf-load-plugin
@@ -45,421 +37,1024 @@
              (format stream "DCF Error [~A]: ~A" (dcf-error-code condition) (dcf-error-message condition)))))
 
 (defun signal-dcf-error (code message)
-  "Signal a DCF-specific error with code and message."
   (error 'dcf-error :code code :message message))
 
 ;; Formal Type System for Network Messages
 (defclass dcf-message ()
   ((sender :initarg :sender :accessor sender :type string)
    (recipient :initarg :recipient :accessor recipient :type string)
-   (data :initarg :data :accessor data :type (or string (vector (unsigned-byte 8))))
-   (timestamp :initarg :timestamp :accessor timestamp :type integer :initform (get-universal-time))
-   (group-id :initarg :group-id :accessor group-id :type integer :initform 0)))
+   (data :initarg :data :accessor data :type (or string (simple-array (unsigned-byte 8) (*))))
+   (timestamp :initarg :timestamp :accessor timestamp :type integer)
+   (sync :initarg :sync :accessor sync :type boolean)
+   (sequence :initarg :sequence :accessor sequence :type (unsigned-byte 32))
+   (redundancy-path :initarg :redundancy-path :accessor redundancy-path :type string)
+   (group-id :initarg :group-id :accessor group-id :type string))
+  (:documentation "Formal CLOS class for DCF messages with type declarations."))
 
-;; Plugin Interfaces (mirroring C ITransport and IHardwarePlugin)
-(defclass itransport ()
-  ((setup :initarg :setup :accessor setup :type function)  ; (self params timeout-ms) -> boolean
-   (send :initarg :send :accessor send :type function)    ; (self data target retries) -> boolean
-   (receive :initarg :receive :accessor receive :type function)  ; (self timeout-ms) -> data or nil
-   (health-check :initarg :health-check :accessor health-check :type function)  ; (self target rtt-ms) -> boolean
-   (destroy :initarg :destroy :accessor destroy :type function))  ; (self) -> void
-  (:documentation "Interface for transport plugins (e.g., gRPC, UDP, LoRaWAN)."))
+(defmethod initialize-instance :after ((msg dcf-message) &key)
+  (unless (stringp (sender msg)) (signal-dcf-error :type-error "Sender must be a string"))
+  (unless (stringp (recipient msg)) (signal-dcf-error :type-error "Recipient must be a string"))
+  (unless (or (stringp (data msg)) (typep (data msg) '(simple-array (unsigned-byte 8) (*))))
+    (signal-dcf-error :type-error "Data must be a string or byte array"))
+  (unless (integerp (timestamp msg)) (signal-dcf-error :type-error "Timestamp must be an integer"))
+  (unless (booleanp (sync msg)) (signal-dcf-error :type-error "Sync must be a boolean"))
+  (unless (typep (sequence msg) '(unsigned-byte 32)) (signal-dcf-error :type-error "Sequence must be an unsigned 32-bit integer"))
+  (unless (stringp (redundancy-path msg)) (signal-dcf-error :type-error "Redundancy-path must be a string"))
+  (unless (stringp (group-id msg)) (signal-dcf-error :type-error "Group-id must be a string")))
 
-(defclass ihardware-plugin ()
-  ((setup :initarg :setup :accessor setup :type function)  ; (self params) -> boolean
-   (execute :initarg :execute :accessor execute :type function)  ; (self command-data) -> data or nil
-   (destroy :initarg :destroy :accessor destroy :type function))  ; (self) -> void
-  (:documentation "Interface for hardware plugins (e.g., I2C, USB)."))
+;; Configuration Structure with Serialization and Type Declarations
+(deftype transport-type () '(member "gRPC" "native-lisp" "WebSocket" "udp" "quic" "bluetooth" "serial" "can" "sctp" "zigbee" "lorawan"))
+(defstruct (dcf-config (:constructor make-dcf-config%)
+                       (:conc-name dcf-config-))
+  (transport "gRPC" :type transport-type)
+  (host "localhost" :type string)
+  (port 50051 :type (integer 0 65535))
+  (mode "client" :type string)
+  (node-id (uuid:print-bytes nil (uuid:make-v4-uuid)) :type string)
+  (peers '() :type list)
+  (group-rtt-threshold 50 :type (integer 0 1000))
+  (plugins (make-hash-table :test 'equal) :type hash-table)
+  (state-file "dcf-state.bin" :type string)
+  (serial-port "/dev/ttyUSB0" :type string)
+  (baud-rate 9600 :type (integer 300 115200))
+  (can-interface "can0" :type string)
+  (zigbee-device "/dev/ttyACM0" :type string)
+  (lorawan-device "/dev/ttyACM1" :type string)
+  (lorawan-app-eui "0000000000000000" :type string)
+  (lorawan-app-key "00000000000000000000000000000000" :type string))
 
-;; Plugin Manager Class (refined for thread-safety, robustness)
-(defclass dcf-plugin-manager ()
-  ((transport :initform nil :accessor dcf-transport :documentation "Singleton transport plugin instance")
-   (hardware :initform (make-hash-table :test #'equal) :accessor dcf-hardware :documentation "Hash-table: id -> (cons path instance)")
-   (lock :initform (bt:make-lock "plugin-manager-lock") :accessor dcf-lock :documentation "Lock for thread-safety")))
+(defun make-dcf-config (&rest args)
+  "Create and persist configuration."
+  (let ((config (apply #'make-dcf-config% args)))
+    (cl-store:store config (dcf-config-state-file config))
+    config))
 
-(defun dcf-plugin-manager-new ()
-  "Create a new plugin manager instance."
-  (make-instance 'dcf-plugin-manager))
-
-(defun version>= (v1 v2)
-  "Compare version strings (e.g., '1.1.0' >= '1.1')."
-  (let ((parts1 (mapcar #'parse-integer (split-sequence:split-sequence #\. v1 :remove-empty-subseqs t)))
-        (parts2 (mapcar #'parse-integer (split-sequence:split-sequence #\. v2 :remove-empty-subseqs t))))
-    (loop for p1 in parts1
-          for p2 in parts2
-          if (> p1 p2) return t
-          if (< p1 p2) return nil
-          finally return t)))
-
-(defun dcf-plugin-manager-load (manager config-path)
-  "Load transport and hardware plugins from config.json, thread-safe."
-  (bt:with-lock-held ((dcf-lock manager))
-    (handler-case
-        (with-open-file (stream config-path :direction :input :if-does-not-exist :error)
-          (let* ((config-json (json:decode-json stream))
-                 (plugins (cdr (assoc :plugins config-json)))
-                 (transport-path (cdr (assoc :transport plugins)))
-                 (hardware-obj (cdr (assoc :hardware plugins))))
-            ;; Validate config against schema
-            (unless (jsonschema:validate (json:encode-json-to-string config-json) (read-file "config.schema.json"))
-              (signal-dcf-error :config-invalid "Invalid config.json schema"))
-            ;; Load Transport
-            (when transport-path
-              (unless (probe-file transport-path)
-                (signal-dcf-error :file-not-found (format nil "Transport plugin ~A not found" transport-path)))
-              (load transport-path :if-does-not-exist :error)
-              (let* ((pkg (find-package (string-upcase (pathname-name (pathname transport-path)))))
-                     (create (when pkg (find-symbol "CREATE-PLUGIN" pkg)))
-                     (get-version (when pkg (find-symbol "GET-PLUGIN-VERSION" pkg))))
-                (unless (and create get-version)
-                  (signal-dcf-error :plugin-fail (format nil "Missing create/version functions in ~A" transport-path)))
-                (let ((version (funcall get-version)))
-                  (unless (and (stringp version) (version>= version "1.1"))
-                    (signal-dcf-error :invalid-version (format nil "Invalid version ~A for ~A (requires >=1.1)" version transport-path))))
-                (let ((instance (funcall create)))
-                  (unless (typep instance 'itransport)
-                    (signal-dcf-error :plugin-fail (format nil "Invalid transport instance type for ~A" transport-path)))
-                  (let ((params (cdr (assoc :transport-params config-json)))
-                        (timeout (or (cdr (assoc :timeout-ms config-json)) 5000)))
-                    (unless (funcall (setup instance) instance params timeout)
-                      (signal-dcf-error :plugin-fail (format nil "Transport setup failed for ~A" transport-path))))
-                  (setf (dcf-transport manager) instance))))
-            ;; Load Hardware (multiple, non-fatal per plugin)
-            (when hardware-obj
-              (loop for (id . path) in hardware-obj
-                    do (handler-case
-                           (progn
-                             (unless (probe-file path)
-                               (log:warn *dcf-logger* "Hardware plugin ~A not found" path)
-                               (continue))
-                             (load path :if-does-not-exist :error)
-                             (let* ((pkg (find-package (string-upcase (pathname-name (pathname path)))))
-                                    (create (when pkg (find-symbol "CREATE-PLUGIN" pkg)))
-                                    (get-version (when pkg (find-symbol "GET-PLUGIN-VERSION" pkg))))
-                               (unless (and create get-version)
-                                 (log:warn *dcf-logger* "Skipping ~A: missing create/version functions" path)
-                                 (continue))
-                               (let ((version (funcall get-version)))
-                                 (unless (and (stringp version) (version>= version "1.1"))
-                                   (log:warn *dcf-logger* "Skipping ~A: invalid version ~A" path version)
-                                   (continue)))
-                               (let ((instance (funcall create)))
-                                 (unless (typep instance 'ihardware-plugin)
-                                   (log:warn *dcf-logger* "Skipping ~A: invalid hardware instance type" path)
-                                   (continue))
-                                 (let ((params (cdr (assoc (intern (string-upcase id) :keyword)
-                                                           (cdr (assoc :hardware-params config-json))))))
-                                   (unless (funcall (setup instance) instance params)
-                                     (log:warn *dcf-logger* "Skipping ~A: setup failed" path)
-                                     (continue)))
-                                 (setf (gethash id (dcf-hardware manager)) (cons path instance)))))
-                         (error (e)
-                           (log:warn *dcf-logger* "Failed to load hardware plugin ~A: ~A" path e)
-                           (continue)))))
-            :success))
-      (file-error (e)
-        (log:error *dcf-logger* "Config file error: ~A" e)
-        :error)
-      (error (e)
-        (log:error *dcf-logger* "Plugin load error: ~A" e)
-        :error))))
-
-(defun dcf-plugin-manager-get-transport (manager)
-  "Get the loaded transport plugin instance, thread-safe."
-  (bt:with-lock-held ((dcf-lock manager))
-    (dcf-transport manager)))
-
-(defun dcf-plugin-manager-get-hardware (manager plugin-id)
-  "Get a hardware plugin instance by ID, thread-safe."
-  (bt:with-lock-held ((dcf-lock manager))
-    (cdr (gethash plugin-id (dcf-hardware manager)))))
-
-(defun dcf-plugin-manager-free (manager)
-  "Free all loaded plugins, thread-safe."
-  (bt:with-lock-held ((dcf-lock manager))
-    (when (dcf-transport manager)
-      (handler-case
-          (funcall (destroy (dcf-transport manager)) (dcf-transport manager))
-        (error (e)
-          (log:warn *dcf-logger* "Transport destroy error: ~A" e)))
-      (setf (dcf-transport manager) nil))
-    (maphash (lambda (id entry)
-               (let ((instance (cdr entry)))
-                 (when instance
-                   (handler-case
-                       (funcall (destroy instance) instance)
-                     (error (e)
-                       (log:warn *dcf-logger* "Hardware ~A destroy error: ~A" id e))))
-                 (remhash id (dcf-hardware manager))))
-             (dcf-hardware manager))))
-
-;; Manual Plugin Loading (for CLI or single loads)
-(defun dcf-load-plugin (path)
-  "Load a single plugin (hardware by default) manually, thread-safe."
-  (bt:with-lock-held ((dcf-lock *global-manager*))
-    (handler-case
-        (progn
-          (unless (probe-file path)
-            (signal-dcf-error :file-not-found (format nil "Plugin ~A not found" path)))
-          (load path :if-does-not-exist :error)
-          (let* ((pkg (find-package (string-upcase (pathname-name (pathname path)))))
-                 (create (when pkg (find-symbol "CREATE-PLUGIN" pkg)))
-                 (get-version (when pkg (find-symbol "GET-PLUGIN-VERSION" pkg))))
-            (unless (and create get-version)
-              (signal-dcf-error :plugin-fail (format nil "Missing create/version functions in ~A" path)))
-            (let ((version (funcall get-version)))
-              (unless (and (stringp version) (version>= version "1.1"))
-                (signal-dcf-error :invalid-version (format nil "Invalid version ~A in ~A (requires >=1.1)" version path))))
-            (let ((instance (funcall create)))
-              (unless (typep instance 'ihardware-plugin)
-                (signal-dcf-error :plugin-fail (format nil "Invalid hardware instance type for ~A" path)))
-              (unless (funcall (setup instance) instance nil)  ; Default params
-                (signal-dcf-error :plugin-fail (format nil "Setup failed for ~A" path)))
-              (let ((id (pathname-name (pathname path))))
-                (setf (gethash id (dcf-hardware *global-manager*)) (cons path instance)))
-              instance)))
-      (file-error (e)
-        (log:error *dcf-logger* "Plugin file error: ~A" e)
-        nil)
-      (error (e)
-        (log:error *dcf-logger* "Load plugin error: ~A" e)
-        nil))))
-
-;; Global Manager (thread-safe)
-(defvar *global-manager* (dcf-plugin-manager-new) "Global plugin manager instance.")
-
-;; Configuration Handling
-(defun read-file (path)
-  "Read file contents as a string."
-  (with-open-file (stream path :direction :input :if-does-not-exist :error)
-    (let ((contents (make-string (file-length stream))))
-      (read-sequence contents stream)
-      contents)))
-
-(defun dcf-init (config-path)
-  "Initialize DCF with config.json, including plugin loading."
+(defun load-config (path)
+  "Load and validate JSON configuration with schema."
   (handler-case
-      (progn
-        (unless (probe-file config-path)
-          (signal-dcf-error :file-not-found (format nil "Config file ~A not found" config-path)))
-        (when (eq (dcf-plugin-manager-load *global-manager* config-path) :error)
-          (signal-dcf-error :init-fail "Plugin loading failed during init"))
-        (log:info *dcf-logger* "Initialized with config: ~A" config-path)
-        :success)
-      (error (e)
-        (log:error *dcf-logger* "Init error: ~A" e)
-        :error)))
+      (with-open-file (stream path :direction :input)
+        (let* ((json (cl-json:decode-json stream))
+               (schema (cl-json:decode-json-from-source (merge-pathnames "config.schema.json" (asdf:system-source-directory :d-lisp))))
+               (validator (jsonschema:make-validator schema)))
+          (unless (jsonschema:validate validator json)
+            (signal-dcf-error :config-invalid "Configuration fails schema validation"))
+          (make-dcf-config
+           :transport (cdr (assoc :transport json))
+           :host (cdr (assoc :host json))
+           :port (cdr (assoc :port json))
+           :mode (cdr (assoc :mode json))
+           :node-id (or (cdr (assoc :node-id json)) (uuid:print-bytes nil (uuid:make-v4-uuid)))
+           :peers (cdr (assoc :peers json))
+           :group-rtt-threshold (or (cdr (assoc :group-rtt-threshold json)) 50)
+           :plugins (or (cdr (assoc :plugins json)) (make-hash-table :test 'equal))
+           :serial-port (or (cdr (assoc :serial-port json)) "/dev/ttyUSB0")
+           :baud-rate (or (cdr (assoc :baud-rate json)) 9600)
+           :can-interface (or (cdr (assoc :can-interface json)) "can0")
+           :zigbee-device (or (cdr (assoc :zigbee-device json)) "/dev/ttyACM0")
+           :lorawan-device (or (cdr (assoc :lorawan-device json)) "/dev/ttyACM1")
+           :lorawan-app-eui (or (cdr (assoc :lorawan-app-eui json)) "0000000000000000")
+           :lorawan-app-key (or (cdr (assoc :lorawan-app-key json)) "00000000000000000000000000000000"))))
+    (file-error (e) (signal-dcf-error :file-not-found (format nil "Config file not found: ~A" path)))
+    (jsonschema:validation-error (e) (signal-dcf-error :schema-violation (format nil "Schema violation: ~A" e)))))
 
-;; Placeholder for Core Functionality (assumed from truncated original)
-(defun dcf-start ()
-  "Start the DCF node."
-  (log:info *dcf-logger* "Starting DCF node")
-  :success)
+(defun save-state (config)
+  "Persist state to file."
+  (cl-store:store config (dcf-config-state-file config)))
 
-(defun dcf-stop ()
-  "Stop the DCF node gracefully."
-  (log:info *dcf-logger* "Stopping DCF node")
-  (dcf-plugin-manager-free *global-manager*)
-  :success)
+(defun restore-state (state-file)
+  "Restore persisted state."
+  (handler-case
+      (cl-store:restore state-file)
+    (file-error () nil)))
 
-(defun dcf-send (data recipient)
-  "Send a message to a recipient via the transport plugin."
-  (let ((transport (dcf-plugin-manager-get-transport *global-manager*)))
-    (unless transport
-      (signal-dcf-error :no-transport "No transport plugin loaded"))
-    (unless (funcall (send transport) transport data recipient 3) ; Default 3 retries
-      (signal-dcf-error :send-fail "Failed to send message"))
-    (log:info *dcf-logger* "Sent message to ~A" recipient)
-    :success))
+;; Networking Layer with Modes, Native Transport, and Connection Pooling
+(defclass dcf-node ()
+  ((channel :initarg :channel :accessor channel :initform nil)
+   (stub :initarg :stub :accessor stub :initform nil)
+   (server :initarg :server :accessor server :initform nil)
+   (mode :initarg :mode :accessor mode :type string)
+   (config :initarg :config :accessor config :type dcf-config)
+   (plugins :initform (make-hash-table :test 'equal) :accessor plugins :type hash-table)
+   (peer-groups :initform (make-hash-table :test 'equal) :accessor peer-groups :type hash-table)
+   (thread-pool :initform (bt:make-thread-pool 4) :accessor thread-pool)
+   (master-connection :initform nil :accessor master-connection)
+   (native-transport :initform nil :accessor native-transport)
+   (connection-pool :initform (make-hash-table :test 'equal) :accessor connection-pool) ; Connection pool
+   (middlewares :initform nil :accessor middlewares) ; Middleware chain
+   (metrics :initform (make-hash-table :test 'equal) :accessor metrics))) ; Metrics
 
-(defun dcf-receive ()
-  "Receive a message via the transport plugin."
-  (let ((transport (dcf-plugin-manager-get-transport *global-manager*)))
-    (unless transport
-      (signal-dcf-error :no-transport "No transport plugin loaded"))
-    (let ((data (funcall (receive transport) transport 5000))) ; 5s timeout
-      (if data
-          (log:info *dcf-logger* "Received message: ~A" data)
-          (log:warn *dcf-logger* "No message received"))
-      data)))
+(defvar *node* nil "Global DCF node instance.")
 
-(defun dcf-status ()
-  "Get node status."
-  (log:info *dcf-logger* "Retrieving status")
-  `(:status "running" :peers (list-peers) :mode "auto")) ; Placeholder
+(defun initialize-node (config)
+  "Initialize node based on mode, with native transport option."
+  (let ((node (make-instance 'dcf-node :mode (dcf-config-mode config) :config config)))
+    (when (member (dcf-config-transport config) '("native-lisp" "udp" "quic" "bluetooth" "serial" "can" "sctp" "zigbee" "lorawan") :test #'string=)
+      (setup-transport node (dcf-config-transport config)))
+    (initialize-connection-pool node)
+    (case (intern (string-upcase (dcf-config-mode config)))
+      (:server (setup-server node))
+      (:client (setup-client node))
+      (:p2p (setup-p2p node))
+      (:auto (setup-auto node))
+      (:master (setup-master node))
+      (t (signal-dcf-error :invalid-mode (format nil "Unknown mode: ~A" (dcf-config-mode config)))))
+    (log:info *dcf-logger* "Node initialized in ~A mode with transport ~A" (mode node) (dcf-config-transport config))
+    node))
 
-(defun dcf-health-check (peer)
-  "Check peer health and RTT."
-  (let ((transport (dcf-plugin-manager-get-transport *global-manager*)))
-    (unless transport
-      (signal-dcf-error :no-transport "No transport plugin loaded"))
-    (let ((rtt-ms (make-int-pointer))) ; CFFI or similar for RTT
-      (if (funcall (health-check transport) transport peer rtt-ms)
-          (log:info *dcf-logger* "Peer ~A healthy, RTT: ~Ams" peer (cffi:mem-ref rtt-ms :int))
-          (log:warn *dcf-logger* "Peer ~A unhealthy" peer))
-      `(:peer ,peer :healthy ,(funcall (health-check transport) transport peer rtt-ms) :rtt-ms ,(cffi:mem-ref rtt-ms :int)))))
+(defun setup-transport (node transport)
+  "Setup specific transport based on config."
+  (cond
+    ((string= transport "native-lisp") (setup-native-transport node))
+    ((string= transport "udp") (setup-udp-transport node))
+    ((string= transport "quic") (setup-quic-transport node))
+    ((string= transport "bluetooth") (setup-bluetooth-transport node))
+    ((string= transport "serial") (setup-serial-transport node))
+    ((string= transport "can") (setup-can-transport node))
+    ((string= transport "sctp") (setup-sctp-transport node))
+    ((string= transport "zigbee") (setup-zigbee-transport node))
+    ((string= transport "lorawan") (setup-lorawan-transport node))))
 
-(defun dcf-list-peers ()
-  "List peers with group information."
-  (log:info *dcf-logger* "Listing peers")
-  '("peer1" "peer2")) ; Placeholder
+(defun setup-lorawan-transport (node)
+  "Setup LoRaWAN transport using cl-lorawan."
+  (let ((lorawan (lorawan-initialize (dcf-config-lorawan-device (config node))
+                                     :app-eui (dcf-config-lorawan-app-eui (config node))
+                                     :app-key (dcf-config-lorawan-app-key (config node)))))
+    (lorawan-join-network lorawan)
+    (setf (gethash "lorawan" (plugins node)) lorawan)
+    (log:info *dcf-logger* "LoRaWAN transport setup on device ~A" (dcf-config-lorawan-device (config node)))))
 
-(defun dcf-heal (peer)
-  "Trigger failover for a peer."
-  (log:info *dcf-logger* "Healing peer: ~A" peer)
-  :success) ; Placeholder
+;; Connection Pooling
+(defun initialize-connection-pool (node)
+  "Initialize connection pool for gRPC or native transports."
+  (setf (gethash "grpc" (connection-pool node)) (make-array 10 :initial-element nil :adjustable t :fill-pointer 0))
+  (setf (gethash "native" (connection-pool node)) (make-array 10 :initial-element nil :adjustable t :fill-pointer 0))
+  (log:info *dcf-logger* "Connection pool initialized"))
 
-(defun dcf-version ()
-  "Return SDK version."
-  "1.7.0")
+(defun acquire-connection (node type address)
+  "Acquire a connection from pool or create new."
+  (let ((pool (gethash type (connection-pool node))))
+    (or (vector-pop pool)
+        (ecase type
+          (:grpc (cl-grpc:channel address :insecure t))
+          (:native (usocket:socket-connect (first (cl-ppcre:split ":" address)) (parse-integer (second (cl-ppcre:split ":" address)))))))))
 
-(defun dcf-benchmark (peer)
-  "Benchmark RTT to a peer."
-  (log:info *dcf-logger* "Benchmarking peer: ~A" peer)
-  `(:peer ,peer :rtt-ms 10)) ; Placeholder
+(defun release-connection (node type conn)
+  "Release connection back to pool."
+  (vector-push-extend conn (gethash type (connection-pool node))))
 
-(defun dcf-group-peers ()
-  "Regroup peers by RTT."
-  (log:info *dcf-logger* "Regrouping peers")
-  :success) ; Placeholder
-
-(defun dcf-simulate-failure (peer)
-  "Simulate peer failure for testing."
-  (log:info *dcf-logger* "Simulating failure for peer: ~A" peer)
-  :success) ; Placeholder
-
-(defun dcf-log-level (level)
-  "Set logging level (0=debug, 1=info, 2=error)."
-  (log:config *dcf-logger* (case level
-                             (0 :debug)
-                             (1 :info)
-                             (2 :error)
-                             (t (signal-dcf-error :invalid-argument "Invalid log level"))))
-  :success)
-
-(defun dcf-tui ()
-  "Start TUI for monitoring."
-  (log:info *dcf-logger* "Starting TUI")
-  :success) ; Placeholder
-
-(defun def-dcf-plugin (name superclasses slots &rest methods)
-  "Macro to define a plugin (transport or hardware)."
-  `(defclass ,name ,superclasses ,slots
-     ,@(mapcar (lambda (method)
-                 (destructuring-bind (name args &body body) method
-                   `(:method ,name ,args ,@body)))
-               methods)))
-
-(defun dcf-master-assign-role (peer role)
-  "Assign a role to a peer in master mode."
-  (log:info *dcf-logger* "Assigning role ~A to peer ~A" role peer)
-  :success) ; Placeholder
-
-(defun dcf-master-update-config (config-path)
-  "Update configuration in master mode."
-  (log:info *dcf-logger* "Updating config: ~A" config-path)
-  (dcf-init config-path))
-
-(defun dcf-master-collect-metrics ()
-  "Collect network metrics in master mode."
-  (log:info *dcf-logger* "Collecting metrics")
-  `(:metrics (:peer-count 2 :avg-rtt 10))) ; Placeholder
-
-(defun dcf-master-optimize-network ()
-  "Optimize network topology using AI (MGL)."
-  (log:info *dcf-logger* "Optimizing network")
-  :success) ; Placeholder
-
-(defun dcf-set-mode (mode)
-  "Set operating mode (client, server, p2p, auto, master)."
-  (log:info *dcf-logger* "Setting mode: ~A" mode)
-  :success) ; Placeholder
-
-(defun dcf-update-config (config-path)
-  "Update configuration."
-  (log:info *dcf-logger* "Updating config: ~A" config-path)
-  (dcf-init config-path))
-
+;; Middleware System
 (defun add-middleware (fn)
-  "Add middleware function for message processing."
-  (log:info *dcf-logger* "Adding middleware: ~A" fn)
-  :success) ; Placeholder
+  "Add a middleware function to the chain."
+  (push fn (middlewares *node*))
+  (log:info *dcf-logger* "Added middleware"))
 
 (defun remove-middleware (fn)
-  "Remove middleware function."
-  (log:info *dcf-logger* "Removing middleware: ~A" fn)
-  :success) ; Placeholder
+  "Remove a middleware function."
+  (setf (middlewares *node*) (remove fn (middlewares *node*)))
+  (log:info *dcf-logger* "Removed middleware"))
 
+(defun apply-middlewares (msg direction)
+  "Apply middleware chain to message (send or receive)."
+  (reduce (lambda (m f) (funcall f m direction)) (middlewares *node*) :initial-value msg))
+
+;; Setup Functions
+(defun setup-native-transport (node)
+  "Setup native Lisp transport using USocket."
+  (let ((socket (usocket:socket-listen (dcf-config-host (config node)) (dcf-config-port (config node)) :reuse-address t :element-type '(unsigned-byte 8))))
+    (setf (native-transport node) socket)
+    (bt:make-thread (lambda () (native-transport-listener node)) :name "native-transport-listener")
+    (log:info *dcf-logger* "Native Lisp transport setup on ~A:~A" (dcf-config-host (config node)) (dcf-config-port (config node)))))
+
+(defun native-transport-listener (node)
+  "Listener loop for native transport."
+  (loop
+    (let ((client (usocket:socket-accept (native-transport node))))
+      (bt:make-thread (lambda () (handle-native-connection node client)) :name "native-client-handler"))))
+
+(defun handle-native-connection (node client)
+  "Handle incoming native connection."
+  (handler-case
+      (with-open-stream (stream (usocket:socket-stream client))
+        (let ((data (read-line stream)))
+          (log:debug *dcf-logger* "Native received: ~A" data)
+          (format stream "Echo: ~A~%" data)))
+    (error (e) (log:error *dcf-logger* "Native connection error: ~A" e))
+    (finally (usocket:socket-close client))))
+
+(defun native-send (node data recipient)
+  "Send via native transport."
+  (let* ((parts (cl-ppcre:split ":" recipient))
+         (host (first parts))
+         (port (parse-integer (second parts))))
+    (let ((socket (acquire-connection node :native (format nil "~A:~A" host port))))
+      (with-open-stream (stream (usocket:socket-stream socket))
+        (format stream "~A~%" data))
+      (release-connection node :native socket))))
+
+(defun setup-server (node)
+  "Setup server mode with gRPC server."
+  (let* ((address (format nil "~A:~A" (dcf-config-host (config node)) (dcf-config-port (config node))))
+         (server (cl-grpc:server address)))
+    (cl-grpc:register-service server 'dcf-service (make-instance 'dcf-service-impl :node node))
+    (setf (server node) server)))
+
+(defun setup-client (node)
+  "Setup client mode with gRPC channel from pool."
+  (let* ((address (format nil "~A:~A" (dcf-config-host (config node)) (dcf-config-port (config node))))
+         (channel (acquire-connection node :grpc address)))
+    (setf (channel node) channel
+          (stub node) (cl-grpc:stub 'dcf-service channel))))
+
+(defun setup-p2p (node)
+  "Setup P2P mode with multiple channels."
+  (setup-client node)
+  (dolist (peer (dcf-config-peers (config node)))
+    (add-peer-channel node peer))
+  (bt:make-thread (lambda () (monitor-peers node)) :name "p2p-monitor"))
+
+(defun setup-auto (node)
+  "Setup AUTO mode with master connection."
+  (setup-p2p node)
+  (connect-to-master node)
+  (bt:make-thread (lambda () (listen-for-master-commands node)) :name "auto-listener"))
+
+(defun setup-master (node)
+  "Setup master mode for controlling AUTO nodes."
+  (setup-server node)
+  (cl-grpc:register-service (server node) 'dcf-master-service (make-instance 'dcf-master-service-impl :node node))
+  (bt:make-thread (lambda () (collect-metrics-periodically node)) :name "master-metrics-collector"))
+
+;; Plugin System
+(defstruct plugin-interface
+  setup send receive destroy version)
+
+(defmacro def-dcf-plugin (name &key version &body body)
+  "Define a plugin with interface."
+  `(defvar ,name (make-plugin-interface
+                  :setup (lambda (self config) ,@body)
+                  :send (lambda (self data recipient) ,@body)
+                  :receive (lambda (self) ,@body)
+                  :destroy (lambda (self) ,@body)
+                  :version ,version)))
+
+(defun load-plugin (node path)
+  "Load and version-check plugin."
+  (handler-case
+      (let ((plugin (load path)))
+        (unless (string= (plugin-interface-version plugin) "1.0")
+          (signal-dcf-error :plugin-version-mismatch "Plugin version mismatch"))
+        (funcall (plugin-interface-setup plugin) plugin (config node))
+        (setf (gethash path (plugins node)) plugin)
+        (log:info *dcf-logger* "Loaded plugin: ~A" path))
+    (error (e) (signal-dcf-error :plugin-load-fail (format nil "Failed to load plugin: ~A" e)))))
+
+(defun unload-plugin (node path)
+  "Unload plugin."
+  (let ((plugin (gethash path (plugins node))))
+    (when plugin
+      (funcall (plugin-interface-destroy plugin) plugin)
+      (remhash path (plugins node))
+      (log:info *dcf-logger* "Unloaded plugin: ~A" path))))
+
+;; Example Plugin: WebSocket Transport
+(def-dcf-plugin websocket-transport :version "1.0"
+  :setup (lambda (self config)
+           (hunchensocket:websocket-server (dcf-config-port config) :handler (lambda (ws) (setf (gethash "ws" self) ws))))
+  :send (lambda (self data recipient)
+          (hunchensocket:send-text (gethash "ws" self) data))
+  :receive (lambda (self)
+             (hunchensocket:receive-text (gethash "ws" self)))
+  :destroy (lambda (self)
+             (hunchensocket:close (gethash "ws" self))))
+
+;; Core DCF Functions
+(defun dcf-init (config-path &key restore-state)
+  "Initialize DCF with config, optionally restoring state.
+Example: (dcf-init \"config.json\" :restore-state t)"
+  (handler-case
+      (let ((config (load-config config-path)))
+        (when restore-state
+          (let ((restored (restore-state (dcf-config-state-file config))))
+            (when restored (setf config restored))))
+        (setf *node* (initialize-node config))
+        (incf (gethash :inits (metrics *node*) 0))
+        (log:info *dcf-logger* "Initialized with config: ~A" config-path)
+        `(:status "success" :config ,config-path :mode ,(mode *node*)))
+    (dcf-error (e) (log:error *dcf-logger* "~A" e) `(:status "error" :message ,(dcf-error-message e)))))
+
+(defun dcf-start ()
+  "Start DCF node.
+Example: (dcf-start)"
+  (handler-case
+      (progn
+        (unless *node* (signal-dcf-error :not-initialized "Node not initialized"))
+        (case (mode *node*)
+          (:server (cl-grpc:start-server (server *node*)))
+          (:master (cl-grpc:start-server (server *node*)))
+          (t (log:info *dcf-logger* "Starting client/P2P/AUTO mode")))
+        (incf (gethash :starts (metrics *node*) 0))
+        (log:info *dcf-logger* "Node started in ~A mode" (mode *node*))
+        `(:status "started"))
+    (error (e) (log:error *dcf-logger* "Start failed: ~A" e) `(:status "error" :message ,(princ-to-string e)))))
+
+(defun dcf-stop ()
+  "Stop DCF node gracefully.
+Example: (dcf-stop)"
+  (handler-case
+      (when *node*
+        (save-state (config *node*))
+        (case (mode *node*)
+          (:server (cl-grpc:stop-server (server *node*)))
+          (:master (cl-grpc:stop-server (server *node*)))
+          (t (when (channel *node*) (cl-grpc:close-channel (channel *node*)))))
+        (when (native-transport *node*) (usocket:socket-close (native-transport *node*)))
+        (bt:destroy-thread-pool (thread-pool *node*))
+        (setf *node* nil)
+        (log:info *dcf-logger* "Node stopped")
+        `(:status "stopped"))
+    (error (e) (log:error *dcf-logger* "Stop failed: ~A" e) `(:status "error" :message ,(princ-to-string e)))))
+
+(defun dcf-send (data recipient &key sync sequence redundancy-path group-id)
+  "Send message with optional fields, using native or gRPC based on config.
+Example: (dcf-send \"Hello\" \"localhost:50052\" :sync t)"
+  (handler-case
+      (unless *node* (signal-dcf-error :not-initialized "Node not initialized"))
+      (let ((msg (make-instance 'dcf-message
+                                :sender (dcf-config-node-id (config *node*))
+                                :recipient recipient
+                                :data data
+                                :timestamp (get-universal-time)
+                                :sync (or sync t)
+                                :sequence (or sequence (random #xFFFFFFFF))
+                                :redundancy-path (or redundancy-path "")
+                                :group-id (or group-id ""))))
+        (setf msg (apply-middlewares msg :send))
+        (incf (gethash :sends (metrics *node*) 0))
+        (if (string= (dcf-config-transport (config *node*)) "native-lisp")
+            (progn
+              (native-send *node* (data msg) recipient)
+              (log:debug *dcf-logger* "Native sent to ~A: ~A" recipient (data msg))
+              `(:status "success" :response "Echo: ~A" (data msg)))
+            (let ((response (cl-grpc:call (stub *node*) 'send-message msg)))
+              (log:debug *dcf-logger* "Sent message to ~A: ~A" recipient (data msg))
+              `(:status "success" :response ,(slot-value response 'data)))))
+    (grpc-error (e) (log:error *dcf-logger* "gRPC send failed: ~A" e) (dcf-heal recipient) `(:status "error" :message ,(princ-to-string e)))
+    (usocket:socket-error (e) (log:error *dcf-logger* "Native send failed: ~A" e) `(:status "error" :message ,(princ-to-string e)))))
+
+(defun dcf-receive (&key timeout)
+  "Receive messages from stream with timeout.
+Example: (dcf-receive :timeout 30)"
+  (handler-case
+      (unless *node* (signal-dcf-error :not-initialized "Node not initialized"))
+      (if (string= (dcf-config-transport (config *node*)) "native-lisp")
+          (progn
+            (log:debug *dcf-logger* "Waiting for native receive")
+            `(:status "error" :message "Native receive not implemented"))
+          (let ((stream (cl-grpc:call (stub *node*) 'receive-stream (make-instance 'empty))))
+            (loop with end-time = (+ (get-internal-real-time) (or timeout (* 10 internal-time-units-per-second)))
+                  for msg = (cl-grpc:next stream)
+                  while (and msg (< (get-internal-real-time) end-time))
+                  do (incf (gethash :receives (metrics *node*) 0))
+                  collect (progn
+                            (setf msg (apply-middlewares msg :receive))
+                            (log:debug *dcf-logger* "Received message from ~A: ~A" (sender msg) (data msg))
+                            msg))))
+    (error (e) (log:error *dcf-logger* "Receive failed: ~A" e) `(:status "error" :message ,(princ-to-string e)))))
+
+(defun dcf-status ()
+  "Get detailed node status.
+Example: (dcf-status)"
+  (if *node*
+      `(:status "running" :mode ,(mode *node*) :peers ,(dcf-config-peers (config *node*))
+        :peer-count ,(length (dcf-config-peers (config *node*))) :groups ,(hash-table-count (peer-groups *node*))
+        :plugins ,(hash-table-keys (plugins *node*)))
+      `(:status "stopped")))
+
+(defun dcf-health-check (peer)
+  "Health check with RTT measurement.
+Example: (dcf-health-check \"localhost:50052\")"
+  (handler-case
+      (let* ((request (make-instance 'health-request :peer peer))
+             (start-time (get-internal-real-time))
+             (response (cl-grpc:call (get-peer-stub *node* peer) 'health-check request))
+             (rtt (- (get-internal-real-time) start-time)))
+        (incf (gethash :health-checks (metrics *node*) 0))
+        (log:debug *dcf-logger* "Health check for ~A: healthy=~A, RTT=~Ams" peer (slot-value response 'healthy) (/ rtt internal-time-units-per-second 0.001))
+        `(:peer ,peer :healthy ,(slot-value response 'healthy) :status ,(slot-value response 'status) :rtt ,rtt))
+    (error (e) (log:warn *dcf-logger* "Health check failed for ~A: ~A" peer e) `(:peer ,peer :healthy nil :rtt -1))))
+
+(defun dcf-list-peers ()
+  "List peers with health and group info.
+Example: (dcf-list-peers)"
+  (mapcar (lambda (peer)
+            (let ((health (dcf-health-check peer)))
+              (append health `(:group-id ,(get-group-id peer (peer-groups *node*))))))
+          (dcf-config-peers (config *node*))))
+
+(defun dcf-heal (peer)
+  "Heal by rerouting on failure.
+Example: (dcf-heal \"localhost:50052\")"
+  (let ((health (dcf-health-check peer)))
+    (if (getf health :healthy)
+        (log:info *dcf-logger* "~A is healthy" peer) `(:status "healthy" :peer ,peer)
+        (progn
+          (log:warn *dcf-logger* "Healing ~A" peer)
+          (reroute-to-alternative *node* peer)
+          `(:status "healed" :peer ,peer)))))
+
+(defun dcf-version ()
+  "Get version information.
+Example: (dcf-version)"
+  `(:version "1.7.0" :dcf-version "5.0.0"))
+
+(defun dcf-benchmark (peer &key iterations)
+  "Benchmark RTT over iterations.
+Example: (dcf-benchmark \"localhost:50052\" :iterations 20)"
+  (let ((total-rtt 0) (success-count 0))
+    (dotimes (i (or iterations 10))
+      (let ((health (dcf-health-check peer)))
+        (when (getf health :healthy)
+          (incf total-rtt (getf health :rtt))
+          (incf success-count))))
+    (if (zerop success-count)
+        `(:status "failed" :peer ,peer)
+        `(:status "success" :peer ,peer :avg-rtt ,(/ total-rtt success-count) :success-rate ,(/ success-count (or iterations 10))))))
+
+(defun dcf-group-peers ()
+  "Group peers using Dijkstra with RTT weights.
+Example: (dcf-group-peers)"
+  (handler-case
+      (let ((groups (compute-rtt-groups (dcf-config-peers (config *node*)) (dcf-config-group-rtt-threshold (config *node*)))))
+        (setf (peer-groups *node*) groups)
+        (log:info *dcf-logger* "Peers grouped: ~A groups" (hash-table-count groups))
+        `(:status "grouped" :groups ,(hash-table-alist groups)))
+    (error (e) (log:error *dcf-logger* "Grouping failed: ~A" e) `(:status "error"))))
+
+(defun dcf-simulate-failure (peer)
+  "Simulate failure and trigger heal.
+Example: (dcf-simulate-failure \"localhost:50052\")"
+  (setf (dcf-config-peers (config *node*)) (remove peer (dcf-config-peers (config *node*)) :test #'string=))
+  (dcf-group-peers)
+  (dcf-heal peer)
+  `(:status "failure-simulated" :peer ,peer))
+
+(defun dcf-log-level (level)
+  "Set log level dynamically.
+Example: (dcf-log-level 0) ; Debug mode"
+  (case level
+    (0 (log:config *dcf-logger* :debug))
+    (1 (log:config *dcf-logger* :info))
+    (2 (log:config *dcf-logger* :error))
+    (t (signal-dcf-error :invalid-level "Invalid log level")))
+  `(:status "log-level-set" :level ,level))
+
+(defun dcf-load-plugin (path)
+  "Load a plugin.
+Example: (dcf-load-plugin \"lisp/plugins/udp-transport.lisp\")"
+  (load-plugin *node* path)
+  `(:status "plugin-loaded" :path ,path))
+
+;; Diagnostic and Debugging Tools
 (defun dcf-trace-message (msg)
-  "Trace a message through middleware."
-  (log:info *dcf-logger* "Tracing message: ~A" msg)
-  `(:message ,msg :trace "middleware1 -> middleware2")) ; Placeholder
+  "Trace a message through middleware and logging.
+Example: (dcf-trace-message (make-instance 'dcf-message :data \"Test\"))"
+  (log:debug *dcf-logger* "Tracing message: ~A" msg)
+  (apply-middlewares msg :trace)
+  (log:debug *dcf-logger* "Traced message: ~A" msg)
+  msg)
 
 (defun dcf-debug-network ()
-  "Debug network state."
-  (log:info *dcf-logger* "Debugging network")
-  `(:peers ,(dcf-list-peers) :status "ok")) ; Placeholder
+  "Debug network state: peers, groups, metrics.
+Example: (dcf-debug-network)"
+  (format t "Debug: Peers: ~A~%Groups: ~A~%Metrics: ~A~%" 
+          (dcf-config-peers (config *node*)) 
+          (peer-groups *node*) 
+          (metrics *node*)))
 
+;; Simpler Facade API
 (defun dcf-quick-start-client (config-path)
-  "Facade to initialize and start a client."
-  (log:info *dcf-logger* "Quick-starting client with config: ~A" config-path)
-  (when (eq (dcf-init config-path) :success)
-    (dcf-set-mode "client")
-    (dcf-start)))
+  "Facade to init and start a client node.
+Example: (dcf-quick-start-client \"config.json\")"
+  (dcf-init config-path)
+  (dcf-set-mode "client")
+  (dcf-start))
 
 (defun dcf-quick-send (data recipient)
-  "Facade for simple message sending."
-  (log:info *dcf-logger* "Quick-sending to ~A" recipient)
+  "Facade for simple send without options.
+Example: (dcf-quick-send \"Hello\" \"localhost:50052\")"
   (dcf-send data recipient))
 
+;; Metrics and Monitoring
 (defun dcf-get-metrics ()
-  "Retrieve monitoring metrics."
-  (log:info *dcf-logger* "Retrieving metrics")
-  `(:peer-count 2 :avg-rtt 10)) ; Placeholder
+  "Get collected metrics.
+Example: (dcf-get-metrics)"
+  (metrics *node*))
 
-(defun dcf-visualize-topology (file)
-  "Generate Graphviz DOT file for topology."
-  (log:info *dcf-logger* "Visualizing topology to ~A" file)
-  (cl-dot:dot-graph (cl-dot:generate-graph-from-roots '(:peers ,(dcf-list-peers))) file)
-  :success)
+;; Visual Debugger for Network Topology
+(defun dcf-visualize-topology (&optional file)
+  "Generate Graphviz DOT file for network topology.
+Example: (dcf-visualize-topology \"topology.dot\")"
+  (let ((graph (cl-dot:generate-graph-from-roots (list (peer-groups *node*)) 
+                                                 (hash-table-keys (peer-groups *node*)))))
+    (with-open-file (stream (or file "topology.dot") :direction :output :if-exists :supersede)
+      (cl-dot:print-graph graph :stream stream))
+    (log:info *dcf-logger* "Topology visualized in ~A" (or file "topology.dot"))))
 
+;; TUI Implementation with ncurses
+(defun dcf-tui ()
+  "Interactive TUI for monitoring and commands.
+Example: (dcf-tui)"
+  (handler-case
+      (curses:with-curses ()
+        (curses:initscr)
+        (curses:curs-set 0)
+        (curses:cbreak)
+        (curses:noecho)
+        (curses:keypad t)
+        (let ((main-win (curses:newwin (curses:lines) (curses:cols) 0 0))
+              (input-win (curses:newwin 3 (curses:cols) (- (curses:lines) 3) 0)))
+          (curses:wborder main-win)
+          (curses:mvwprintw main-win 1 1 "DeMoD-LISP TUI v1.7.0")
+          (curses:mvwprintw main-win 2 1 "Status: ~A" (getf (dcf-status) :status))
+          (curses:wrefresh main-win)
+          (loop
+            (curses:mvwprintw input-win 1 1 "Command: ")
+            (curses:wclrtoeol input-win)
+            (curses:wrefresh input-win)
+            (let ((input (read-line-from-curses input-win)))
+              (when (string= input "quit") (return))
+              (let ((result (execute-tui-command input)))
+                (curses:mvwprintw main-win 4 1 "Result: ~A" result)
+                (curses:wrefresh main-win)))))
+        (curses:endwin))
+    (error (e) (log:error *dcf-logger* "TUI failed: ~A" e))))
+
+(defun read-line-from-curses (win)
+  "Read input line in curses window."
+  (let ((str "") (ch))
+    (loop
+      (setf ch (curses:getch))
+      (case ch
+        (10 (return str))
+        (127 (when (> (length str) 0) (setf str (subseq str 0 (1- (length str))))))
+        (t (setf str (concatenate 'string str (string (code-char ch))))))
+      (curses:mvwprintw win 1 10 "~A" str)
+      (curses:wrefresh win))))
+
+(defun execute-tui-command (input)
+  "Execute command in TUI context."
+  (handler-case
+      (with-input-from-string (stream input)
+        (let ((cmd (read stream)))
+          (case cmd
+            (help (dcf-help))
+            (status (dcf-status))
+            (send (dcf-send (read stream) (read stream)))
+            (receive (dcf-receive))
+            (health-check (dcf-health-check (read stream)))
+            (list-peers (dcf-list-peers))
+            (heal (dcf-heal (read stream)))
+            (benchmark (dcf-benchmark (read stream)))
+            (group-peers (dcf-group-peers))
+            (simulate-failure (dcf-simulate-failure (read stream)))
+            (log-level (dcf-log-level (read stream)))
+            (load-plugin (dcf-load-plugin (read stream)))
+            (trace-message (dcf-trace-message (read stream)))
+            (debug-network (dcf-debug-network))
+            (quick-start-client (dcf-quick-start-client (read stream)))
+            (quick-send (dcf-quick-send (read stream) (read stream)))
+            (get-metrics (dcf-get-metrics))
+            (visualize-topology (dcf-visualize-topology (read stream)))
+            (t "Unknown command"))))
+    (error () "Invalid command syntax")))
+
+;; AUTO Mode and Master Node Functions
+(defun connect-to-master (node)
+  "Establish connection to master."
+  (let* ((master-address (format nil "~A:~A" (dcf-config-host (config node)) (dcf-config-port (config node))))
+         (channel (acquire-connection node :grpc master-address)))
+    (setf (master-connection node) (cl-grpc:stub 'dcf-master-service channel))
+    (log:info *dcf-logger* "Connected to master at ~A" master-address)))
+
+(defun listen-for-master-commands (node)
+  "Listen for commands from master."
+  (let ((stream (cl-grpc:call (master-connection node) 'receive-commands (make-instance 'empty))))
+    (loop for command = (cl-grpc:next stream)
+          while command
+          do (process-master-command node command))))
+
+(defun process-master-command (node command)
+  "Process incoming master command."
+  (let ((cmd (slot-value command 'command)))
+    (cond
+      ((string= cmd "set_role") (dcf-set-mode (slot-value command 'role)))
+      ((string= cmd "update_config") (dcf-update-config (slot-value command 'key) (slot-value command 'value)))
+      ((string= cmd "collect_metrics") (send-metrics-to-master node))
+      ((string= cmd "optimize_network") (dcf-group-peers))
+      (t (log:warn *dcf-logger* "Unknown master command: ~A" cmd)))))
+
+(defun dcf-set-mode (new-mode)
+  "Dynamically set node mode.
+Example: (dcf-set-mode \"client\")"
+  (handler-case
+      (progn
+        (dcf-stop)
+        (setf (mode *node*) new-mode)
+        (initialize-node (config *node*))
+        (dcf-start)
+        (log:info *dcf-logger* "Mode set to ~A" new-mode)
+        `(:status "mode-set" :mode ,new-mode))
+    (error (e) (log:error *dcf-logger* "Mode set failed: ~A" e) `(:status "error"))))
+
+(defun dcf-update-config (key value)
+  "Update config key-value.
+Example: (dcf-update-config \"port\" 50052)"
+  (handler-case
+      (progn
+        (setf (slot-value (config *node*) (intern (string-upcase key) :keyword)) value)
+        (save-state (config *node*))
+        (log:info *dcf-logger* "Updated config ~A to ~A" key value)
+        `(:status "updated" :key ,key :value ,value))
+    (error (e) (log:error *dcf-logger* "Config update failed: ~A" e) `(:status "error"))))
+
+;; Master Node Specific Functions
+(defun dcf-master-assign-role (peer role)
+  "Master assigns role to peer.
+Example: (dcf-master-assign-role \"localhost:50052\" \"client\")"
+  (handler-case
+      (let ((request (make-instance 'master-command :command "set_role" :role role :peer peer)))
+        (cl-grpc:call (get-peer-stub *node* peer) 'assign-role request)
+        (log:info *dcf-logger* "Assigned role ~A to ~A" role peer)
+        `(:status "assigned" :peer ,peer :role ,role))
+    (error (e) `(:status "error" :message ,(princ-to-string e)))))
+
+(defun dcf-master-update-config (peer key value)
+  "Master updates config for peer.
+Example: (dcf-master-update-config \"localhost:50052\" \"port\" 50053)"
+  (handler-case
+      (let ((request (make-instance 'master-command :command "update_config" :key key :value value :peer peer)))
+        (cl-grpc:call (get-peer-stub *node* peer) 'update-config request)
+        (log:info *dcf-logger* "Updated ~A=~A for ~A" key value peer)
+        `(:status "updated" :peer ,peer :key ,key :value ,value))
+    (error (e) `(:status "error" :message ,(princ-to-string e)))))
+
+(defun dcf-master-collect-metrics ()
+  "Master collects metrics from peers.
+Example: (dcf-master-collect-metrics)"
+  (let ((metrics (make-hash-table :test 'equal)))
+    (dolist (peer (dcf-config-peers (config *node*)))
+      (let ((response (cl-grpc:call (get-peer-stub *node* peer) 'collect-metrics (make-instance 'empty))))
+        (setf (gethash peer metrics) (parse-metrics response))))
+    (log:info *dcf-logger* "Collected metrics from ~A peers" (hash-table-count metrics))
+    metrics))
+
+(defun dcf-master-optimize-network ()
+  "Master optimizes network topology with AI.
+Example: (dcf-master-optimize-network)"
+  (let ((metrics (dcf-master-collect-metrics)))
+    (optimize-topology metrics)
+    (dolist (peer (hash-table-keys metrics))
+      (cl-grpc:call (get-peer-stub *node* peer) 'optimize-network (make-instance 'empty)))
+    (log:info *dcf-logger* "AI-driven network optimized")
+    `(:status "optimized")))
+
+(defun collect-metrics-periodically (node)
+  "Periodic metrics collection in master mode."
+  (loop
+    (sleep 60)
+    (dcf-master-collect-metrics)))
+
+(defun send-metrics-to-master (node)
+  "Send local metrics to master."
+  (let ((metrics (collect-local-metrics node)))
+    (cl-grpc:call (master-connection node) 'submit-metrics metrics)
+    (log:debug *dcf-logger* "Sent metrics to master")))
+
+(defun collect-local-metrics (node)
+  "Collect local RTT and group data."
+  (make-instance 'metrics
+                 :node-id (dcf-config-node-id (config node))
+                 :rtts (mapcar (lambda (p) (cons p (getf (dcf-health-check p) :rtt))) (dcf-config-peers (config node)))
+                 :groups (hash-table-alist (peer-groups node))))
+
+;; P2P Redundancy with Dijkstra Routing
+(defun add-peer-channel (node peer)
+  "Add channel for P2P peer."
+  (let ((channel (acquire-connection node :grpc peer)))
+    (setf (gethash peer (plugins node)) (cl-grpc:stub 'dcf-service channel))))
+
+(defun get-peer-stub (node peer)
+  "Get stub for peer."
+  (or (gethash peer (plugins node))
+      (signal-dcf-error :peer-not-found (format nil "Peer not found: ~A" peer))))
+
+(defun monitor-peers (node)
+  "Monitor peers for failures."
+  (loop
+    (sleep 10)
+    (dolist (peer (dcf-config-peers (config node)))
+      (unless (getf (dcf-health-check peer) :healthy)
+        (dcf-heal peer)))))
+
+(defun compute-rtt-groups (peers threshold)
+  "Compute groups using RTT."
+  (let ((graph (build-graph peers))
+        (groups (make-hash-table :test 'equal)))
+    (multiple-value-bind (distances predecessors) (dijkstra graph (dcf-config-node-id (config *node*)))
+      (dolist (peer peers)
+        (let ((dist (gethash peer distances)))
+          (when (< dist threshold)
+            (push peer (gethash (floor dist (/ threshold 10)) groups)))))
+      groups)))
+
+(defun build-graph (peers)
+  "Build graph with RTT weights."
+  (let ((graph (make-hash-table :test 'equal)))
+    (dolist (p1 peers)
+      (dolist (p2 peers)
+        (unless (string= p1 p2)
+          (setf (gethash (cons p1 p2) graph) (getf (dcf-health-check p2) :rtt)))))
+    graph))
+
+(defun dijkstra (graph start)
+  "Dijkstra's algorithm for shortest paths."
+  (let ((distances (make-hash-table :test 'equal))
+        (predecessors (make-hash-table :test 'equal))
+        (queue (make-instance 'priority-queue)))
+    (setf (gethash start distances) 0)
+    (enqueue queue start 0)
+    (loop while (not (empty-p queue))
+          do (let ((u (dequeue queue)))
+               (dolist (v (neighbors u graph))
+                 (let ((alt (+ (gethash u distances) (gethash (cons u v) graph))))
+                   (when (< alt (or (gethash v distances) most-positive-fixnum))
+                     (setf (gethash v distances) alt
+                           (gethash v predecessors) u)
+                     (enqueue queue v alt)))))
+    (values distances predecessors)))
+
+(defun reconstruct-path (predecessors target)
+  "Reconstruct path from predecessors."
+  (let ((path '()))
+    (loop for u = target then (gethash u predecessors)
+          while u
+          do (push u path))
+    path))
+
+(defun reroute-to-alternative (node failed-peer)
+  "Reroute using Dijkstra predecessors."
+  (multiple-value-bind (distances predecessors) (dijkstra (build-graph (dcf-config-peers (config node))) (dcf-config-node-id (config node)))
+    (let ((alt-path (reconstruct-path predecessors failed-peer)))
+      (when alt-path
+        (let ((alt-peer (car (last alt-path))))
+          (setf (dcf-config-peers (config node)) (substitute alt-peer failed-peer (dcf-config-peers (config node)) :test #'string=))
+          (add-peer-channel node alt-peer)
+          (log:info *dcf-logger* "Rerouted ~A to ~A via path ~A" failed-peer alt-peer alt-path))))))
+
+(defun get-group-id (peer groups)
+  "Get group ID for peer."
+  (loop for (id . peers) in (hash-table-alist groups)
+        when (member peer peers :test #'string=)
+        return id))
+
+;; gRPC Service Implementations
+(defclass dcf-service-impl (cl-grpc:service)
+  ((node :initarg :node :accessor node)))
+
+(defmethod cl-grpc:send-message ((self dcf-service-impl) context request response)
+  "Implement SendMessage RPC."
+  (setf (slot-value response 'data) (format nil "Echo: ~A" (slot-value request 'data)))
+  :ok)
+
+(defmethod cl-grpc:receive-stream ((self dcf-service-impl) context request stream)
+  "Implement ReceiveStream RPC."
+  (loop for msg in (some-message-queue)
+        do (cl-grpc:send stream msg)))
+
+(defclass dcf-master-service-impl (cl-grpc:service)
+  ((node :initarg :node :accessor node)))
+
+;; Advanced AI-driven Network Optimization
+(defun optimize-topology (metrics)
+  "Use MGL neural network for AI-driven optimization of network topology."
+  (let ((nn (make-instance 'mgl-bp:bpnn :layers '(10 5 2))))
+    (mgl-bp:train nn (prepare-training-data metrics) :max-iterations 100)
+    (let ((optimal-groups (mgl-bp:predict nn (prepare-input metrics))))
+      (apply-optimized-groups optimal-groups)
+      (log:info *dcf-logger* "AI-optimized topology applied"))
+    `(:status "ai-optimized")))
+
+(defun prepare-training-data (metrics)
+  "Prepare data for NN training."
+  (loop for (peer . rtt) in metrics collect (vector rtt (random 2))))
+
+(defun prepare-input (metrics)
+  "Prepare input for prediction."
+  (loop for (peer . rtt) in metrics collect (vector rtt)))
+
+(defun apply-optimized-groups (predictions)
+  "Apply predicted groups to node."
+  (setf (peer-groups *node*) (group-from-predictions predictions)))
+
+(defun group-from-predictions (predictions)
+  "Convert NN predictions to groups."
+  (let ((groups (make-hash-table :test 'equal)))
+    (loop for pred across predictions
+          for peer in (hash-table-keys (peer-groups *node*))
+          do (push peer (gethash (round (aref pred 0)) groups)))
+    groups))
+
+;; FiveAM Integration for Testing
+#+fiveam
+(fiveam:def-suite d-lisp-suite
+  :description "Test suite for D-LISP SDK.")
+
+#+fiveam
+(fiveam:in-suite d-lisp-suite)
+
+#+fiveam
+(fiveam:test version-test
+  (fiveam:is (equal (dcf-version) '(:version "1.7.0" :dcf-version "5.0.0"))))
+
+#+fiveam
+(fiveam:test middleware-test
+  (add-middleware (lambda (msg dir) (declare (ignore dir)) msg))
+  (fiveam:is (equal (apply-middlewares (make-instance 'dcf-message :sender "test" :recipient "test" :data "test" :timestamp 0 :sync t :sequence 0 :redundancy-path "" :group-id "") :send)
+                    (make-instance 'dcf-message :sender "test" :recipient "test" :data "test" :timestamp 0 :sync t :sequence 0 :redundancy-path "" :group-id ""))))
+
+#+fiveam
+(fiveam:test type-system-test
+  (fiveam:signals dcf-error (make-instance 'dcf-message :sender 123)))
+
+#+fiveam
+(fiveam:test connection-pool-test
+  (let ((node (make-instance 'dcf-node)))
+    (initialize-connection-pool node)
+    (fiveam:is (arrayp (gethash "grpc" (connection-pool node))))))
+
+#+fiveam
+(fiveam:test network-scenario-test
+  (let ((node (make-instance 'dcf-node :config (make-dcf-config :peers '("peer1" "peer2")))))
+    (dcf-group-peers)
+    (dcf-simulate-failure "peer1")
+    (fiveam:is (= (length (dcf-config-peers (config node))) 1))))
+
+#+fiveam
+(fiveam:test metrics-test
+  (let ((node (make-instance 'dcf-node)))
+    (incf (gethash :tests (metrics node) 0))
+    (fiveam:is (= (gethash :tests (dcf-get-metrics)) 1))))
+
+#+fiveam
+(fiveam:test visualize-test
+  (let ((node (make-instance 'dcf-node)))
+    (setf (peer-groups node) (make-hash-table))
+    (dcf-visualize-topology "test.dot")
+    (fiveam:is (probe-file "test.dot"))
+    (delete-file "test.dot")))
+
+#+fiveam
+(fiveam:test config-validation-test
+  (let ((valid-config-path "test-config.json"))
+    (with-open-file (stream valid-config-path :direction :output :if-exists :supersede)
+      (cl-json:encode-json
+       '((:transport . "gRPC") (:host . "localhost") (:port . 50051) (:mode . "client") (:node-id . "test-node"))
+       stream))
+    (fiveam:is (equal (getf (dcf-init valid-config-path) :status) "success"))
+    (delete-file valid-config-path)))
+
+#+fiveam
+(fiveam:test websocket-plugin-test
+  (fiveam:is (equal (plugin-interface-version websocket-transport) "1.0")))
+
+#+fiveam
+(fiveam:test udp-plugin-test
+  (let ((config (make-dcf-config :transport "udp")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "udp-socket" (plugins *node*)))))))
+
+#+fiveam
+(fiveam:test quic-plugin-test
+  (let ((config (make-dcf-config :transport "quic")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "quic-engine" (plugins *node*)))))))
+
+#+fiveam
+(fiveam:test bluetooth-plugin-test
+  (let ((config (make-dcf-config :transport "bluetooth")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "bt-dd" (plugins *node*)))))))
+
+#+fiveam
+(fiveam:test serial-plugin-test
+  (let ((config (make-dcf-config :transport "serial")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "serial-port" (plugins *node*)))))))
+
+#+fiveam
+(fiveam:test can-plugin-test
+  (let ((config (make-dcf-config :transport "can")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "can" (plugins *node*)))))))
+
+#+fiveam
+(fiveam:test sctp-plugin-test
+  (let ((config (make-dcf-config :transport "sctp")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "sctp" (plugins *node*)))))))
+
+#+fiveam
+(fiveam:test zigbee-plugin-test
+  (let ((config (make-dcf-config :transport "zigbee")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "zigbee" (plugins *node*)))))))
+
+#+fiveam
+(fiveam:test lorawan-plugin-test
+  (let ((config (make-dcf-config :transport "lorawan")))
+    (let ((*node* (initialize-node config)))
+      (fiveam:is (not (null (gethash "lorawan" (plugins *node*)))))))
+
+#+fiveam
+(defun run-tests ()
+  "Run all FiveAM tests."
+  (fiveam:run! 'd-lisp-suite)
+  (log:info *dcf-logger* "FiveAM tests completed."))
+
+;; Help Command for Newcomers
 (defun dcf-help ()
-  "Display beginner-friendly guidance."
-  (format t "~%DeMoD-LISP (D-LISP) SDK Help~%~%Commands:~%~
-             - init [config.json]: Initialize with config.~%~
-             - start: Start node.~%~
-             - stop: Stop node.~%~
-             - send [data] [recipient]: Send message.~%~
-             - receive: Receive message.~%~
-             - status: Node status.~%~
-             - health-check [peer]: Check peer health/RTT.~%~
-             - list-peers: List peers.~%~
-             - heal [peer]: Trigger failover.~%~
-             - version: Show version.~%~
-             - benchmark [peer]: Measure RTT.~%~
-             - group-peers: Regroup peers by RTT.~%~
-             - simulate-failure [peer]: Test failover.~%~
-             - log-level [0/1/2]: Set logging (debug/info/error).~%~
-             - load-plugin [path]: Load plugin (e.g., udp-transport.lisp).~%~
-             - add-middleware [fn]: Add protocol customizer.~%~
-             - trace-message [msg]: Trace through middleware.~%~
-             - debug-network: Debug network state.~%~
-             - quick-start-client [config]: Facade to init/start client.~%~
-             - quick-send [data] [recipient]: Simple send.~%~
-             - get-metrics: Get monitoring data.~%~
-             - visualize-topology [file]: Generate DOT graph.~%~
-             - master-assign-role [peer] [role]: Assign role (master mode).~%~
-             - master-optimize-network: AI-optimize topology.~%~
-             - run-tests: Run FiveAM tests.~%~
-             - help: This guide.~%~%Tips for New Users:~%~
-             - Start with 'client' mode and gRPC transport.~%~
-             - Use facade APIs for simplicity, then explore advanced features.~%~
-             - For customization, add middlewares or plugins like UDP for low-latency.~%~
-             - Monitor with metrics; visualize topology for debugging.~%~
-             - Read docs/dcf_design_spec.md in repo for architecture.~%~
-             - For errors, check logs (set log-level 0 for debug).~%~
-             - Questions? Open issues on GitHub.~%~%For more, visit the repo or run (dcf-help) again!~%")
-  :help)
+  "Provide beginner-friendly guidance for new users of DeMoD Communications Framework (DCF)."
+  (format nil "~
+Welcome to DeMoD-LISP (D-LISP), a Lisp-based SDK for the DeMoD Communications Framework (DCF)!
+
+**What is DCF?**
+DCF is a free, open-source (FOSS) framework for low-latency data exchange in applications like IoT, gaming, distributed computing, and edge networking. It's modular, interoperable across languages (e.g., Lisp, C, Python), and complies with U.S. export regulations (no encryption by default). Licensed under GPL-3.0. Repo: https://github.com/ALH477/DeMoD-Communication-Framework
+
+**Key Concepts for Beginners:**
+- **Modes**: Client (send/receive), Server (host), P2P (peer-to-peer with self-healing), AUTO (dynamic role switching via master node), Master (controls AUTO nodes).
+- **Transports**: gRPC (default), Native Lisp (lightweight TCP), WebSocket (web-friendly via plugin), UDP (low-latency datagrams), QUIC (multiplexed UDP), Bluetooth (wireless short-range), Serial (embedded hardware), CAN (automotive/industrial), SCTP (reliable multi-stream), Zigbee (low-power mesh), LoRaWAN (long-range low-power).
+- **Plugins**: Extend functionality, e.g., custom transports. Define with (def-dcf-plugin ...).
+- **Middleware**: Customize protocols by adding functions to process messages, e.g., (add-middleware (lambda (msg dir) ...)).
+- **Type System**: Messages use CLOS classes with type checks for safety.
+- **Redundancy**: Automatic failover using RTT-based grouping (<50ms clusters) and Dijkstra routing.
+- **Metrics/Monitoring**: Track sends, receives, etc., with (dcf-get-metrics).
+- **Visual Debugger**: Generate topology graphs with (dcf-visualize-topology \"file.dot\").
+- **Configuration**: Use JSON files validated against schema. Example: config.json with transport, host, port, mode.
+
+**Getting Started:**
+1. **Install Dependencies**: Use Quicklisp to load libraries (see top of d-lisp.lisp).
+2. **Clone Repo**: git clone https://github.com/ALH477/DeMoD-Communication-Framework --recurse-submodules
+3. **Load D-LISP**: sbcl --load lisp/src/d-lisp.lisp
+4. **Quick Start**: (dcf-quick-start-client \"config.json\")
+5. **Send Message**: (dcf-quick-send \"Hello\" \"localhost:50052\")
+6. **Load UDP Plugin**: (dcf-load-plugin \"lisp/plugins/udp-transport.lisp\")
+7. **Load QUIC Plugin**: (dcf-load-plugin \"lisp/plugins/quic-transport.lisp\")
+8. **Load Bluetooth Plugin**: (dcf-load-plugin \"lisp/plugins/bluetooth-transport.lisp\")
+9. **Load Serial Plugin**: (dcf-load-plugin \"lisp/plugins/serial-transport.lisp\")
+10. **Load CAN Plugin**: (dcf-load-plugin \"lisp/plugins/can-transport.lisp\")
+11. **Load SCTP Plugin**: (dcf-load-plugin \"lisp/plugins/sctp-transport.lisp\")
+12. **Load Zigbee Plugin**: (dcf-load-plugin \"lisp/plugins/zigbee-transport.lisp\")
+13. **Load LoRaWAN Plugin**: (dcf-load-plugin \"lisp/plugins/lorawan-transport.lisp\")
+14. **Visualize**: (dcf-visualize-topology)
+15. **Run Tests**: (run-tests) or CLI \"run-tests\".
+
+**Common Commands (CLI/TUI):**
+- init [config.json]: Load config.
+- start: Start node.
+- stop: Stop node.
+- send [data] [recipient]: Send message.
+- receive: Receive messages.
+- status: Show node status.
+- health-check [peer]: Check peer health/RTT.
+- list-peers: List peers with groups.
+- heal [peer]: Reroute on failure.
+- benchmark [peer]: Measure RTT.
+- group-peers: Regroup by RTT.
+- simulate-failure [peer]: Test failover.
+- log-level [0/1/2]: Set logging (debug/info/error).
+- load-plugin [path]: Load plugin (e.g., udp-transport.lisp).
+- add-middleware [fn]: Add protocol customizer.
+- trace-message [msg]: Trace through middleware.
+- debug-network: Debug network state.
+- quick-start-client [config]: Facade to init/start client.
+- quick-send [data] [recipient]: Simple send.
+- get-metrics: Get monitoring data.
+- visualize-topology [file]: Generate DOT graph.
+- master-assign-role [peer] [role]: Assign role (master mode).
+- master-optimize-network: AI-optimize topology.
+- run-tests: Run FiveAM tests.
+- help: This guide.
+
+**Tips for New Users:**
+- Start with 'client' mode and gRPC transport.
+- Use facade APIs for simplicity, then explore advanced features.
+- For customization, add middlewares or plugins like UDP for low-latency.
+- Monitor with metrics; visualize topology for debugging.
+- Read docs/dcf_design_spec.md in repo for architecture.
+- For errors, check logs (set log-level 0 for debug).
+- Questions? Open issues on GitHub.
+
+For more, visit the repo or run (dcf-help) again!"))
 
 ;; CLI Entry Point
 (defun main (&rest args)
@@ -477,15 +1072,13 @@
                        ((string= command "quick-send") (dcf-quick-send (second cmd-args) (third cmd-args)))
                        ((string= command "get-metrics") (dcf-get-metrics))
                        ((string= command "visualize-topology") (dcf-visualize-topology (second cmd-args)))
-                       ((string= command "run-tests") (fiveam:run!))
-                       (t (apply (or (find-symbol (string-upcase (format nil "DCF-~A" command)) :d-lisp)
-                                     (signal-dcf-error :invalid-command (format nil "Unknown command: ~A" command)))
-                                 cmd-args)))))
+                       ((string= command "run-tests") (run-tests))
+                       (t (apply (intern (string-upcase (format nil "DCF-~A" command)) :d-lisp) cmd-args)))))
         (if json-output
             (cl-json:encode-json-to-string result)
             (format t "~A~%" result)))
-      (error (e)
-        (log:error *dcf-logger* "CLI error: ~A~%Backtrace: ~A" e (trivial-backtrace:backtrace-string))
-        (if (position "--json" args :test #'string=)
-            (cl-json:encode-json-to-string `(:status "error" :message ,(princ-to-string e)))
-            (format t "Error: ~A~%" e)))))
+    (error (e)
+      (log:error *dcf-logger* "CLI error: ~A~%Backtrace: ~A" e (trivial-backtrace:backtrace-string))
+      (if (position "--json" args :test #'string=)
+          (cl-json:encode-json-to-string `(:status "error" :message ,(princ-to-string e)))
+          (format t "Error: ~A~%" e)))))
