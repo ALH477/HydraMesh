@@ -11,8 +11,8 @@ DeMoD-LISP (D-LISP) is a high-performance, production-ready Common Lisp implemen
 
 This SDK, developed by **DeMoD LLC** with significant contributions from **Grok 4 Heavy** (xAI's advanced AI model), emphasizes reliability, extensibility, and compliance with U.S. export regulations (no encryption by default). It is part of the DCF mono repository and interoperates with other language SDKs (e.g., C, Python) for cross-platform compatibility.
 
-### Efficiency Highlight: 672 Lines of Code
-D-LISP achieves its extensive functionality in just **~789 non-comment, non-blank lines of code** (verified across the core implementation and plugins). This remarkable efficiency is made possible by Common Lisp's expressive features, such as macros (e.g., `def-dcf-plugin` for concise plugin definitions) and CLOS for type-safe abstractions. The codebase remains lean while delivering a full SDK/DSL, with plugins like LoRaWAN fitting in under 30 lines each. This compactness ensures maintainability, reduces deployment overhead, and highlights Lisp's power for building complex systems with minimal verbosity.
+### Efficiency Highlight: 584 Lines of Code
+D-LISP achieves its extensive functionality in just **~701 non-comment, non-blank lines of code** (verified across the core implementation and plugins). This remarkable efficiency is made possible by Common Lisp's expressive features, such as macros (e.g., `def-dcf-plugin` for concise plugin definitions) and CLOS for type-safe abstractions. The codebase remains lean while delivering a full SDK/DSL, with plugins like LoRaWAN fitting in under 30 lines each. This compactness ensures maintainability, reduces deployment overhead, and highlights Lisp's power for building complex systems with minimal verbosity.
 
 - **Core Breakdown**:
   - `d-lisp.lisp` (main SDK/DSL): 672 lines
