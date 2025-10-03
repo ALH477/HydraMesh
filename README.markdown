@@ -78,7 +78,7 @@ graph TD
     AM --> AP[Future SDKs: Python, Perl, etc.]
     
     A --> AQ[Persistence Layer]
-    AQ --> AR[StreamDB]  // Integrated for state persistence
+    AQ --> AR[StreamDB] 
 ```
 
 ## Installation
