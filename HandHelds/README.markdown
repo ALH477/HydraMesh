@@ -51,7 +51,7 @@ This framework democratizes retro homebrew development, allowing developers to b
   - [BlocksDS](https://blocksds.github.io/docs) toolchain, modded DSi with SD card, [TWiLight Menu++](https://github.com/DS-Homebrew/TWiLightMenu).
   - `cargo-nds` (`cargo install --git https://github.com/SeleDreams/cargo-nds`).
 - **PSP**:
-  - [PSP SDK](https://www.psdev.net/psp.html), [rust-psp](https://github.com/overdrivenpotato/rust-psp) crate, modded PSP with Memory Stick.
+  - [rust-psp](https://github.com/overdrivenpotato/rust-psp) crate, modded PSP with Memory Stick.
 - **Dependencies**: See `Cargo.toml` (heapless, lru, crc, byteorder; optional: libnds-rs, psp).
 
 ### Installation
