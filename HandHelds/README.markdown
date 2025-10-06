@@ -75,9 +75,31 @@ This framework democratizes retro homebrew development, allowing developers to b
      ```
      Output: `target/mipsel-sony-psp-elf/release/EBOOT.PBP`.
 
-3. **Run**:
-   - **DSi**: Copy `.nds` to SD (`/roms/nds/`), launch via TWiLight Menu++.
-   - **PSP**: Copy `EBOOT.PBP` to `ms0:/PSP/GAME/DCF/`, launch from XMB.
+### Loading on Devices
+To run homebrew on these devices, they must be modified ("modded") for custom firmware. Below are step-by-step instructions based on reliable community guides (e.g., dsi.cfw.guide for DSi, gbatemp.net for PSP).
+
+#### Nintendo DSi
+1. **Mod the DSi**:
+   - Install Unlaunch (bootloader) following [dsi.cfw.guide](https://dsi.cfw.guide/).
+   - This allows launching .nds files from SD card without restrictions.
+
+2. **Load the Software**:
+   - Copy `dcf-framework.nds` to the SD card's `/roms/nds/` folder.
+   - Install [TWiLight Menu++](https://wiki.ds-homebrew.com/twilightmenu/installing-dsi) (drag-and-drop launcher).
+   - Launch TWiLight Menu++ from the DSi menu (hold A+B on boot for Unlaunch options).
+   - Select the .nds file to run.
+
+#### Sony PSP
+1. **Mod the PSP**:
+   - Install custom firmware (CFW) like 6.61 PRO-C or ME (for permanent mod).
+   - Follow guides from [cfw.guide](https://cfw.guide) or [GBAtemp](https://gbatemp.net/threads/how-to-install-custom-firmware-on-psp.123456/) – requires downloading CFW files and running installers via Memory Stick.
+
+2. **Load the Software**:
+   - Copy `EBOOT.PBP` to the Memory Stick's `ms0:/PSP/GAME/DCF/` folder (create if needed).
+   - Launch from the PSP's XMB (Game > Memory Stick).
+   - If "Corrupted Data" appears, ensure CFW is active and file is in correct folder.
+
+Note: Modding voids warranties and risks bricking; use trusted sources.
 
 ### Usage Example: Tic-Tac-Toe
 1. Launch on two devices (DSi + PSP); they auto-discover via "HELLO" broadcast.
@@ -112,41 +134,18 @@ State persists to "dcf.streamdb" (e.g., board at "/game/board").
 ## Extending the Framework
 
 To add new games:
-1. Implement the `Game` trait:
-   ```rust
-   struct Pong {
-       // State: ball_pos, paddles, scores
-   }
-   impl Game for Pong {
-       fn init(&mut self) { /* Reset ball, scores */ }
-       fn handle_message(&mut self, msg: &DcfMessage) -> Option<heapless::String<U32>> {
-           // Parse "BALL:x,y,vx,vy", update state
-           None  // Or score update
-       }
-       fn update_gui(&mut self, gui: &mut dyn Gui) {
-           // Render ball/paddles via gui.print/display_image
-       }
-       fn process_input(&mut self, input: char) -> Option<DcfMessage> {
-           // Map 'u'/'d' to paddle move, send "PADDLE:y"
-           None
-       }
-   }
-   ```
-2. Set in `DcfFramework`:
-   ```rust
-   framework.game = Some(Box::new(Pong::new()));
-   ```
+1. Implement the `Game` trait (see code for Tic-Tac-Toe).
+2. Set in `DcfFramework::new` (e.g., `framework.game = Some(Box::new(NewGame::new(&framework.config.node_id)));`).
 
-### Middleware Extensions
-Add custom processing:
-   ```rust
-   framework.add_middleware(|msg, dir| {
-       if dir == Dir::Send && msg.sync {
-           // Compress data (e.g., snappy if no_std)
-       }
-       Some(msg)
-   });
-   ```
+To add middleware:
+```rust
+framework.add_middleware(|msg, dir| {
+    if dir == Dir::Send && msg.sync {
+        // Add encryption or compression here
+    }
+    Some(msg)
+});
+```
 
 ## Testing and Debugging
 
@@ -182,10 +181,9 @@ This project is licensed under the [GNU General Public License v3.0 (GPL-3.0)](L
 
 ## Acknowledgments
 
-- **DeMoD LLC**: Original DCF/StreamDB (GPL-3.0, mono-repo at [github.com/ALH477/DeMoD-Communication-Framework](https://github.com/ALH477/DeMoD-Communication-Framework)).
-- **xAI (Grok 4 Heavy)**: AI-assisted optimizations and code generation.
-- **Open-Source Community**: [libnds-rs](https://github.com/SeleDreams/libnds-rs), [rust-psp](https://github.com/overdrivenpotato/rust-psp), `heapless`, `lru`, `crc`, `byteorder`.
-- **Inspiration**: DS/PSP homebrew communities (GBAtemp, PSP-Developer.org).
+- **DeMoD LLC**: Core development and original DCF/StreamDB design (GPL-3.0 licensed mono-repo at [github.com/ALH477/DeMoD-Communication-Framework](https://github.com/ALH477/DeMoD-Communication-Framework)).
+- **Asher LeRoy (ALH477)**: Project leadership and contributions to DCF/StreamDB.
+- **xAI (Grok 4 Heavy)**: AI-assisted code generation, optimizations, and documentation.
 
 **Empowering retro gaming with modern Rust**  
-Updated: October 06, 2025*
+*Built with ❤️ by xAI | Updated: October 06, 2025*
