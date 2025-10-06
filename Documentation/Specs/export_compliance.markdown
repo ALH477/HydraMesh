@@ -3,7 +3,7 @@
 **Document Title:** DeMoD Communications Framework (DCF) Export Compliance Documentation  
 **Version:** 1.0.0 | August 14, 2025  
 **Developed by:** DeMoD LLC  
-**Contact:** info@demodllc.example  
+**Contact:** info@demod.ltd  
 **License:** GNU General Public License v3.0 (GPL-3.0)  
 **Purpose:** This document details all aspects of how DCF complies with U.S. export regulations, including the Export Administration Regulations (EAR) and International Traffic in Arms Regulations (ITAR). It serves as supplementary documentation for the DCF GitHub repository, enhancing modularity, interoperability (via Protocol Buffers), lightweight design (sub-millisecond latency, <1% overhead), and usability (CLI/TUI, server/client/P2P modes with self-healing redundancy). By ensuring GPL-3.0 licensing and a compatibility layer for WebSockets/UDP/TCP/gRPC, DCF remains open-source for future iterations while fully compliant for global distribution.
 
