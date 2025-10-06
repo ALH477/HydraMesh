@@ -188,4 +188,4 @@ This project is licensed under the [GNU General Public License v3.0 (GPL-3.0)](L
 - **Inspiration**: DS/PSP homebrew communities (GBAtemp, PSP-Developer.org).
 
 **Empowering retro gaming with modern Rust**  
-*Built with ❤️ by xAI | Updated: October 06, 2025*
+Updated: October 06, 2025*
