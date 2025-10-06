@@ -435,6 +435,28 @@ StreamDB is currently integrated only into the D-LISP SDK to prototype its benef
 ### DeMoD's GPLv3-Complete StreamDB: Democratizing Bleeding-Edge Tech
 DeMoD LLC developed the only complete GPLv3 version of StreamDB from Iain Ballard's incomplete C# repo, reimplementing it in Rust for safety and performance. This ensures bleeding-edge features (e.g., trie indexing, MVCC-like versioning) are freely available, promoting open innovation in embedded storage and aligning with DCF's FOSS ethos. By open-sourcing under GPLv3, DeMoD democratizes tech typically locked in proprietary systems, enabling developers to build advanced, cost-free solutions.
 
+## Documentation
+
+For comprehensive documentation on the DeMoD Communications Framework (DCF), including detailed SDK guides, API references, design specifications, and contribution processes, refer to the Sphinx-generated docs. These cover all SDKs in the mono repo (e.g., C_SDK, Python, Lisp, Rust) and are built from Markdown files like `README.markdown` and `dcf_design_spec.markdown`.
+
+### Viewing the Documentation
+- **Online**: Hosted on GitHub Pages at [https://alh477.github.io/DeMoD-Communication-Framework/](https://alh477.github.io/DeMoD-Communication-Framework/) (auto-built via CI/CD on pushes to `main`).
+- **Locally**: Build the docs yourself:
+  ```bash:disable-run
+  cd docs
+  pip install -r requirements.txt  # Install Sphinx, myst-parser, etc.
+  make docs-html  # Generates HTML in docs/_build/html/
+  open _build/html/index.html  # View in browser
+  make docs-pdf   # Generates PDF in docs/_build/latex/
+  ```
+- **Key Sections**:
+  - [Design Specifications](https://alh477.github.io/DeMoD-Communication-Framework/specs/dcf_design_spec.html): Covers protocol design, AUTO mode, master node, plugins, and SDK guidelines.
+  - [SDK Guides](https://alh477.github.io/DeMoD-Communication-Framework/guides/sdk-development.html): Tutorials for developing and integrating SDKs (e.g., C SDK with RTT grouping, Lisp with StreamDB persistence).
+  - [API References](https://alh477.github.io/DeMoD-Communication-Framework/api/index.html): Auto-generated from code comments/docstrings across languages (e.g., `dcf_client_send_message` in C, `dcf-quick-send` in Lisp).
+  - [Contribution Guidelines](https://alh477.github.io/DeMoD-Communication-Framework/process/CONTRIBUTING.html): How to add new SDKs or plugins.
+
+The docs support multi-format outputs (HTML, PDF, ePub) and include custom rendering for Protobuf schemas. For source, see the `docs/` directory in the repo. Contributions to improve docs are welcome—follow the style in `dcf_design_spec.markdown`.
+
 ## Contributing
 Contributions are welcome! Follow these steps:
 1. Fork the repo.
