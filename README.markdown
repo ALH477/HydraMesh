@@ -1,6 +1,6 @@
 # DeMoD Communications Framework (DCF)
 
-**Version 5.0.0 | Oct 06, 2025**  
+**Version 5.0.1 | Oct 06, 2025**  
 **Developed by DeMoD LLC**  
 **Contact:** info@demod.ltd 
 **License:** GNU General Public License v3.0 (GPL-3.0)  
