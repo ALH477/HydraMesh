@@ -466,5 +466,12 @@ Contributions are welcome! Follow these steps:
 5. Discuss issues via [GitHub Issues](https://github.com/ALH477/DeMoD-Communication-Framework/issues).
 New SDKs (e.g., Python, Perl) encouraged; ensure RTT grouping, plugins, AUTO mode, and GPL-3.0 compliance.
 
-## Documentation
-See `docs/dcf_design_spec.md` for detailed architecture, SDK guidelines, plugin system, AUTO mode, and testing. C SDK documentation in `c_sdk/C-SDKreadme.markdown`. Lisp SDK documentation in `lisp/README.md`.
+# DeMoD LLC. Cut the bullshit, Cut the price. Innovation without the overhead.
+```
+  ___   _      _   _   ___  ____________          ______    ___  ___     ______   _      _     _____ 
+ / _ \ | |    | | | | /   ||___  /___  /          |  _  \   |  \/  |     |  _  \ | |    | |   /  __ \
+/ /_\ \| |    | |_| |/ /| |   / /   / /   ______  | | | |___| .  . | ___ | | | | | |    | |   | /  \/
+|  _  || |    |  _  / /_| |  / /   / /   |______| | | | / _ \ |\/| |/ _ \| | | | | |    | |   | |    
+| | | || |____| | | \___  |./ /  ./ /             | |/ /  __/ |  | | (_) | |/ /  | |____| |___| \__/\
+\_| |_/\_____/\_| |_/   |_/\_/   \_/              |___/ \___\_|  |_/\___/|___/   \_____/\_____/\____/
+```
