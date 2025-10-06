@@ -466,7 +466,7 @@ Contributions are welcome! Follow these steps:
 5. Discuss issues via [GitHub Issues](https://github.com/ALH477/DeMoD-Communication-Framework/issues).
 New SDKs (e.g., Python, Perl) encouraged; ensure RTT grouping, plugins, AUTO mode, and GPL-3.0 compliance.
 
-# DeMoD LLC. Cut the bullshit, Cut the price. Innovation without the overhead.
+# [DeMoD LLC](https://DeMoD.ltd) Cut the bullshit, Cut the price. Innovation without the overhead.
 ```
   ___   _      _   _   ___  ____________          ______    ___  ___     ______   _      _     _____ 
  / _ \ | |    | | | | /   ||___  /___  /          |  _  \   |  \/  |     |  _  \ | |    | |   /  __ \
