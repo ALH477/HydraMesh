@@ -1,0 +1,4 @@
+# docs/requirements.txt
+sphinx==7.2.7
+sphinx-rtd-theme==2.0.0
+myst-parser==2.0.0
