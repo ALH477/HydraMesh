@@ -2,6 +2,13 @@
 name = "dcf-framework"
 version = "0.1.0"
 edition = "2025"
+license = "GPL-3.0"
+description = "DCF Framework for Cross-Compatible Multiplayer Games on Nintendo DSi and Sony PSP"
+repository = "https://github.com/ALH477/DCF-Handheld-Framework"
+readme = "README.md"
+authors = ["DeMoD LLC", "xAI (Grok 4 Heavy)"]
+keywords = ["dcf", "streamdb", "multiplayer", "dsi", "psp"]
+categories = ["embedded", "game-engines", "network-programming"]
 
 [dependencies]
 libnds = { git = "https://github.com/oxcabe/libnds-rs", optional = true }
@@ -10,6 +17,9 @@ heapless = "0.8"
 lru = { version = "0.12", default-features = false }
 crc = { version = "3.2", default-features = false }
 byteorder = { version = "1.5", default-features = false }
+
+[build-dependencies]
+cc = "1.0"  # For linking platform-specific C libraries if needed (e.g., custom FFI builds)
 
 [features]
 dsi = ["libnds"]
