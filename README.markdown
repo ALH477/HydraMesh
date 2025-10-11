@@ -465,7 +465,7 @@ Contributions are welcome! Follow these steps:
 3. Add tests and code (follow style: `perltidy`, `black`, `ktlint`, `swiftformat`, `clang-format` for C, Lisp conventions for D-LISP).
 4. Submit a PR with a clear description using the [PR template](docs/PR_TEMPLATE.md).
 5. Discuss issues via [GitHub Issues](https://github.com/ALH477/DeMoD-Communication-Framework/issues).
-New SDKs (e.g., Python, Perl) encouraged; ensure RTT grouping, plugins, AUTO mode, and GPL-3.0 compliance.
+New SDKs (e.g., Python, Perl) encouraged; ensure RTT grouping, plugins, AUTO mode, and LGPL-3.0 compliance.
 
 # [DeMoD LLC](https://DeMoD.ltd) Cut the bullshit, Cut the price. Innovation without the overhead.
 ```
