@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package dcf;
+
+message DCFMessage {
+  string id = 1;
+  int64 timestamp = 2;
+  string content = 3;
+}
+
+message DCFResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message PeerInfo {
+  string address = 1;
+  int64 rtt = 2;
+}
+
+message Metrics {
+  int64 sends = 1;
+  int64 receives = 2;
+  int64 failures = 3;
+}
+
+message RoleAssignment {
+  string role = 1; // "client", "server", "p2p"
+  string master_address = 2;
+}
+
+message Empty {}
