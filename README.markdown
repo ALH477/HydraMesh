@@ -2,7 +2,7 @@
 
 **Version 5.0.1 | Oct 06, 2025**  
 **Developed by DeMoD LLC**  
-**Contact:** info@demod.ltd 
+**Contact:** alh477@demod.ltd 
 
 **License:** [![License: GPL v3](https://img.shields.io/badge/License-LGPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)  
 ![lgpl](https://www.gnu.org/graphics/lgplv3-with-text-154x68.png)
