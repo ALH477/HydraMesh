@@ -722,4 +722,403 @@ impl DatabaseBackend for FileBackend {
         document.paths.push(path.to_string());
         let data = self.serialize_document(&document)?;
         self.write_raw_page(index_root.page_id, &data, index_root.version)?;
-        self.trie_insert
+        self.trie_insert(path, id)?;
+        Ok(id)
+    }
+
+    fn get_document_id_by_path(&self, path: &str) -> Result<Uuid, StreamDbError> {
+        if path.is_empty() || path.contains('\0') || path.contains("//") {
+            return Err(StreamDbError::InvalidData("Invalid path".to_string()));
+        }
+        let trie_root = self.trie_root.lock();
+        if trie_root.page_id == -1 {
+            return Err(StreamDbError::NotFound("Path not found".to_string()));
+        }
+        let reversed: String = path.chars().rev().collect();
+        let mut current_page_id = trie_root.page_id;
+        let mut remaining = reversed.as_str();
+        while !remaining.is_empty() {
+            let node = self.deserialize_trie_node(&self.read_raw_page(current_page_id)?)?;
+            let edge = node.edge.as_str();
+            if remaining.starts_with(edge) {
+                remaining = &remaining[edge.len()..];
+                if remaining.is_empty() {
+                    return node.document_id.ok_or_else(|| StreamDbError::NotFound("Path not found".to_string()));
+                }
+                let first_char = remaining.chars().next().unwrap();
+                if let Some(&child_id) = node.children.get(&first_char) {
+                    current_page_id = child_id;
+                } else {
+                    return Err(StreamDbError::NotFound("Path not found".to_string()));
+                }
+            } else {
+                return Err(StreamDbError::NotFound("Path not found".to_string()));
+            }
+        }
+        let node = self.deserialize_trie_node(&self.read_raw_page(current_page_id)?)?;
+        node.document_id.ok_or_else(|| StreamDbError::NotFound("Path not found".to_string()))
+    }
+
+    fn search_paths(&self, prefix: &str) -> Result<Vec<String>, StreamDbError> {
+        if prefix.is_empty() || prefix.contains('\0') || prefix.contains("//") {
+            return Err(StreamDbError::InvalidData("Invalid prefix".to_string()));
+        }
+        let trie_root = self.trie_root.lock();
+        if trie_root.page_id == -1 {
+            return Ok(vec![]);
+        }
+        let reversed_prefix: String = prefix.chars().rev().collect();
+        let mut current_page_id = trie_root.page_id;
+        let mut remaining = reversed_prefix.as_str();
+        while !remaining.is_empty() {
+            let node = self.deserialize_trie_node(&self.read_raw_page(current_page_id)?)?;
+            let edge = node.edge.as_str();
+            if remaining.starts_with(edge) {
+                remaining = &remaining[edge.len()..];
+                if remaining.is_empty() {
+                    let mut results = vec![];
+                    self.trie_collect_paths(&node, String::new(), &mut results)?;
+                    return Ok(results.into_iter().filter(|p| p.starts_with(prefix)).map(|p| p.chars().rev().collect()).collect());
+                }
+                let first_char = remaining.chars().next().unwrap();
+                if let Some(&child_id) = node.children.get(&first_char) {
+                    current_page_id = child_id;
+                } else {
+                    return Ok(vec![]);
+                }
+            } else {
+                return Ok(vec![]);
+            }
+        }
+        let node = self.deserialize_trie_node(&self.read_raw_page(current_page_id)?)?;
+        let mut results = vec![];
+        self.trie_collect_paths(&node, String::new(), &mut results)?;
+        Ok(results.into_iter().filter(|p| p.starts_with(prefix)).map(|p| p.chars().rev().collect()).collect())
+    }
+
+    fn trie_collect_paths(&self, node: &ReverseTrieNode, prefix: String, results: &mut Vec<String>) -> Result<(), StreamDbError> {
+        let new_prefix = format!("{}{}", node.edge, prefix);
+        if let Some(id) = node.document_id {
+            results.push(new_prefix.clone());
+        }
+        for &child_id in node.children.values() {
+            let child = self.deserialize_trie_node(&self.read_raw_page(child_id)?)?;
+            self.trie_collect_paths(&child, new_prefix.clone(), results)?;
+        }
+        Ok(())
+    }
+
+    fn list_paths_for_document(&self, id: Uuid) -> Result<Vec<String>, StreamDbError> {
+        let index_root = self.document_index_root.lock();
+        let data = self.read_raw_page(index_root.page_id)?;
+        let document = self.deserialize_document(&data)?;
+        if document.id != id {
+            return Err(StreamDbError::NotFound("ID not found".to_string()));
+        }
+        Ok(document.paths)
+    }
+
+    fn count_free_pages(&self) -> Result<i64, StreamDbError> {
+        let mut count = 0;
+        let mut current = self.free_list_root.lock().page_id;
+        while current != -1 {
+            let offset = current as u64 * self.config.page_size + self.config.page_header_size;
+            let mut buffer = vec![0u8; FREE_LIST_HEADER_SIZE as usize];
+            {
+                let mmap = self.mmap.read();
+                if let Some(mmap) = mmap.as_ref() {
+                    let start = offset as usize;
+                    buffer.copy_from_slice(&mmap[start..start + FREE_LIST_HEADER_SIZE as usize]);
+                } else {
+                    let mut file = self.file.lock();
+                    file.seek(SeekFrom::Start(offset))?;
+                    file.read_exact(&mut buffer)?;
+                }
+            }
+            let mut reader = Cursor::new(buffer);
+            current = reader.read_i64::<LittleEndian>()?;
+            let used_entries = reader.read_i32::<LittleEndian>()?;
+            count += used_entries as i64;
+        }
+        Ok(count)
+    }
+
+    fn get_info(&self, id: Uuid) -> Result<String, StreamDbError> {
+        let index_root = self.document_index_root.lock();
+        let data = self.read_raw_page(index_root.page_id)?;
+        let document = self.deserialize_document(&data)?;
+        if document.id != id {
+            return Err(StreamDbError::NotFound("ID not found".to_string()));
+        }
+        let mut size = 0;
+        let mut current_page_id = document.first_page_id;
+        while current_page_id != -1 {
+            let header = self.read_page_header(current_page_id)?;
+            size += header.data_length as u64;
+            current_page_id = header.next_page_id;
+        }
+        Ok(format!(
+            "ID: {}, Version: {}, Size: {} bytes, Paths: {:?}",
+            id, document.current_version, size, document.paths
+        ))
+    }
+
+    fn delete_paths_for_document(&mut self, id: Uuid) -> Result<(), StreamDbError> {
+        let index_root = self.document_index_root.lock();
+        let data = self.read_raw_page(index_root.page_id)?;
+        let mut document = self.deserialize_document(&data)?;
+        if document.id != id {
+            return Err(StreamDbError::NotFound("ID not found".to_string()));
+        }
+        for path in document.paths.iter() {
+            // Implement trie_delete
+        }
+        document.paths.clear();
+        let data = self.serialize_document(&document)?;
+        self.write_raw_page(index_root.page_id, &data, index_root.version)?;
+        Ok(())
+    }
+
+    fn remove_from_index(&mut self, id: Uuid) -> Result<(), StreamDbError> {
+        self.delete_paths_for_document(id)?;
+        Ok(())
+    }
+
+    fn get_cache_stats(&self) -> Result<CacheStats, StreamDbError> {
+        Ok(self.cache_stats.lock().clone())
+    }
+
+    fn get_stream(&self, id: Uuid) -> Result<impl Iterator<Item = Result<Vec<u8>, StreamDbError>>, StreamDbError> {
+        let index_root = self.document_index_root.lock();
+        let data = self.read_raw_page(index_root.page_id)?;
+        let document = self.deserialize_document(&data)?;
+        if document.id != id {
+            return Err(StreamDbError::NotFound("Document not found".to_string()));
+        }
+        let mut current = Some(document.first_page_id);
+        Ok(std::iter::from_fn(move || {
+            if let Some(page_id) = current {
+                let data = self.read_raw_page(page_id);
+                if let Ok(ref d) = data {
+                    let header = self.read_page_header(page_id).ok()?;
+                    current = if header.next_page_id != -1 { Some(header.next_page_id) } else { None };
+                }
+                data.map(Ok)
+            } else {
+                None
+            }
+        }))
+    }
+}
+
+pub struct StreamDb {
+    backend: Box<dyn DatabaseBackend + Send + Sync>,
+    path_cache: Mutex<LruCache<String, Uuid>>,
+    quick_mode: AtomicBool,
+}
+
+impl StreamDb {
+    pub fn open_with_config<P: AsRef<Path>>(path: P, config: Config) -> Result<Self, StreamDbError> {
+        let backend = Box::new(FileBackend::new(path, config)?);
+        Ok(Self {
+            backend,
+            path_cache: Mutex::new(LruCache::new(config.page_cache_size)),
+            quick_mode: AtomicBool::new(false),
+        })
+    }
+}
+
+impl Database for StreamDb {
+    fn write_document(&mut self, path: &str, data: &mut dyn Read) -> Result<Uuid, StreamDbError> {
+        let id = self.backend.write_document(data)?;
+        self.backend.bind_path_to_document(path, id)?;
+        self.path_cache.lock().put(path.to_string(), id);
+        Ok(id)
+    }
+
+    fn get(&self, path: &str) -> Result<Vec<u8>, StreamDbError> {
+        self.get_quick(path, self.quick_mode.load(Ordering::Relaxed))
+    }
+
+    fn get_quick(&self, path: &str, quick: bool) -> Result<Vec<u8>, StreamDbError> {
+        let id = self.get_id_by_path(path)?;
+        if let Some(id) = id {
+            self.backend.read_document_quick(id, quick)
+        } else {
+            Err(StreamDbError::NotFound("Path not found".to_string()))
+        }
+    }
+
+    fn get_id_by_path(&self, path: &str) -> Result<Option<Uuid>, StreamDbError> {
+        if let Some(id) = self.path_cache.lock().get(path) {
+            return Ok(Some(*id));
+        }
+        let id = self.backend.get_document_id_by_path(path);
+        if let Ok(id) = id {
+            self.path_cache.lock().put(path.to_string(), id);
+            Ok(Some(id))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn delete(&mut self, path: &str) -> Result<(), StreamDbError> {
+        if let Some(id) = self.get_id_by_path(path)? {
+            self.backend.delete_document(id)?;
+            self.path_cache.lock().pop(path);
+        }
+        Ok(())
+    }
+
+    fn delete_by_id(&mut self, id: Uuid) -> Result<(), StreamDbError> {
+        self.backend.delete_document(id)?;
+        self.path_cache.lock().retain(|_, v| *v != id);
+        Ok(())
+    }
+
+    fn bind_to_path(&mut self, id: Uuid, path: &str) -> Result<(), StreamDbError> {
+        self.backend.bind_path_to_document(path, id)?;
+        self.path_cache.lock().put(path.to_string(), id);
+        Ok(())
+    }
+
+    fn unbind_path(&mut self, id: Uuid, path: &str) -> Result<(), StreamDbError> {
+        self.backend.delete_paths_for_document(id)?;
+        self.path_cache.lock().pop(path);
+        Ok(())
+    }
+
+    fn search(&self, prefix: &str) -> Result<Vec<String>, StreamDbError> {
+        self.backend.search_paths(prefix)
+    }
+
+    fn list_paths(&self, id: Uuid) -> Result<Vec<String>, StreamDbError> {
+        self.backend.list_paths_for_document(id)
+    }
+
+    fn flush(&self) -> Result<(), StreamDbError> {
+        // Implement flush for FileBackend
+        Ok(())
+    }
+
+    fn calculate_statistics(&self) -> Result<(i64, i64), StreamDbError> {
+        let free_pages = self.backend.count_free_pages()?;
+        Ok((free_pages, 0)) // Total pages not implemented
+    }
+
+    fn set_quick_mode(&mut self, enabled: bool) {
+        self.quick_mode.store(enabled, Ordering::Relaxed);
+    }
+
+    fn snapshot(&self) -> Result<Self, StreamDbError> {
+        // Implement snapshot
+        Err(StreamDbError::NotFound("Snapshot not implemented".to_string()))
+    }
+
+    fn get_cache_stats(&self) -> Result<CacheStats, StreamDbError> {
+        self.backend.get_cache_stats()
+    }
+
+    fn get_stream(&self, path: &str) -> Result<impl Iterator<Item = Result<Vec<u8>, StreamDbError>>, StreamDbError> {
+        let id = self.get_id_by_path(path)?;
+        if let Some(id) = id {
+            self.backend.get_stream(id)
+        } else {
+            Err(StreamDbError::NotFound("Path not found".to_string()))
+        }
+    }
+
+    fn get_async(&self, path: &str) -> impl Future<Output = Result<Vec<u8>, StreamDbError>> {
+        async move { self.get(path) }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+enum DCFEvent {
+    Send { msg_id: String, timestamp: i64, content_summary: String },
+    Receive { msg_id: String, timestamp: i64, content_summary: String },
+    Failure { error: String, timestamp: i64, context: String },
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct DcfConfig {
+    pub streamdb: Config,
+    pub grpc_port: u16,
+    pub p2p_discovery: bool,
+}
+
+impl Default for DcfConfig {
+    fn default() -> Self {
+        Self {
+            streamdb: Config::default(),
+            grpc_port: 50051,
+            p2p_discovery: true,
+        }
+    }
+}
+
+pub struct MyDcfService {
+    db: Arc<StreamDb>,
+    role: Mutex<String>,
+    peers: Mutex<HashMap<String, i64>>,
+    metrics: Mutex<Metrics>,
+    master_address: Mutex<String>,
+}
+
+impl MyDcfService {
+    pub fn new(db: Arc<StreamDb>) -> Self {
+        Self {
+            db,
+            role: Mutex::new("p2p".to_string()),
+            peers: Mutex::new(HashMap::new()),
+            metrics: Mutex::new(Metrics { sends: 0, receives: 0, failures: 0 }),
+            master_address: Mutex::new("".to_string()),
+        }
+    }
+
+    async fn log_event(&self, event: DCFEvent) -> Result<(), StreamDbError> {
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
+        let event_id = Uuid::new_v4();
+        let path = format!("/logs/{}-{}.json", timestamp, event_id);
+        let json = serde_json::to_vec(&event)?;
+        let mut data = Cursor::new(json);
+        self.db.write_document(&path, &mut data)?;
+        self.db.flush()?;
+        Ok(())
+    }
+
+    async fn discover_peers(&self, config: &DcfConfig) -> Result<(), StreamDbError> {
+        if !config.p2p_discovery {
+            return Ok(());
+        }
+        let mdns = ServiceDaemon::new()?;
+        let service_type = "_dcf._tcp.local.";
+        let receiver = mdns.browse(service_type)?;
+        while let Ok(event) = receiver.recv_async().await {
+            if let mdns_sd::ServiceEvent::ServiceResolved(info) = event {
+                let addr = info.get_addresses().iter().next().map(|a| a.to_string()).unwrap_or_default();
+                let rtt = measure_rtt(&addr).await.unwrap_or(100);
+                if rtt < 50 {
+                    self.peers.lock().insert(addr.clone(), rtt);
+                    let path = format!("/peers/{}", Uuid::new_v4());
+                    let peer_info = PeerInfo { address: addr.clone(), rtt };
+                    let mut data = Cursor::new(serde_json::to_vec(&peer_info)?);
+                    self.db.write_document(&path, &mut data)?;
+                    self.db.flush()?;
+                    let event = DCFEvent::Receive {
+                        msg_id: addr,
+                        timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64,
+                        content_summary: format!("RTT: {}", rtt),
+                    };
+                    self.log_event(event).await?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+async fn measure_rtt(address: &str) -> Result<i64, StreamDbError> {
+    // Placeholder: Real implementation would use TCP or ICMP ping
+    Ok(rand::random::<i64>() % 100)
+}
