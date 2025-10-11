@@ -1,6 +1,6 @@
 # DeMoD Communications Framework (DCF)
 
-**Version 5.0.1 | Oct 06, 2025**  
+**Version 5.0.1 | Oct 010, 2025**  
 **Developed by DeMoD LLC**  
 **Contact:** alh477@demod.ltd 
 
