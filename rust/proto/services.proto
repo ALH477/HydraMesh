@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package dcf;
+
+import "messages.proto";
+
+service DCFService {
+  rpc SendMessage(DCFMessage) returns (DCFResponse);
+  rpc GetMetrics(Empty) returns (Metrics);
+  rpc AssignRole(RoleAssignment) returns (DCFResponse);
+  rpc ReportPeer(PeerInfo) returns (DCFResponse);
+}
