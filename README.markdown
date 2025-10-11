@@ -12,6 +12,8 @@ The DeMoD Communications Framework (DCF) is a free and open-source software (FOS
 
 DCF is hardware and language agnostic, supporting embedded devices (e.g., Raspberry Pi), cloud servers, and mobile platforms (Android/iOS) with bindings in Perl, Python, C, C++, JavaScript (Node.js), Go, Rust, Java/Kotlin, Swift, and Lisp. Version 5.0.0 introduces a plugin system for custom modules and transports, an AUTO mode for dynamic role assignment managed by a master node, and enhanced extensibility. Licensed under GPL-3.0, DCF ensures open-source derivatives. It includes CLI, TUI, server/client logic, P2P, and AUTO modes, making it versatile for standalone tools, libraries, or networked services. SDKs (e.g., C SDK, Lisp SDK) are developed as submodules for streamlined integration.
 
+The bash scripts are there to help you set up your enviroment. There is Nix and Docker presets. You're welcome.
+
 > **Important**: DCF complies with U.S. export regulations (EAR and ITAR). It avoids encryption to remain export-control-free. Users must ensure custom extensions comply; consult legal experts for specific use cases. DeMoD LLC disclaims liability for non-compliant modifications.
 
 ## Features
@@ -23,7 +25,7 @@ DCF is hardware and language agnostic, supporting embedded devices (e.g., Raspbe
 - **Usability**: CLI for automation, TUI for monitoring; server, client, P2P, and AUTO modes with logging; master node commands for role and config management.
 - **Self-Healing P2P**: Redundant paths, failure detection, RTT-based grouping (clusters by <50ms threshold), and optimized routing (Dijkstra with RTT weights).
 - **Persistence**: Integrated StreamDB for state, metrics, and message logging in Lisp SDK, with potential extensions to other SDKs.
-- **Open Source**: GPL-3.0 ensures transparency and community contributions.
+- **Open Source**: LGPL-3.0 ensures transparency and community contributions.
 
 ## Architecture
 ```mermaid
