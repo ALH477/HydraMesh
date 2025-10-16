@@ -1,5 +1,7 @@
 # HydraMesh
 
+![logo](logo.png)
+
 **Version 5.0.1 | Oct 10, 2025**  
 **Developed by DeMoD LLC**  
 **Contact:** alh477@demod.ltd 
