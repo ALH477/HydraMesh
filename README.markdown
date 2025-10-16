@@ -4,8 +4,8 @@
 **Developed by DeMoD LLC**  
 **Contact:** alh477@demod.ltd 
 
-**License:** [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)  
-![gpl](https://www.gnu.org/graphics/gplv3-with-text-154x68.png)
+**License:** [![License: LGPL v3](https://img.shields.io/badge/License-LGPLv3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)  
+![gpl](https://www.gnu.org/graphics/lgplv3-with-text-154x68.png)
 
 ## Overview
 HydraMesh is a free and open-source software (FOSS) framework evolved from the DeMoD Secure Protocol, designed for low-latency, modular, and interoperable data exchange. It supports applications like IoT messaging, real-time gaming synchronization, distributed computing, and edge networking. HydraMesh features a handshakeless design, efficient Protocol Buffers serialization, and a compatibility layer for UDP, TCP, WebSocket, and gRPC transports, enabling seamless peer-to-peer (P2P) networking with self-healing redundancy.
