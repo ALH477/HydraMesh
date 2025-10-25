@@ -2,7 +2,7 @@
 
 **Version 1.8.0** | **Updated: October 3, 2025**  
 **Developed by DeMoD LLC** with contributions from **Grok 4 Heavy** (xAI)  
-**License**: GNU General Public License v3.0 (GPL-3.0)  
+**License**: GNU General Public License v3.0 (LGPL-3.0)  
 **Repository**: [https://github.com/ALH477/DeMoD-Communication-Framework](https://github.com/ALH477/DeMoD-Communication-Framework)  
 **Demo (soon)**: [YouTube Video](https://youtu.be/IXbIB8jCvDE)
 
