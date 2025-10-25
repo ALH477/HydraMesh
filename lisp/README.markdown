@@ -348,4 +348,4 @@ This project is licensed under the GNU General Public License v3.0 (GPL-3.0). Se
 ---
 
 **DeMoD LLC** | Empowering Scalable, Fault-Tolerant Communication  
-**Built with ❤️ and Lisp** | Powered by **Grok 4 Heavy**
+**Built with ❤️ and Lisp** | Powered by **Grok 4 Heavy** & **O B S E S S I O N**
