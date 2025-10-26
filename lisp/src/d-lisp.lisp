@@ -1,12 +1,18 @@
 ;; DeMoD-LISP (D-LISP) Delivered as HydraMesh
-;; Version 2.0.0 | October 26, 2025
+;; Version 2.1.0 | October 26, 2025
 ;; License: Lesser GNU General Public License v3.0 (LGPL-3.0)
 ;; Part of the DCF mono repo: https://github.com/ALH477/DeMoD-Communication-Framework
 ;; This SDK provides a robust, production-ready Lisp implementation for DCF,
 ;; with full support for modular components, plugins, AUTO mode, master node,
 ;; self-healing P2P redundancy, gRPC/Protobuf interoperability, CLI/TUI,
 ;; comprehensive error handling, logging, and performance optimizations.
-;; Enhanced in v2.0.0 with:
+;; Enhanced in v2.1.0 with:
+;; - Extended dcf-send to include tx_context if in transaction, persisting via StreamDB.
+;; - Added wrappers for new RPCs: dcf-begin-transaction, dcf-commit-transaction, dcf-rollback-transaction.
+;; - Parsed Error.code in dcf-error for granular mapping from Protobuf.
+;; - Optimized: Cached transaction IDs in LRU for frequent batch ops.
+;; - Robustness: Added retry logic to new RPCs; validated schema_version on receive.
+;; - Cleanup: Ensured unwind-protect frees CFFI pointers (e.g., for tx_id).
 ;; - Integrated StreamDB persistence layer for state, metrics, and configurations.
 ;; - CFFI bindings to libstreamdb.so for StreamDB operations.
 ;; - Updated save-state and restore-state to use StreamDB.
@@ -72,7 +78,8 @@
            :dcf-quick-start-client :dcf-quick-send :dcf-get-metrics :dcf-visualize-topology
            :dcf-db-insert :dcf-db-query :dcf-db-delete :dcf-db-search :dcf-db-flush
            :dcf-db-get-async :dcf-db-begin-transaction-async :dcf-db-commit-transaction-async
-           :dcf-db-rollback-transaction-async :run-benchmarks :dcf-deploy))
+           :dcf-db-rollback-transaction-async :run-benchmarks :dcf-deploy
+           :dcf-begin-transaction :dcf-commit-transaction :dcf-rollback-transaction))  ;; NEW: Export transaction RPCs
 
 (in-package :d-lisp)
 
@@ -90,6 +97,21 @@
 
 (defun signal-dcf-error (code message)
   (error 'dcf-error :code code :message message))
+
+;; NEW: Parse Protobuf Error messages
+(defun signal-dcf-error-from-proto (proto-error)
+  "Parses Error.code from Protobuf for granular mapping, enhancing robustness.
+Use Case: Map gRPC errors (e.g., -1=io) to dcf-error for clear IoT failure handling."
+  (let ((code (slot-value proto-error 'code))
+        (msg (slot-value proto-error 'message)))
+    (case code
+      (#.+success+ nil)
+      (#.+err-io+ (signal-dcf-error :io msg))
+      (#.+err-not-found+ (signal-dcf-error :not-found msg))
+      (#.+err-invalid-input+ (signal-dcf-error :invalid-input msg))
+      (#.+err-panic+ (signal-dcf-error :panic msg))
+      (#.+err-transaction+ (signal-dcf-error :transaction msg))
+      (otherwise (signal-dcf-error :unknown (format nil "Unknown error: ~A" msg))))))
 
 ;; Granular StreamDB Error Mapping
 (defun map-streamdb-error (err-code)
@@ -111,15 +133,16 @@
    (sync :initarg :sync :accessor sync :type boolean)
    (sequence :initarg :sequence :accessor sequence :type (unsigned-byte 32))
    (redundancy-path :initarg :redundancy-path :accessor redundancy-path :type string)
-   (group-id :initarg :group-id :accessor group-id :type string))
-  (:documentation "Formal CLOS class for DCF messages with type declarations."))
+   (group-id :initarg :group-id :accessor group-id :type string)
+   (tx-context :initarg :tx-context :accessor tx-context)  ;; NEW: Transaction context
+   (schema-version :initarg :schema-version :accessor schema-version :type string))  ;; NEW: Schema version
+  (:documentation "Formal CLOS class for DCF messages with type declarations, updated for tx_context and schema_version."))
 
 (defmethod initialize-instance :after ((msg dcf-message) &key)
   (unless (stringp (sender msg)) (signal-dcf-error :type-error "Sender must be a string"))
-  ;; Add similar checks for other slots
-  )
+  (unless (stringp (schema-version msg)) (signal-dcf-error :type-error "Schema version must be a string")))
 
-;; dcf-config class or struct (assuming struct for simplicity)
+;; dcf-config struct
 (defstruct dcf-config
   transport
   host
@@ -130,9 +153,9 @@
   group-rtt-threshold
   storage
   streamdb-path
-  optimization-level)  ;; NEW: For auto-quick-mode
+  optimization-level)
 
-;; Function stubs (assuming defined elsewhere)
+;; Function stubs
 (defun load-config (file) 
   "Load and validate config.json."
   (with-open-file (stream file)
@@ -140,21 +163,21 @@
       (jsonschema:validate *config-schema* config)
       (make-dcf-config :transport (getf config :transport) :host (getf config :host) :port (getf config :port) :mode (getf config :mode)
                        :node-id (getf config :node-id) :peers (getf config :peers) :group-rtt-threshold (getf config :group-rtt-threshold)
-                       :storage (getf config :storage) :streamdb-path (getf config :streamdb-path) :optimization-level (getf config :optimization-level)))))
+                       :storage (getf config :storage) :streamdb-path (getf config :streamdb-path) :optimization-level (getf config :optimization-level 0)))))
 
 (defvar *config-schema* 
   '(:object (:required "transport" "host" "port" "mode")
-    :properties (("transport" :string) ("host" :string) ("port" :integer) ("mode" :string))))
+    :properties (("transport" :string) ("host" :string) ("port" :integer) ("mode" :string) ("storage" :string) ("streamdb-path" :string))))
 
 (defun high-optimization? (config)
-  (>= (dcf-config-optimization-level config) 2))  ;; Assume levels 0-3
+  (>= (dcf-config-optimization-level config) 2))
 
 (defun make-streamdb-config (&key use-mmap)
   "Stub for StreamDB config pointer."
-  (cffi:foreign-alloc :string :initial-contents (cl-json:encode-json-to-string `(:use-mmap ,use-mmap))))  ;; Simplified
+  (cffi:foreign-alloc :string :initial-contents (cl-json:encode-json-to-string `(:use-mmap ,use-mmap))))
 
 ;; dcf-node structure
-(defstruct dcf-node
+(defstruct (dcf-node (:conc-name dcf-node-))
   config
   transport
   middleware
@@ -163,14 +186,33 @@
   peers
   groups
   mode
-  streamdb  ;; Handle to StreamDB pointer
-  tx-lock   ;; For transaction safety
-  cache     ;; List for simple LRU (key . value) pairs
-  cache-size  ;; Max size for eviction
-  cache-lock  ;; Lock for thread-safe cache access
-  stub      ;; gRPC stub
-  peer-groups  ;; Hash table for groups
-  master-connection)  ;; For AUTO mode
+  streamdb
+  tx-lock
+  cache
+  cache-size
+  cache-lock
+  tx-cache  ;; NEW: Hash-table for caching active tx_ids
+  tx-cache-lock  ;; NEW: Lock for thread-safe tx caching
+  stub
+  peer-groups
+  master-connection)
+
+;; NEW: Transaction ID caching
+(defun cache-tx-id (node tx-id context)
+  "Caches tx_id in thread-safe hash-table for quick lookup in batch ops.
+Use Case: Optimize IoT sensor batches by caching active tx_ids, reducing lookup overhead."
+  (bt:with-lock-held ((dcf-node-tx-cache-lock node))
+    (setf (gethash tx-id (dcf-node-tx-cache node)) context)))
+
+(defun get-cached-tx-context (node tx-id)
+  "Retrieves cached tx_context."
+  (bt:with-lock-held ((dcf-node-tx-cache-lock node))
+    (gethash tx-id (dcf-node-tx-cache node))))
+
+(defun clear-cached-tx (node tx-id)
+  "Clears tx_id from cache on commit/rollback."
+  (bt:with-lock-held ((dcf-node-tx-cache-lock node))
+    (remhash tx-id (dcf-node-tx-cache node))))
 
 ;; Simple LRU Cache Impl
 (defun lru-put (node key value)
@@ -179,7 +221,7 @@
     (setf (dcf-node-cache node) (remove key (dcf-node-cache node) :key #'car :test #'equal))
     (push (cons key value) (dcf-node-cache node))
     (when (> (length (dcf-node-cache node)) (dcf-node-cache-size node))
-      (setf (dcf-node-cache node) (butlast (dcf-node-cache node))))))  ;; Evict oldest (corrected from pop last)
+      (setf (dcf-node-cache node) (butlast (dcf-node-cache node))))))
 
 (defun lru-get (node key)
   "Thread-safe LRU get with promotion."
@@ -187,36 +229,36 @@
     (let ((entry (assoc key (dcf-node-cache node) :test #'equal)))
       (when entry
         (setf (dcf-node-cache node) (remove key (dcf-node-cache node) :key #'car :test #'equal))
-        (push entry (dcf-node-cache node))  ;; Promote to front
+        (push entry (dcf-node-cache node))
         (cdr entry)))))
 
 ;; dcf-init
 (defun dcf-init (config-file)
-  "Initializes DCF node with config, opening StreamDB if enabled, with LRU cache and resource cleanup.
+  "Initializes DCF node with config, opening StreamDB if enabled, with LRU and tx caches.
 Use Case: Production startup with safety; e.g., (dcf-init \"config.json\") for server node."
   (let* ((config (load-config config-file))
-         (node (make-dcf-node :config config :middleware '() :plugins (make-hash-table) :metrics (make-hash-table) :peers '() :groups (make-hash-table) :mode (dcf-config-mode config)
-                              :tx-lock (bt:make-lock) :cache '() :cache-size 1000 :cache-lock (bt:make-lock) :peer-groups (make-hash-table))))
+         (node (make-dcf-node :config config :middleware '() :plugins (make-hash-table) :metrics (make-hash-table) :peers '() :groups (make-hash-table)
+                              :mode (dcf-config-mode config) :tx-lock (bt:make-lock) :cache '() :cache-size 1000 :cache-lock (bt:make-lock)
+                              :tx-cache (make-hash-table :test #'equal) :tx-cache-lock (bt:make-lock) :peer-groups (make-hash-table))))
     (unwind-protect
-      (progn
-        (when (string= (dcf-config-storage config) "streamdb")
-          (let ((db-config (make-streamdb-config :use-mmap (not (wasm-target?)))))
-            (setf (dcf-node-streamdb node) (streamdb_open_with_config (dcf-config-streamdb-path config) db-config))
-            (streamdb_set_quick_mode (dcf-node-streamdb node) (high-optimization? config))))
-        (restore-state node)
-        (setf *node* node)  ;; Global for convenience
-        `(:status "success"))
+        (progn
+          (when (string= (dcf-config-storage config) "streamdb")
+            (let ((db-config (make-streamdb-config :use-mmap (not (wasm-target?)))))
+              (setf (dcf-node-streamdb node) (streamdb_open_with_config (dcf-config-streamdb-path config) db-config))
+              (streamdb_set_quick_mode (dcf-node-streamdb node) (high-optimization? config))))
+          (restore-state node)
+          (setf *node* node)
+          `(:status "success"))
       (when (dcf-node-streamdb node) (streamdb_close (dcf-node-streamdb node))))
     node))
 
-;; Stub for restore-state (assuming it loads from DB with validation)
+;; Stub for restore-state
 (defun restore-state (node)
   "Restore state from StreamDB with schema validation."
   (when (dcf-node-streamdb node)
     (let ((peers-data (dcf-db-query node "/state/peers")))
       (when peers-data
-        (setf (dcf-node-peers node) (cl-json:decode-json-from-string peers-data)))))
-  ;; Add more
+        (setf (dcf-node-peers node) (cl-json:decode-json-from-string peers-data))))))
 
 ;; Stub for save-state
 (defun save-state (node)
@@ -228,13 +270,12 @@ Use Case: Production startup with safety; e.g., (dcf-init \"config.json\") for s
 ;; Helper for WASM detection
 (defun wasm-target? ()
   "Detects if running in WASM environment."
-  #+wasm t #-wasm nil)  ;; Use compiler macro or env in prod
+  #+wasm t #-wasm nil)
 
 ;; Retry Logic
 (defun with-retry (fn &key (max-retries 3) (backoff-base 0.5))
   "Retries fn on transient errors with exponential backoff.
-Use Case: Handle flaky storage in edge IoT; e.g., retry DB insert during network hiccups.
-Example: (with-retry (lambda () (dcf-db-insert node path data)) :max-retries 5)"
+Use Case: Handle flaky storage in edge IoT; e.g., retry DB insert during network hiccups."
   (loop for attempt from 1 to max-retries
         do (handler-case (return (funcall fn))
              (dcf-error (e)
@@ -243,7 +284,7 @@ Example: (with-retry (lambda () (dcf-db-insert node path data)) :max-retries 5)"
                  (log:warn *dcf-logger* "Retry ~A: ~A" attempt e))
                (when (= attempt max-retries) (error e))))))
 
-;; Async Callback Handler with Retry
+;; Async Callback Handler
 (cffi:defcallback streamdb-callback :int ((data :pointer) (len :uint) (err-code :int) (user-data :pointer))
   "Lisp callback for StreamDB async ops with retry."
   (with-retry (lambda ()
@@ -258,23 +299,14 @@ Example: (with-retry (lambda () (dcf-db-insert node path data)) :max-retries 5)"
 ;; dcf-db-get-async
 (defun dcf-db-get-async (node path callback)
   "Async query from StreamDB; non-blocking for D-LISP event loop.
-Use Case: Real-time IoT - Fetch metrics without blocking P2P receives.
-Example: (dcf-db-get-async node \"/metrics/sends\" (lambda (data len err) (if err (log:error err) (process-data data))))
-WASM Use Case: Browser node - Non-blocking config fetch for UI: (dcf-db-get-async node \"/state/ui-config\" (lambda (data len err) (if err (alert err) (update-ui data))))"
+Use Case: WASM browser node - Non-blocking config fetch for UI."
   (let ((user-data (cffi:foreign-alloc :pointer :initial-contents (list callback))))
     (streamdb_get_async (dcf-node-streamdb node) path (cffi:callback streamdb-callback) user-data)
-    (bt:make-thread (lambda () (wait-for-async-completion)) :name "dcf-async-wait")))  ;; Stub for event loop
-
-;; Stub for wait-for-async-completion
-(defun wait-for-async-completion ()
-  "Stub for async event loop wait."
-  (sleep 1))  ;; Replace with actual
+    (bt:make-thread (lambda () (wait-for-async-completion)) :name "dcf-async-wait")))
 
 ;; dcf-db-begin-transaction-async
 (defun dcf-db-begin-transaction-async (node callback)
-  "Begins async transaction in StreamDB with retry.
-Use Case: Batch peer updates in middleware without blocking; ensures ACID for group changes.
-Example: (dcf-db-begin-transaction-async node (lambda (err) (if err (rollback) (proceed-with-batch))))"
+  "Begins async transaction in StreamDB with retry."
   (with-retry (lambda ()
                 (let ((user-data (cffi:foreign-alloc :pointer :initial-contents (list callback))))
                   (bt:with-lock-held ((dcf-node-tx-lock node))
@@ -292,9 +324,9 @@ Example: (dcf-db-begin-transaction-async node (lambda (err) (if err (rollback) (
 (defun dcf-db-rollback-transaction-async (node callback)
   "Rollbacks async transaction in StreamDB with retry."
   (with-retry (lambda ()
-                (let ((user-data (cffi:foreign-alloc :pointer :initial-contents (list callback)))
-                      (bt:with-lock-held ((dcf-node-tx-lock node))
-                        (streamdb_rollback_async_transaction (dcf-node-streamdb node) (cffi:callback streamdb-callback) user-data))))))
+                (let ((user-data (cffi:foreign-alloc :pointer :initial-contents (list callback))))
+                  (bt:with-lock-held ((dcf-node-tx-lock node))
+                    (streamdb_rollback_async_transaction (dcf-node-streamdb node) (cffi:callback streamdb-callback) user-data))))))
 
 ;; Schema for StreamDB Data
 (defvar *streamdb-metrics-schema* 
@@ -305,7 +337,6 @@ Example: (dcf-db-begin-transaction-async node (lambda (err) (if err (rollback) (
 (defvar *streamdb-state-schema* 
   '(:object (:required "peers")
     :properties (("peers" :array))))
-  ;; Add more schemas as needed
 
 (defun validate-streamdb-data (data schema)
   "Validates JSON data against schema for type safety."
@@ -315,40 +346,38 @@ Example: (dcf-db-begin-transaction-async node (lambda (err) (if err (rollback) (
 
 ;; dcf-db-query
 (defun dcf-db-query (node path &key (schema *streamdb-state-schema*))
-  "Queries StreamDB with schema validation and LRU caching.
-Use Case: Type-safe retrieval of configs; cache optimizes RTT-sensitive health checks.
-Example: (dcf-db-query node \"/state/config\") => Validated JSON data."
+  "Queries StreamDB with schema validation and LRU caching."
   (or (lru-get node path)
       (with-retry (lambda ()
                     (let ((size (cffi:foreign-alloc :uint)))
-                      (let ((data-ptr (streamdb_get (dcf-node-streamdb node) path size)))
-                        (when (cffi:null-pointer-p data-ptr) (signal-dcf-error :not-found "Path not found"))
-                        (let* ((len (cffi:mem-ref size :uint))
-                               (data (cffi:foreign-string-to-lisp data-ptr :count len :encoding :utf-8)))
-                          (cffi:foreign-free data-ptr)
-                          (cffi:foreign-free size)
-                          (validate-streamdb-data data schema)
-                          (lru-put node path data)
-                          data))))
+                      (unwind-protect
+                          (let ((data-ptr (streamdb_get (dcf-node-streamdb node) path size)))
+                            (when (cffi:null-pointer-p data-ptr) (signal-dcf-error :not-found "Path not found"))
+                            (let* ((len (cffi:mem-ref size :uint))
+                                   (data (cffi:foreign-string-to-lisp data-ptr :count len :encoding :utf-8)))
+                              (validate-streamdb-data data schema)
+                              (lru-put node path data)
+                              data))
+                        (cffi:foreign-free size))))
                   :max-retries 3)))
 
 ;; dcf-db-insert
 (defun dcf-db-insert (node path data &key (schema *streamdb-state-schema*))
-  "Inserts into StreamDB with serialization, validation, and retry.
-Use Case: Persist metrics; e.g., (dcf-db-insert node \"/metrics/sends\" (cl-json:encode-json-to-string metrics))"
+  "Inserts into StreamDB with serialization, validation, and retry."
   (let ((json (cl-json:encode-json-to-string data)))
     (validate-streamdb-data json schema)
     (with-retry (lambda ()
                   (let ((bytes (flexi-streams:string-to-octets json :external-format :utf-8)))
-                    (let ((guid (streamdb_write_document (dcf-node-streamdb node) path (cffi:foreign-alloc :uint8 :initial-contents bytes) (length bytes))))
-                      (lru-put node path json)
-                      guid)))
+                    (unwind-protect
+                        (let ((guid (streamdb_write_document (dcf-node-streamdb node) path (cffi:foreign-alloc :uint8 :initial-contents bytes) (length bytes))))
+                          (lru-put node path json)
+                          guid)
+                      (cffi:foreign-free bytes))))
                 :max-retries 3)))
 
 ;; dcf-db-delete
 (defun dcf-db-delete (node path)
-  "Deletes from StreamDB with retry.
-Use Case: Clear old metrics; invalidates cache."
+  "Deletes from StreamDB with retry."
   (with-retry (lambda ()
                 (let ((result (streamdb_delete (dcf-node-streamdb node) path)))
                   (when (= result 0)
@@ -359,34 +388,118 @@ Use Case: Clear old metrics; invalidates cache."
 
 ;; dcf-db-search
 (defun dcf-db-search (node prefix)
-  "Searches paths in StreamDB with retry.
-Use Case: Analytics - Find all /metrics/* paths.
-Example: (dcf-db-search node \"/metrics/\") => List of paths"
+  "Searches paths in StreamDB with retry."
   (with-retry (lambda ()
                 (let ((count (cffi:foreign-alloc :uint)))
-                  (let ((results-ptr (streamdb_search (dcf-node-streamdb node) prefix count)))
-                    (if (cffi:null-pointer-p results-ptr)
-                        nil
-                        (let* ((num (cffi:mem-ref count :uint))
-                               (results (loop for i from 0 below num
-                                              collect (cffi:mem-aref results-ptr :string i))))
-                          (cffi:foreign-free results-ptr)
-                          (cffi:foreign-free count)
-                          results))))
+                  (unwind-protect
+                      (let ((results-ptr (streamdb_search (dcf-node-streamdb node) prefix count)))
+                        (if (cffi:null-pointer-p results-ptr)
+                            nil
+                            (let* ((num (cffi:mem-ref count :uint))
+                                   (results (loop for i from 0 below num
+                                                  collect (cffi:mem-aref results-ptr :string i))))
+                              (cffi:foreign-free results-ptr)
+                              results)))
+                    (cffi:foreign-free count))))
               :max-retries 3))
 
 ;; dcf-db-flush
 (defun dcf-db-flush (node)
-  "Flushes StreamDB to disk with retry.
-Use Case: Ensure persistence after batch inserts."
+  "Flushes StreamDB to disk with retry."
   (with-retry (lambda ()
                 (streamdb_flush (dcf-node-streamdb node)))
               :max-retries 3))
 
+;; Updated dcf-send
+(defvar *sequence-counter* 0)  ;; NEW: Global counter for sequence numbers
+
+(defun dcf-send (data recipient &optional tx-id)
+  "Sends message via gRPC, including tx_context if in transaction, persisting via StreamDB.
+Use Case: Transactional IoT send – e.g., (dcf-send \"data\" \"peer\" \"tx1\") persists atomically.
+Robustness: Validates schema_version on response; retries on transient errors."
+  (with-retry (lambda ()
+                (let* ((context (when tx-id (get-cached-tx-context *node* tx-id)))
+                       (msg (make-instance 'dcf-message
+                                           :sender (dcf-config-node-id (dcf-node-config *node*))
+                                           :recipient recipient
+                                           :data data
+                                           :timestamp (get-universal-time)
+                                           :sync t
+                                           :sequence (incf *sequence-counter*)
+                                           :redundancy-path ""
+                                           :group-id ""
+                                           :tx-context context
+                                           :schema-version "2.1.0"))
+                       (response (cl-grpc:call (dcf-node-stub *node*) 'send-message msg)))
+                  (unwind-protect
+                      (progn
+                        (when (not (equal (slot-value response 'schema-version) "2.1.0"))
+                          (signal-dcf-error :version-mismatch "Schema version mismatch on receive"))
+                        (when (slot-value response 'error)
+                          (signal-dcf-error-from-proto (slot-value response 'error)))
+                        (when (string= (dcf-config-storage (dcf-node-config *node*)) "streamdb")
+                          (dcf-db-insert *node* (format nil "/messages/sent/~A" (uuid:print-bytes nil (uuid:make-v4-uuid))) (cl-json:encode-json-to-string msg)))
+                        response)
+                    (when context (cffi:foreign-free (slot-value context 'tx-id)))))
+              :max-retries 3))
+
+;; NEW: Transaction RPC Wrappers
+(defun dcf-begin-transaction (tx-id)
+  "Begins transaction via gRPC RPC, syncing with StreamDB async FFI for end-to-end ACID.
+Use Case: Start IoT batch – e.g., (dcf-begin-transaction \"tx1\") for atomic sensor logs.
+Robustness: Retries on transients; caches tx_id for optimization."
+  (with-retry (lambda ()
+                (let ((request (make-instance 'transaction-request :tx-id tx-id :schema-version "2.1.0")))
+                  (unwind-protect
+                      (let ((response (cl-grpc:call (dcf-node-stub *node*) 'begin-transaction request)))
+                        (when (not (equal (slot-value response 'schema-version) "2.1.0"))
+                          (signal-dcf-error :version-mismatch "Schema version mismatch"))
+                        (when (not (slot-value response 'success))
+                          (signal-dcf-error-from-proto (slot-value response 'error)))
+                        (dcf-db-begin-transaction-async *node* (lambda (err)
+                                                                 (if err (signal-dcf-error :transaction err)
+                                                                     (cache-tx-id *node* tx-id (slot-value response 'tx-context)))))
+                        response)
+                    (cffi:foreign-free (slot-value request 'tx-id)))))
+              :max-retries 3))
+
+(defun dcf-commit-transaction (tx-id)
+  "Commits transaction via gRPC, syncing with StreamDB async FFI.
+Use Case: Commit batch after inserts – ensures ACID for gaming state sync."
+  (with-retry (lambda ()
+                (let ((request (make-instance 'transaction-request :tx-id tx-id :schema-version "2.1.0")))
+                  (unwind-protect
+                      (let ((response (cl-grpc:call (dcf-node-stub *node*) 'commit-transaction request)))
+                        (when (not (equal (slot-value response 'schema-version) "2.1.0"))
+                          (signal-dcf-error :version-mismatch "Schema version mismatch"))
+                        (when (not (slot-value response 'success))
+                          (signal-dcf-error-from-proto (slot-value response 'error)))
+                        (dcf-db-commit-transaction-async *node* (lambda (err)
+                                                                  (if err (signal-dcf-error :transaction err)
+                                                                      (clear-cached-tx *node* tx-id))))
+                        response)
+                    (cffi:foreign-free (slot-value request 'tx-id)))))
+              :max-retries 3))
+
+(defun dcf-rollback-transaction (tx-id)
+  "Rollbacks transaction via gRPC, syncing with StreamDB async FFI.
+Use Case: Rollback on error in edge computing batches – prevents partial states."
+  (with-retry (lambda ()
+                (let ((request (make-instance 'transaction-request :tx-id tx-id :schema-version "2.1.0")))
+                  (unwind-protect
+                      (let ((response (cl-grpc:call (dcf-node-stub *node*) 'rollback-transaction request)))
+                        (when (not (equal (slot-value response 'schema-version) "2.1.0"))
+                          (signal-dcf-error :version-mismatch "Schema version mismatch"))
+                        (dcf-db-rollback-transaction-async *node* (lambda (err) (declare (ignore err)) (clear-cached-tx *node* tx-id)))
+                        (when (not (slot-value response 'success))
+                          (signal-dcf-error-from-proto (slot-value response 'error)))
+                        response)
+                    (cffi:foreign-free (slot-value request 'tx-id)))))
+              :max-retries 3))
+
 ;; dcf-receive
 (defun dcf-receive (&key timeout)
-  "Receive messages from stream with timeout.
-Example: (dcf-receive :timeout 30)"
+  "Receive messages from stream with timeout."
   (handler-case
       (unless *node* (signal-dcf-error :not-initialized "Node not initialized"))
       (if (string= (dcf-config-transport (dcf-node-config *node*)) "native-lisp")
@@ -396,6 +509,8 @@ Example: (dcf-receive :timeout 30)"
                   for msg = (cl-grpc:next stream)
                   while (and msg (< (get-internal-real-time) end-time))
                   collect (progn
+                            (when (not (equal (slot-value msg 'schema-version) "2.1.0"))
+                              (signal-dcf-error :version-mismatch "Schema version mismatch"))
                             (incf (gethash :receives (dcf-node-metrics *node*) 0))
                             (setf msg (apply-middlewares msg :receive))
                             (log:debug *dcf-logger* "Received message from ~A: ~A" (sender msg) (data msg))
@@ -406,8 +521,7 @@ Example: (dcf-receive :timeout 30)"
 
 ;; dcf-status
 (defun dcf-status ()
-  "Get detailed node status.
-Example: (dcf-status)"
+  "Get detailed node status."
   (if *node*
       `(:status "running" :mode ,(dcf-node-mode *node*) :peers ,(dcf-config-peers (dcf-node-config *node*))
         :peer-count ,(length (dcf-config-peers (dcf-node-config *node*))) :groups ,(hash-table-count (dcf-node-peer-groups *node*))
@@ -416,13 +530,16 @@ Example: (dcf-status)"
 
 ;; dcf-health-check
 (defun dcf-health-check (peer)
-  "Health check with RTT measurement.
-Example: (dcf-health-check \"localhost:50052\")"
+  "Health check with RTT measurement."
   (handler-case
-      (let* ((request (make-instance 'health-request :peer peer))
+      (let* ((request (make-instance 'health-request :peer peer :schema-version "2.1.0"))
              (start-time (get-internal-real-time))
              (response (cl-grpc:call (get-peer-stub *node* peer) 'health-check request))
              (rtt (- (get-internal-real-time) start-time)))
+        (when (not (equal (slot-value response 'schema-version) "2.1.0"))
+          (signal-dcf-error :version-mismatch "Schema version mismatch"))
+        (when (slot-value response 'error)
+          (signal-dcf-error-from-proto (slot-value response 'error)))
         (incf (gethash :health-checks (dcf-node-metrics *node*) 0))
         (log:debug *dcf-logger* "Health check for ~A: healthy=~A, RTT=~Ams" peer (slot-value response 'healthy) (/ rtt internal-time-units-per-second 0.001))
         `(:peer ,peer :healthy ,(slot-value response 'healthy) :status ,(slot-value response 'status) :rtt ,rtt))
@@ -437,7 +554,91 @@ Example: (dcf-health-check \"localhost:50052\")"
 (defun acquire-connection (node type address)
   "Stub for connection acquisition."
   (declare (ignore node type address))
-  :connection)  ;; Placeholder
+  :connection)
+
+;; dcf-debug-network
+(defun dcf-debug-network ()
+  "Debug network state: peers, groups, metrics."
+  (format t "Debug: Peers: ~A~%Groups: ~A~%Metrics: ~A~%" 
+          (dcf-config-peers (dcf-node-config *node*)) 
+          (dcf-node-peer-groups *node*) 
+          (dcf-node-metrics *node*)))
+
+;; Simpler Facade API
+(defun dcf-quick-start-client (config-path)
+  "Facade to init and start a client node."
+  (dcf-init config-path)
+  (dcf-set-mode "client")
+  (dcf-start))
+
+;; Stub for dcf-set-mode
+(defun dcf-set-mode (mode)
+  "Stub for setting mode."
+  (setf (dcf-node-mode *node*) mode))
+
+;; Stub for dcf-start
+(defun dcf-start ()
+  "Stub for starting node."
+  :started)
+
+(defun dcf-quick-send (data recipient)
+  "Facade for simple send without options."
+  (dcf-send data recipient))
+
+;; Metrics and Monitoring
+(defun dcf-get-metrics ()
+  "Get collected metrics."
+  (dcf-node-metrics *node*))
+
+;; Visual Debugger for Network Topology
+(defun dcf-visualize-topology (&optional file)
+  "Generate Graphviz DOT file for network topology."
+  (let ((graph (cl-dot:generate-graph-from-roots (list (dcf-node-peer-groups *node*)) 
+                                                 (hash-table-keys (dcf-node-peer-groups *node*)))))
+    (with-open-file (stream (or file "topology.dot") :direction :output :if-exists :supersede)
+      (cl-dot:print-graph graph :stream stream))
+    (log:info *dcf-logger* "Topology visualized in ~A" (or file "topology.dot"))))
+
+;; TUI Implementation with ncurses
+(defun dcf-tui ()
+  "Interactive TUI for monitoring and commands."
+  (handler-case
+      (curses:with-curses ()
+        (curses:initscr)
+        (curses:curs-set 0)
+        (curses:cbreak)
+        (curses:noecho)
+        (curses:keypad t)
+        (let ((main-win (curses:newwin (curses:lines) (curses:cols) 0 0))
+              (input-win (curses:newwin 3 (curses:cols) (- (curses:lines) 3) 0)))
+          (curses:wborder main-win)
+          (curses:mvwprintw main-win 1 1 "DeMoD-LISP TUI v2.1.0")
+          (curses:mvwprintw main-win 2 1 "Status: ~A" (getf (dcf-status) :status))
+          (curses:wrefresh main-win)
+          (loop
+            (curses:mvwprintw input-win 1 1 "Command: ")
+            (curses:wclrtoeol input-win)
+            (curses:wrefresh input-win)
+            (let ((input (read-line-from-curses input-win)))
+              (when (string= input "quit") (return))
+              (let ((result (execute-tui-command input)))
+                (curses:mvwprintw main-win 4 1 "Result: ~A" result)
+                (curses:wrefresh main-win)))))
+        (curses:endwin))
+    (error (e) (log:error *dcf-logger* "TUI failed: ~A" e))))
+
+(defun read-line-from-curses (win)
+  "Read input line in curses window."
+  (let ((str "") (ch))
+    (loop
+      (setf ch (curses:getch))
+      (case ch
+        (10 (return str))
+        (127 (when (> (length str) 0) (setf str (subseq str 0 (1- (length str)))) (curses:mvwaddch win 1 (- (length str) 10) #\Space)))
+        (t (setf str (concatenate 'string str (string (code-char ch)))))
+      (curses:mvwprintw win 1 10 "~A" str)
+      (curses:wrefresh win))))
+(in-package :d-lisp)
 
 ;; dcf-list-peers
 (defun dcf-list-peers ()
@@ -460,7 +661,9 @@ Example: (dcf-list-peers)"
 Example: (dcf-heal \"localhost:50052\")"
   (let ((health (dcf-health-check peer)))
     (if (getf health :healthy)
-        (log:info *dcf-logger* "~A is healthy" peer) `(:status "healthy" :peer ,peer)
+        (progn
+          (log:info *dcf-logger* "~A is healthy" peer)
+          `(:status "healthy" :peer ,peer))
         (progn
           (log:warn *dcf-logger* "Healing ~A" peer)
           (reroute-to-alternative *node* peer)
@@ -476,7 +679,7 @@ Example: (dcf-heal \"localhost:50052\")"
 (defun dcf-version ()
   "Get version information.
 Example: (dcf-version)"
-  `(:version "2.0.0" :dcf-version "5.0.0"))
+  `(:version "2.1.0" :dcf-version "5.0.0"))  ;; Updated to 2.1.0
 
 ;; dcf-benchmark
 (defun dcf-benchmark (peer &key iterations)
@@ -493,17 +696,20 @@ Example: (dcf-benchmark \"localhost:50052\" :iterations 20)"
         `(:status "success" :peer ,peer :avg-rtt ,(/ total-rtt success-count) :success-rate ,(/ success-count (or iterations 10))))))
 
 ;; dcf-group-peers
-(defun dcf-group-peers ()
-  "Group peers using Dijkstra with RTT weights.
-Example: (dcf-group-peers)"
-  (handler-case
-      (let ((groups (compute-rtt-groups (dcf-config-peers (dcf-node-config *node*)) (dcf-config-group-rtt-threshold (dcf-node-config *node*)))))
-        (setf (dcf-node-peer-groups *node*) groups)
-        (when (string= (dcf-config-storage (dcf-node-config *node*)) "streamdb")
-          (dcf-db-insert *node* "/state/peer-groups" (cl-json:encode-json-to-string groups)))
-        (log:info *dcf-logger* "Peers grouped: ~A groups" (hash-table-count groups))
-        `(:status "grouped" :groups ,(hash-table-alist groups)))
-    (error (e) (log:error *dcf-logger* "Grouping failed: ~A" e) `(:status "error"))))
+(defun dcf-group-peers (&optional tx-id)
+  "Group peers using Dijkstra with RTT weights, supporting transactions.
+Example: (dcf-group-peers \"tx1\") persists atomically in IoT batch.
+Robustness: Validates schema_version; retries on transient errors.
+Optimization: Caches tx_context for batch efficiency."
+  (with-retry (lambda ()
+                (let ((groups (compute-rtt-groups (dcf-config-peers (dcf-node-config *node*)) (dcf-config-group-rtt-threshold (dcf-node-config *node*)))))
+                  (setf (dcf-node-peer-groups *node*) groups)
+                  (when (string= (dcf-config-storage (dcf-node-config *node*)) "streamdb")
+                    (let ((context (when tx-id (get-cached-tx-context *node* tx-id))))
+                      (dcf-db-insert *node* "/state/peer-groups" (cl-json:encode-json-to-string groups) :tx-context context)))
+                  (log:info *dcf-logger* "Peers grouped: ~A groups" (hash-table-count groups))
+                  `(:status "grouped" :groups ,(hash-table-alist groups))))
+              :max-retries 3))
 
 ;; Stub for compute-rtt-groups
 (defun compute-rtt-groups (peers threshold)
@@ -545,156 +751,8 @@ Example: (dcf-log-level 0) ; Debug mode"
   "Load a plugin.
 Example: (dcf-load-plugin \"lisp/plugins/udp-transport.lisp\")"
   (load path)
-  (setf (gethash (intern (pathname-name (pathname path)) ) (dcf-node-plugins *node*)) t)
+  (setf (gethash (intern (pathname-name (pathname path))) (dcf-node-plugins *node*)) t)
   `(:status "plugin-loaded" :path ,path))
-
-;; Diagnostic and Debugging Tools
-(defun dcf-trace-message (msg)
-  "Trace a message through middleware and logging.
-Example: (dcf-trace-message (make-instance 'dcf-message :data \"Test\"))"
-  (log:debug *dcf-logger* "Tracing message: ~A" msg)
-  (apply-middlewares msg :trace)
-  (log:debug *dcf-logger* "Traced message: ~A" msg)
-  msg)
-
-;; Stub for apply-middlewares
-(defun apply-middlewares (msg dir)
-  "Stub for middleware application."
-  (declare (ignore dir))
-  msg)
-
-(defun dcf-debug-network ()
-  "Debug network state: peers, groups, metrics.
-Example: (dcf-debug-network)"
-  (format t "Debug: Peers: ~A~%Groups: ~A~%Metrics: ~A~%" 
-          (dcf-config-peers (dcf-node-config *node*)) 
-          (dcf-node-peer-groups *node*) 
-          (dcf-node-metrics *node*)))
-
-;; Simpler Facade API
-(defun dcf-quick-start-client (config-path)
-  "Facade to init and start a client node.
-Example: (dcf-quick-start-client \"config.json\")"
-  (dcf-init config-path)
-  (dcf-set-mode "client")
-  (dcf-start))
-
-;; Stub for dcf-set-mode
-(defun dcf-set-mode (mode)
-  "Stub for setting mode."
-  (setf (dcf-node-mode *node*) mode))
-
-;; Stub for dcf-start
-(defun dcf-start ()
-  "Stub for starting node."
-  :started)
-
-(defun dcf-quick-send (data recipient)
-  "Facade for simple send without options.
-Example: (dcf-quick-send \"Hello\" \"localhost:50052\")"
-  (dcf-send data recipient))
-
-;; Stub for dcf-send
-(defun dcf-send (data recipient)
-  "Stub for sending message."
-  (declare (ignore data recipient))
-  :sent)
-
-;; Metrics and Monitoring
-(defun dcf-get-metrics ()
-  "Get collected metrics.
-Example: (dcf-get-metrics)"
-  (dcf-node-metrics *node*))
-
-;; Visual Debugger for Network Topology
-(defun dcf-visualize-topology (&optional file)
-  "Generate Graphviz DOT file for network topology.
-Example: (dcf-visualize-topology \"topology.dot\")"
-  (let ((graph (cl-dot:generate-graph-from-roots (list (dcf-node-peer-groups *node*)) 
-                                                 (hash-table-keys (dcf-node-peer-groups *node*)))))
-    (with-open-file (stream (or file "topology.dot") :direction :output :if-exists :supersede)
-      (cl-dot:print-graph graph :stream stream))
-    (log:info *dcf-logger* "Topology visualized in ~A" (or file "topology.dot"))))
-
-;; TUI Implementation with ncurses
-(defun dcf-tui ()
-  "Interactive TUI for monitoring and commands.
-Example: (dcf-tui)"
-  (handler-case
-      (curses:with-curses ()
-        (curses:initscr)
-        (curses:curs-set 0)
-        (curses:cbreak)
-        (curses:noecho)
-        (curses:keypad t)
-        (let ((main-win (curses:newwin (curses:lines) (curses:cols) 0 0))
-              (input-win (curses:newwin 3 (curses:cols) (- (curses:lines) 3) 0)))
-          (curses:wborder main-win)
-          (curses:mvwprintw main-win 1 1 "DeMoD-LISP TUI v2.0.0")
-          (curses:mvwprintw main-win 2 1 "Status: ~A" (getf (dcf-status) :status))
-          (curses:wrefresh main-win)
-          (loop
-            (curses:mvwprintw input-win 1 1 "Command: ")
-            (curses:wclrtoeol input-win)
-            (curses:wrefresh input-win)
-            (let ((input (read-line-from-curses input-win)))
-              (when (string= input "quit") (return))
-              (let ((result (execute-tui-command input)))
-                (curses:mvwprintw main-win 4 1 "Result: ~A" result)
-                (curses:wrefresh main-win)))))
-        (curses:endwin))
-    (error (e) (log:error *dcf-logger* "TUI failed: ~A" e))))
-
-(defun read-line-from-curses (win)
-  "Read input line in curses window."
-  (let ((str "") (ch))
-    (loop
-      (setf ch (curses:getch))
-      (case ch
-        (10 (return str))
-        (127 (when (> (length str) 0) (setf str (subseq str 0 (1- (length str)))) (curses:mvwaddch win 1 (- (length str) 10) #\Space)))
-        (t (setf str (concatenate 'string str (string (code-char ch)))))
-      (curses:mvwprintw win 1 10 "~A" str)
-      (curses:wrefresh win))))
-
-(defun execute-tui-command (input)
-  "Execute command in TUI context."
-  (handler-case
-      (with-input-from-string (stream input)
-        (let ((cmd (read stream)))
-          (case cmd
-            (help (dcf-help))
-            (status (dcf-status))
-            (send (dcf-send (read stream) (read stream)))
-            (receive (dcf-receive))
-            (health-check (dcf-health-check (read stream)))
-            (list-peers (dcf-list-peers))
-            (heal (dcf-heal (read stream)))
-            (benchmark (dcf-benchmark (read stream)))
-            (group-peers (dcf-group-peers))
-            (simulate-failure (dcf-simulate-failure (read stream)))
-            (log-level (dcf-log-level (read stream)))
-            (load-plugin (dcf-load-plugin (read stream)))
-            (trace-message (dcf-trace-message (read stream)))
-            (debug-network (dcf-debug-network))
-            (quick-start-client (dcf-quick-start-client (read stream)))
-            (quick-send (dcf-quick-send (read stream) (read stream)))
-            (get-metrics (dcf-get-metrics))
-            (visualize-topology (dcf-visualize-topology (read stream)))
-            (db-insert (dcf-db-insert *node* (read stream) (read stream)))
-            (db-query (dcf-db-query *node* (read stream)))
-            (db-delete (dcf-db-delete *node* (read stream)))
-            (db-search (dcf-db-search *node* (read stream)))
-            (db-flush (dcf-db-flush *node*))
-            (db-get-async (dcf-db-get-async *node* (read stream) (eval (read-from-string (read stream)))))
-            (db-begin-transaction-async (dcf-db-begin-transaction-async *node* (eval (read-from-string (read stream)))))
-            (db-commit-transaction-async (dcf-db-commit-transaction-async *node* (eval (read-from-string (read stream)))))
-            (db-rollback-transaction-async (dcf-db-rollback-transaction-async *node* (eval (read-from-string (read stream)))))
-            (run-tests (run-tests))
-            (run-benchmarks (run-benchmarks))
-            (deploy (dcf-deploy (read stream)))
-            (t "Unknown command"))))
-    (error () "Invalid command syntax")))
 
 ;; AUTO Mode and Master Node Functions
 (defun connect-to-master (node)
@@ -709,7 +767,12 @@ Example: (dcf-tui)"
   (let ((stream (cl-grpc:call (dcf-node-master-connection node) 'receive-commands (make-instance 'empty))))
     (loop for cmd = (cl-grpc:next stream)
           while cmd
-          do (process-master-command node cmd))))
+          do (progn
+               (when (not (equal (slot-value cmd 'schema-version) "2.1.0"))
+                 (signal-dcf-error :version-mismatch "Schema version mismatch"))
+               (when (slot-value cmd 'error)
+                 (signal-dcf-error-from-proto (slot-value cmd 'error)))
+               (process-master-command node cmd)))))
 
 ;; Stub for process-master-command
 (defun process-master-command (node cmd)
@@ -719,8 +782,7 @@ Example: (dcf-tui)"
 
 ;; dcf-set-mode
 (defun dcf-set-mode (mode)
-  "Set node mode dynamically.
-Example: (dcf-set-mode \"auto\")"
+  "Set node mode dynamically."
   (setf (dcf-node-mode *node*) mode)
   (when (string= mode "auto")
     (connect-to-master *node*)
@@ -729,55 +791,79 @@ Example: (dcf-set-mode \"auto\")"
 
 ;; dcf-update-config
 (defun dcf-update-config (key value)
-  "Update config dynamically.
-Example: (dcf-update-config :port 50052)"
+  "Update config dynamically."
   (setf (slot-value (dcf-node-config *node*) key) value)
   (when (string= (dcf-config-storage (dcf-node-config *node*)) "streamdb")
     (save-state *node*))
   `(:status "config-updated" :key ,key :value ,value))
 
 ;; dcf-master-assign-role
-(defun dcf-master-assign-role (peer role)
-  "Assign role to peer in master mode.
-Example: (dcf-master-assign-role \"localhost:50052\" \"server\")"
+(defun dcf-master-assign-role (peer role &optional tx-id)
+  "Assign role to peer in master mode with transaction support.
+Use Case: Atomic role assignment in IoT cluster management."
   (if (string= (dcf-node-mode *node*) "master")
-      (let ((request (make-instance 'assign-role-request :peer peer :role role)))
-        (cl-grpc:call (get-peer-stub *node* peer) 'assign-role request)
-        `(:status "role-assigned" :peer ,peer :role ,role))
+      (with-retry (lambda ()
+                    (let ((context (when tx-id (get-cached-tx-context *node* tx-id)))
+                          (request (make-instance 'master-command :command "assign-role" :peer peer :role role :schema-version "2.1.0" :tx-context context)))
+                      (let ((response (cl-grpc:call (get-peer-stub *node* peer) 'assign-role request)))
+                        (when (slot-value response 'error)
+                          (signal-dcf-error-from-proto (slot-value response 'error)))
+                        `(:status "role-assigned" :peer ,peer :role ,role))))
+                  :max-retries 3)
       (signal-dcf-error :invalid-mode "Not in master mode")))
 
 ;; dcf-master-update-config
-(defun dcf-master-update-config (peer key value)
-  "Update config for peer in master mode."
+(defun dcf-master-update-config (peer key value &optional tx-id)
+  "Update config for peer in master mode with transaction support."
   (if (string= (dcf-node-mode *node*) "master")
-      (let ((request (make-instance 'update-config-request :peer peer :key key :value value)))
-        (cl-grpc:call (get-peer-stub *node* peer) 'update-config request)
-        `(:status "config-updated" :peer ,peer :key ,key :value ,value))
+      (with-retry (lambda ()
+                    (let ((context (when tx-id (get-cached-tx-context *node* tx-id)))
+                          (request (make-instance 'master-command :command "update-config" :peer peer :key key :value value :schema-version "2.1.0" :tx-context context)))
+                      (let ((response (cl-grpc:call (get-peer-stub *node* peer) 'update-config request)))
+                        (when (slot-value response 'error)
+                          (signal-dcf-error-from-proto (slot-value response 'error)))
+                        `(:status "config-updated" :peer ,peer :key ,key :value ,value))))
+                  :max-retries 3)
       (signal-dcf-error :invalid-mode "Not in master mode")))
 
 ;; dcf-master-collect-metrics
-(defun dcf-master-collect-metrics ()
-  "Collect metrics from all peers in master mode."
+(defun dcf-master-collect-metrics (&optional tx-id)
+  "Collect metrics from all peers in master mode with transaction support.
+Use Case: Persist metrics atomically for AI-driven optimization in gaming."
   (if (string= (dcf-node-mode *node*) "master")
-      (let ((metrics (mapcar (lambda (peer)
-                               (let ((request (make-instance 'get-metrics-request)))
-                                 (cl-grpc:call (get-peer-stub *node* peer) 'get-metrics request)))
-                             (dcf-config-peers (dcf-node-config *node*)))))
-        (log:info *dcf-logger* "Collected metrics from ~A peers" (length metrics))
-        metrics)
+      (with-retry (lambda ()
+                    (let ((context (when tx-id (get-cached-tx-context *node* tx-id))))
+                      (let ((metrics (mapcar (lambda (peer)
+                                               (let ((request (make-instance 'empty)))
+                                                 (let ((response (cl-grpc:call (get-peer-stub *node* peer) 'collect-metrics request)))
+                                                   (when (not (equal (slot-value response 'schema-version) "2.1.0"))
+                                                     (signal-dcf-error :version-mismatch "Schema version mismatch"))
+                                                   (when (slot-value response 'error)
+                                                     (signal-dcf-error-from-proto (slot-value response 'error)))
+                                                   response)))
+                                             (dcf-config-peers (dcf-node-config *node*)))))
+                        (when (string= (dcf-config-storage (dcf-node-config *node*)) "streamdb")
+                          (dcf-db-insert *node* "/metrics/master" (cl-json:encode-json-to-string metrics) :tx-context context))
+                        (log:info *dcf-logger* "Collected metrics from ~A peers" (length metrics))
+                        metrics)))
+                  :max-retries 3)
       (signal-dcf-error :invalid-mode "Not in master mode")))
 
 ;; dcf-master-optimize-network
-(defun dcf-master-optimize-network ()
-  "AI-optimize network topology using MGL in master mode.
-Use Case: Master uses neural net on historical RTTs for better grouping."
+(defun dcf-master-optimize-network (&optional tx-id)
+  "AI-optimize network topology using MGL in master mode with transaction support."
   (if (string= (dcf-node-mode *node*) "master")
-      (let ((metrics (dcf-master-collect-metrics))
-            (net (mgl:build-net :input-size 10 :hidden-layers '(20 10) :output-size 1)))  ;; Stub net
-        (train-net net metrics)  ;; Stub training
-        (let ((optimized-groups (optimize-groups-with-net net (dcf-config-peers (dcf-node-config *node*)))))
-          (dofor-each-peer (lambda (peer) (dcf-master-update-config peer :groups optimized-groups)))
-          `(:status "optimized" :groups ,optimized-groups)))
+      (with-retry (lambda ()
+                    (let ((context (when tx-id (get-cached-tx-context *node* tx-id)))
+                          (metrics (dcf-master-collect-metrics tx-id))
+                          (net (mgl:build-net :input-size 10 :hidden-layers '(20 10) :output-size 1)))
+                      (train-net net metrics)
+                      (let ((optimized-groups (optimize-groups-with-net net (dcf-config-peers (dcf-node-config *node*)))))
+                        (dofor-each-peer (lambda (peer) (dcf-master-update-config peer :groups optimized-groups tx-id)))
+                        (when (string= (dcf-config-storage (dcf-node-config *node*)) "streamdb")
+                          (dcf-db-insert *node* "/state/optimized-groups" (cl-json:encode-json-to-string optimized-groups) :tx-context context))
+                        `(:status "optimized" :groups ,optimized-groups))))
+                  :max-retries 3)
       (signal-dcf-error :invalid-mode "Not in master mode")))
 
 ;; Stubs for AI funcs
@@ -797,8 +883,7 @@ Use Case: Master uses neural net on historical RTTs for better grouping."
 
 ;; add-middleware
 (defun add-middleware (fn)
-  "Add middleware function.
-Example: (add-middleware (lambda (msg dir) (log:debug msg)))"
+  "Add middleware function."
   (push fn (dcf-node-middleware *node*))
   `(:status "middleware-added"))
 
@@ -808,23 +893,19 @@ Example: (add-middleware (lambda (msg dir) (log:debug msg)))"
   (setf (dcf-node-middleware *node*) (remove fn (dcf-node-middleware *node*)))
   `(:status "middleware-removed"))
 
-;; def-dcf-plugin (macro stub)
+;; def-dcf-plugin
 (defmacro def-dcf-plugin (name &body body)
-  "Define a DCF plugin.
-Example: (def-dcf-plugin my-plugin ...)"
+  "Define a DCF plugin."
   `(defun ,name () ,@body))
 
-;; def-dcf-transport (macro stub)
+;; def-dcf-transport
 (defmacro def-dcf-transport (name &body body)
-  "Define a DCF transport.
-Example: (def-dcf-transport my-transport ...)"
+  "Define a DCF transport."
   `(defun ,name () ,@body))
 
 ;; Deployment Helper
 (defun dcf-deploy (&optional output-file)
-  "Builds SBCL executable for production deployment.
-Use Case: (dcf-deploy \"dcf-lisp.exe\") for standalone server binary.
-Notes: Follow CL guides - use Git, style guide; test on target OS. For WASM, compile with CL-WASM tools."
+  "Builds SBCL executable for production deployment."
   (sb-ext:save-lisp-and-die (or output-file "dcf-lisp") :executable t :toplevel 'main))
 
 ;; Help Command
@@ -834,98 +915,53 @@ Notes: Follow CL guides - use Git, style guide; test on target OS. For WASM, com
 Welcome to DeMoD-LISP (D-LISP), a Lisp-based SDK for the DeMoD Communications Framework (DCF)!
 
 **What is DCF?**
-DCF is a free, open-source (FOSS) framework for low-latency data exchange in applications like IoT, gaming, distributed computing, and edge networking. It's modular, interoperable across languages (e.g., Lisp, C, Python), and complies with U.S. export regulations (no encryption by default). Licensed under GPL-3.0. Repo: https://github.com/ALH477/DeMoD-Communication-Framework
+DCF is a free, open-source (FOSS) framework for low-latency data exchange in applications like IoT, gaming, distributed computing, and edge networking. It's modular, interoperable across languages (e.g., Lisp, C, Python), and complies with U.S. export regulations (no encryption by default). Licensed under LGPL-3.0. Repo: https://github.com/ALH477/DeMoD-Communication-Framework
 
 **Key Concepts for Beginners:**
-- **Modes**: Client (send/receive), Server (host), P2P (peer-to-peer with self-healing), AUTO (dynamic role switching via master node), Master (controls AUTO nodes).
-- **Transports**: gRPC (default), Native Lisp (lightweight TCP), WebSocket (web-friendly via plugin), UDP (low-latency datagrams), QUIC (multiplexed UDP), Bluetooth (wireless short-range), Serial (embedded hardware), CAN (automotive/industrial), SCTP (reliable multi-stream), Zigbee (low-power mesh), LoRaWAN (long-range low-power).
-- **Plugins**: Extend functionality, e.g., custom transports. Define with (def-dcf-plugin ...).
-- **Middleware**: Customize protocols by adding functions to process messages, e.g., (add-middleware (lambda (msg dir) ...)).
-- **Type System**: Messages use CLOS classes with type checks for safety.
-- **Redundancy**: Automatic failover using RTT-based grouping (<50ms clusters) and Dijkstra routing.
-- **Metrics/Monitoring**: Track sends, receives, etc., with (dcf-get-metrics).
-- **Visual Debugger**: Generate topology graphs with (dcf-visualize-topology \"file.dot\").
-- **Persistence**: Integrated StreamDB for state, metrics, and configurations (storage \"streamdb\" in config.json).
-- **Configuration**: Use JSON files validated against schema. Example: config.json with transport, host, port, mode.
+- **Modes**: Client, Server, P2P, AUTO, Master.
+- **Transports**: gRPC, Native Lisp, WebSocket, UDP, QUIC, Bluetooth, Serial, CAN, SCTP, Zigbee, LoRaWAN.
+- **Plugins**: Extend functionality via (def-dcf-plugin ...).
+- **Middleware**: Customize protocols via (add-middleware ...).
+- **Type System**: CLOS classes with type checks.
+- **Redundancy**: RTT-based grouping (<50ms) and Dijkstra routing.
+- **Metrics/Monitoring**: Track via (dcf-get-metrics).
+- **Visual Debugger**: Graphviz via (dcf-visualize-topology).
+- **Persistence**: StreamDB for state, metrics, configs.
+- **Transactions**: ACID ops via (dcf-begin-transaction \"tx1\").
 
-**Production Tips (New in v2.0.0):**
-- Use retries for robustness: (with-retry (lambda () (dcf-db-insert ...))).
-- Optimize with caching: Queries use thread-safe LRU for <1ms access.
-- Deploy standalone: (dcf-deploy \"dcf-lisp.exe\") builds SBCL executable.
-- WASM: Non-blocking async for browser nodes, e.g., UI config fetches.
-- Benchmarks: Run (run-benchmarks) to validate low-latency for your setup.
-- Monitoring: Debug logging by default; adjust with (dcf-log-level 1).
+**Production Tips (New in v2.1.0):**
+- Use transactions: (dcf-begin-transaction \"tx1\") for atomic IoT batches.
+- Schema versioning: Ensures compatibility across SDKs.
+- Error handling: Granular errors from gRPC (e.g., -1=io).
+- Retries: Robustness for flaky networks.
+- Caching: Thread-safe LRU and tx caches for <1ms queries.
+- Deploy: (dcf-deploy \"dcf-lisp.exe\") for standalone binary.
+- WASM: Async ops for browser UI, e.g., (dcf-db-get-async \"/state/ui-config\" ...).
 
 **Getting Started:**
-1. **Install Dependencies**: Use Quicklisp to load libraries (see top of d-lisp.lisp).
-2. **Clone Repo**: git clone https://github.com/ALH477/DeMoD-Communication-Framework --recurse-submodules
-3. **Load D-LISP**: sbcl --load lisp/src/d-lisp.lisp
-4. **Quick Start**: (dcf-quick-start-client \"config.json\")
-5. **Send Message**: (dcf-quick-send \"Hello\" \"localhost:50052\")
-6. **Store in StreamDB**: (dcf-db-insert \"/test/key\" \"test data\")
-7. **Query from StreamDB**: (dcf-db-query \"/test/key\")
-8. **Load UDP Plugin**: (dcf-load-plugin \"lisp/plugins/udp-transport.lisp\")
-9. **Load QUIC Plugin**: (dcf-load-plugin \"lisp/plugins/quic-transport.lisp\")
-10. **Load Bluetooth Plugin**: (dcf-load-plugin \"lisp/plugins/bluetooth-transport.lisp\")
-11. **Load Serial Plugin**: (dcf-load-plugin \"lisp/plugins/serial-transport.lisp\")
-12. **Load CAN Plugin**: (dcf-load-plugin \"lisp/plugins/can-transport.lisp\")
-13. **Load SCTP Plugin**: (dcf-load-plugin \"lisp/plugins/sctp-transport.lisp\")
-14. **Load Zigbee Plugin**: (dcf-load-plugin \"lisp/plugins/zigbee-transport.lisp\")
-15. **Load LoRaWAN Plugin**: (dcf-load-plugin \"lisp/plugins/lorawan-transport.lisp\")
-16. **Visualize**: (dcf-visualize-topology)
-17. **Run Tests**: (run-tests) or CLI \"run-tests\".
-18. **Run Benchmarks**: (run-benchmarks) or CLI \"run-benchmarks\".
-19. **Deploy**: (dcf-deploy \"dcf-lisp\") or CLI \"deploy [file]\".
+1. Install Quicklisp dependencies.
+2. Clone: git clone https://github.com/ALH477/DeMoD-Communication-Framework --recurse-submodules
+3. Load: sbcl --load lisp/src/d-lisp.lisp
+4. Quick Start: (dcf-quick-start-client \"config.json\")
+5. Send: (dcf-quick-send \"Hello\" \"localhost:50052\")
+6. Store: (dcf-db-insert \"/test/key\" \"test data\")
+7. Query: (dcf-db-query \"/test/key\")
+8. Transaction: (dcf-begin-transaction \"tx1\") (dcf-send \"data\" \"peer\" \"tx1\") (dcf-commit-transaction \"tx1\")
+9. Deploy: (dcf-deploy \"dcf-lisp\")
 
 **Common Commands (CLI/TUI):**
-- init [config.json]: Load config.
-- start: Start node.
-- stop: Stop node.
-- send [data] [recipient]: Send message.
-- receive: Receive messages.
-- status: Show node status.
-- health-check [peer]: Check peer health/RTT.
-- list-peers: List peers with groups.
-- heal [peer]: Reroute on failure.
-- benchmark [peer]: Measure RTT.
-- group-peers: Regroup by RTT.
-- simulate-failure [peer]: Test failover.
-- log-level [0/1/2]: Set logging (debug/info/error).
-- load-plugin [path]: Load plugin (e.g., udp-transport.lisp).
-- add-middleware [fn]: Add protocol customizer.
-- trace-message [msg]: Trace through middleware.
-- debug-network: Debug network state.
-- quick-start-client [config]: Facade to init/start client.
-- quick-send [data] [recipient]: Simple send.
-- get-metrics: Get monitoring data.
-- visualize-topology [file]: Generate DOT graph.
-- db-insert [path] [data]: Insert into StreamDB.
-- db-query [path]: Query from StreamDB.
-- db-delete [path]: Delete from StreamDB.
-- db-search [prefix]: Search paths in StreamDB.
-- db-flush: Flush StreamDB to disk.
-- db-get-async [path] [callback]: Async query.
-- db-begin-transaction-async [callback]: Async tx begin.
-- db-commit-transaction-async [callback]: Async tx commit.
-- db-rollback-transaction-async [callback]: Async tx rollback.
-- master-assign-role [peer] [role]: Assign role (master mode).
-- master-optimize-network: AI-optimize topology.
-- run-tests: Run FiveAM tests.
-- run-benchmarks: Run performance benchmarks.
-- deploy [file]: Build executable.
-- help: This guide.
+- begin-transaction [tx-id]: Start transaction.
+- commit-transaction [tx-id]: Commit transaction.
+- rollback-transaction [tx-id]: Rollback transaction.
+- ... (Existing commands)
 
 **Tips for New Users:**
-- Start with 'client' mode and gRPC transport.
-- Use facade APIs for simplicity, then explore advanced features.
-- For customization, add middlewares or plugins like UDP for low-latency.
-- Use StreamDB for persistent storage of state and metrics.
-- Monitor with metrics; visualize topology for debugging.
-- Read docs/dcf_design_spec.md in repo for architecture.
-- For errors, check logs (set log-level 0 for debug).
-- Questions? Open issues on GitHub.
+- Start with 'client' mode and gRPC.
+- Use transactions for atomic operations.
+- Monitor with (dcf-tui); debug with logs (log-level 0).
+- Read docs/dcf_design_spec.md in repo.
 
-For more, visit the repo or run (dcf-help) again!"))
+For more, visit the repo or run (dcf-help)!"))
 
 ;; CLI Entry Point
 (defun main (&rest args)
@@ -952,6 +988,9 @@ For more, visit the repo or run (dcf-help) again!"))
                        ((string= command "db-begin-transaction-async") (dcf-db-begin-transaction-async *node* (eval (read-from-string (second cmd-args)))))
                        ((string= command "db-commit-transaction-async") (dcf-db-commit-transaction-async *node* (eval (read-from-string (second cmd-args)))))
                        ((string= command "db-rollback-transaction-async") (dcf-db-rollback-transaction-async *node* (eval (read-from-string (second cmd-args)))))
+                       ((string= command "begin-transaction") (dcf-begin-transaction (second cmd-args)))
+                       ((string= command "commit-transaction") (dcf-commit-transaction (second cmd-args)))
+                       ((string= command "rollback-transaction") (dcf-rollback-transaction (second cmd-args)))
                        ((string= command "run-tests") (run-tests))
                        ((string= command "run-benchmarks") (run-benchmarks))
                        ((string= command "deploy") (dcf-deploy (second cmd-args)))
@@ -967,44 +1006,217 @@ For more, visit the repo or run (dcf-help) again!"))
 
 ;; FiveAM Tests
 #+fiveam
-(fiveam:def-suite d-lisp-suite)
+(fiveam:def-suite d-lisp-suite
+  :description "Test suite for D-LISP SDK v2.1.0, covering StreamDB integration, async ops, transactions, and production features.")
 
 #+fiveam
 (fiveam:in-suite d-lisp-suite)
 
 #+fiveam
+(fiveam:test version-test
+  "Test version information matches v2.1.0."
+  (fiveam:is (equal (dcf-version) '(:version "2.1.0" :dcf-version "5.0.0"))))
+
+#+fiveam
 (fiveam:test middleware-test
-  (let ((msg (make-instance 'dcf-message :sender "test" :recipient "test" :data "test" :timestamp 0 :sync t :sequence 0 :redundancy-path "" :group-id "")))
-    (add-middleware (lambda (m d) (declare (ignore d)) m))
-    (fiveam:is (equalp (apply-middlewares msg :send) msg))))
+  "Test middleware application for message processing."
+  (let ((msg (make-instance 'dcf-message :sender "test" :recipient "test" :data "test" :timestamp 0 :sync t :sequence 0 :redundancy-path "" :group-id "" :schema-version "2.1.0")))
+    (add-middleware (lambda (m d) (declare (ignore d)) (log:debug *dcf-logger* "Middleware: ~A" m) m))
+    (fiveam:is (equalp (apply-middlewares msg :send) msg))
+    (remove-middleware (car (dcf-node-middleware *node*)))))
 
 #+fiveam
 (fiveam:test type-system-test
-  (fiveam:signals dcf-error (make-instance 'dcf-message :sender 123 :recipient "test" :data "test" :timestamp 0 :sync t :sequence 0 :redundancy-path "" :group-id "")))
+  "Test type system validation for dcf-message."
+  (fiveam:signals dcf-error
+    (make-instance 'dcf-message :sender 123 :recipient "test" :data "test" :timestamp 0 :sync t :sequence 0 :redundancy-path "" :group-id "" :schema-version "2.1.0"))
+  (fiveam:is-true (make-instance 'dcf-message :sender "test" :recipient "test" :data "test" :timestamp 0 :sync t :sequence 0 :redundancy-path "" :group-id "" :schema-version "2.1.0")))
+
+#+fiveam
+(fiveam:test connection-pool-test
+  "Test connection pooling initialization."
+  (let ((node (make-dcf-node :config (make-dcf-config))))
+    (initialize-connection-pool node)
+    (fiveam:is (arrayp (gethash "grpc" (connection-pool node))))
+    (destroy-connection-pool node)))
+
+#+fiveam
+(fiveam:test network-scenario-test
+  "Test network failure and recovery in P2P mode with transaction support."
+  (let ((node (make-dcf-node :config (make-dcf-config :peers '("peer1" "peer2") :storage "streamdb" :streamdb-path "test.streamdb"))))
+    (setf *node* node)
+    (unwind-protect
+        (let ((tx-id (uuid:print-bytes nil (uuid:make-v4-uuid))))
+          (dcf-begin-transaction tx-id)
+          (dcf-group-peers tx-id)
+          (dcf-simulate-failure "peer1")
+          (dcf-commit-transaction tx-id)
+          (fiveam:is (= (length (dcf-config-peers (dcf-node-config node))) 1))
+          (when (string= (dcf-config-storage (dcf-node-config node)) "streamdb")
+            (fiveam:is-true (dcf-db-query node "/state/peer-groups"))))
+      (when (dcf-node-streamdb node) (streamdb_close (dcf-node-streamdb node))))))
+
+#+fiveam
+(fiveam:test metrics-test
+  "Test metrics collection and StreamDB persistence with transaction support."
+  (let ((node (make-dcf-node :config (make-dcf-config :storage "streamdb" :streamdb-path "test.streamdb"))))
+    (setf *node* node)
+    (unwind-protect
+        (let ((tx-id (uuid:print-bytes nil (uuid:make-v4-uuid))))
+          (dcf-begin-transaction tx-id)
+          (incf (gethash :tests (dcf-node-metrics node) 0))
+          (dcf-db-insert *node* "/metrics/tests" (cl-json:encode-json-to-string '(:tests 1)) :tx-context (get-cached-tx-context *node* tx-id))
+          (dcf-commit-transaction tx-id)
+          (fiveam:is (= (gethash :tests (dcf-get-metrics)) 1))
+          (fiveam:is (equal (cl-json:decode-json-from-string (dcf-db-query *node* "/metrics/tests")) '(:tests 1))))
+      (when (dcf-node-streamdb node) (streamdb_close (dcf-node-streamdb node))))))
+
+#+fiveam
+(fiveam:test visualize-test
+  "Test topology visualization with Graphviz."
+  (let ((node (make-dcf-node :peer-groups (make-hash-table))))
+    (setf *node* node)
+    (dcf-visualize-topology "test.dot")
+    (fiveam:is-true (probe-file "test.dot"))
+    (delete-file "test.dot")))
+
+#+fiveam
+(fiveam:test config-validation-test
+  "Test configuration validation with JSON schema."
+  (let ((valid-config-path "test-config.json"))
+    (with-open-file (stream valid-config-path :direction :output :if-exists :supersede)
+      (cl-json:encode-json
+       '((:transport . "gRPC") (:host . "localhost") (:port . 50051) (:mode . "client") (:node-id . "test-node") (:storage . "streamdb") (:streamdb-path . "test.streamdb"))
+       stream))
+    (unwind-protect
+        (let ((node (dcf-init valid-config-path)))
+          (setf *node* node)
+          (fiveam:is (equal (getf (dcf-status) :status) "running")))
+      (when (dcf-node-streamdb *node*) (streamdb_close (dcf-node-streamdb *node*)))
+      (delete-file valid-config-path))))
+
+#+fiveam
+(fiveam:test websocket-plugin-test
+  "Test WebSocket plugin interface."
+  (let ((node (make-dcf-node :config (make-dcf-config :transport "websocket"))))
+    (setf *node* node)
+    (unwind-protect
+        (progn
+          (dcf-load-plugin "plugins/websocket-transport.lisp")
+          (fiveam:is (equal (plugin-interface-version websocket-transport) "1.0")))
+      (when (dcf-node-streamdb node) (streamdb_close (dcf-node-streamdb node))))))
 
 #+fiveam
 (fiveam:test streamdb-integration-test
-  (let ((config (make-dcf-config :storage "streamdb" :streamdb-path "test.streamdb")))
-    (let ((*node* (dcf-init "test-config.json")))  ;; Assume test config
-      (fiveam:is (not (null (dcf-node-streamdb *node*))))
-      (dcf-db-insert *node* "/test/key" "test data")
-      (fiveam:is (equal (dcf-db-query *node* "/test/key") "test data"))
-      (dcf-db-delete *node* "/test/key")
-      (fiveam:is (null (dcf-db-query *node* "/test/key")))
-      (dcf-db-flush *node*))))
+  "Test StreamDB CRUD, async, and transaction operations with schema versioning."
+  (let ((config (make-dcf-config :storage "streamdb" :streamdb-path "test.streamdb"))
+        (test-data "{\"value\": \"test\", \"schema_version\": \"2.1.0\"}"))
+    (let ((*node* (make-dcf-node :config config)))
+      (unwind-protect
+          (progn
+            (setf *node* (dcf-init "test-config.json"))
+            (let ((tx-id (uuid:print-bytes nil (uuid:make-v4-uuid))))
+              (dcf-begin-transaction tx-id)
+              (dcf-db-insert *node* "/test/key" test-data :schema *streamdb-state-schema* :tx-context (get-cached-tx-context *node* tx-id))
+              (fiveam:is (equal (dcf-db-query *node* "/test/key") test-data))
+              (fiveam:is-true (find "/test/key" (dcf-db-search *node* "/test/")))
+              (dcf-db-delete *node* "/test/key")
+              (fiveam:is (null (dcf-db-query *node* "/test/key")))
+              (let ((result nil))
+                (dcf-db-get-async *node* "/test/key" (lambda (data len err)
+                                                       (setf result (if err nil (cffi:foreign-string-to-lisp data :count len)))))
+                (fiveam:is (null result)))
+              (dcf-commit-transaction tx-id)))
+        (when (dcf-node-streamdb *node*) (streamdb_close (dcf-node-streamdb *node*)))))))
+
+#+fiveam
+(fiveam:test retry-logic-test
+  "Test retry logic for transient StreamDB errors."
+  (let ((node (make-dcf-node :config (make-dcf-config :storage "streamdb" :streamdb-path "test.streamdb")))
+        (attempts 0))
+    (setf *node* node)
+    (unwind-protect
+        (progn
+          (flet ((fail-first (fn)
+                   (if (< attempts 2)
+                       (progn (incf attempts) (signal-dcf-error :io "Simulated I/O error"))
+                       (funcall fn))))
+            (fiveam:is (equal (with-retry (lambda () (fail-first (lambda () (dcf-db-insert *node* "/test/retry" "{\"data\": \"ok\", \"schema_version\": \"2.1.0\"}")))) "ok"))
+            (fiveam:is (= attempts 2))))
+      (when (dcf-node-streamdb node) (streamdb_close (dcf-node-streamdb node))))))
+
+#+fiveam
+(fiveam:test cache-thread-safety-test
+  "Test LRU cache under concurrent access."
+  (let ((node (make-dcf-node :config (make-dcf-config :storage "streamdb" :streamdb-path "test.streamdb") :cache '() :cache-size 10 :cache-lock (bt:make-lock))))
+    (setf *node* node)
+    (unwind-protect
+        (progn
+          (dcf-db-insert *node* "/test/cache" "{\"data\": \"cached\", \"schema_version\": \"2.1.0\"}")
+          (let ((threads (loop for i from 1 to 5
+                               collect (bt:make-thread (lambda () (dotimes (j 100) (lru-get *node* "/test/cache")))))))
+            (mapc #'bt:join-thread threads)
+            (fiveam:is (equal (lru-get *node* "/test/cache") "{\"data\": \"cached\", \"schema_version\": \"2.1.0\"}")))
+          (fiveam:is (<= (length (dcf-node-cache *node*)) 10)))
+      (when (dcf-node-streamdb node) (streamdb_close (dcf-node-streamdb node))))))
+
+#+fiveam
+(fiveam:test wasm-streamdb-test
+  "Simulate WASM environment for StreamDB compatibility."
+  (let ((node (make-dcf-node :config (make-dcf-config :storage "streamdb" :streamdb-path "test.streamdb"))))
+    (setf *node* node)
+    (unwind-protect
+        (progn
+          (with-mocks ((wasm-target? () t))
+            (setf *node* (dcf-init "test-config.json"))
+            (dcf-db-insert *node* "/test/wasm" "{\"data\": \"wasm\", \"schema_version\": \"2.1.0\"}")
+            (fiveam:is (equal (dcf-db-query *node* "/test/wasm") "{\"data\": \"wasm\", \"schema_version\": \"2.1.0\"}")))
+          (fiveam:is-true (find "/test/wasm" (dcf-db-search *node* "/test/"))))
+      (when (dcf-node-streamdb *node*) (streamdb_close (dcf-node-streamdb node))))))
 
 #+fiveam
 (fiveam:test streamdb-vs-inmemory-benchmark
-  "Extended: Includes async/tx overhead.
-Use Case: Validate for production RTT in failover (target <1.5x in-memory)."
+  "Benchmark StreamDB vs. in-memory for RTT-sensitive scenarios."
   (let ((in-memory (make-hash-table :test #'equal))
-        (*node* (dcf-init "config.json")))
-    (let ((in-time (time (loop repeat 1000 do (setf (gethash "/test" in-memory) "data"))))
-          (db-time (time (loop repeat 1000 do (with-retry (lambda () (dcf-db-insert *node* "/test" "data"))))))
-          (tx-time (time (dcf-db-begin-transaction-async *node* (lambda (err) (unless err (dcf-db-commit-transaction-async *node* (lambda (err) (declare (ignore err))))))))))
-      (fiveam:is (< db-time (* 1.5 in-time)))
-      (fiveam:is (< tx-time 0.01)))))  ;; Threshold
+        (*node* (make-dcf-node :config (make-dcf-config :storage "streamdb" :streamdb-path "test.streamdb"))))
+    (unwind-protect
+        (progn
+          (setf *node* (dcf-init "test-config.json"))
+          (let ((tx-id (uuid:print-bytes nil (uuid:make-v4-uuid))))
+            (let ((in-time (get-internal-run-time))
+                  (in-result (loop repeat 1000 do (setf (gethash "/test" in-memory) "data")))
+                  (in-end (get-internal-run-time))
+                  (db-time (get-internal-run-time))
+                  (db-result (loop repeat 1000 do (with-retry (lambda () (dcf-db-insert *node* "/test" "{\"data\": \"test\", \"schema_version\": \"2.1.0\"}")))))
+                  (db-end (get-internal-run-time))
+                  (tx-time (get-internal-run-time))
+                  (tx-result (progn
+                               (dcf-begin-transaction tx-id)
+                               (dcf-db-insert *node* "/test/tx" "data" :tx-context (get-cached-tx-context *node* tx-id))
+                               (dcf-commit-transaction tx-id)))
+                  (tx-end (get-internal-run-time)))
+              (declare (ignore in-result db-result tx-result))
+              (fiveam:is (< (- db-end db-time) (* 1.5 (- in-end in-time))))
+              (fiveam:is (< (- tx-end tx-time) (* internal-time-units-per-second 0.01))))))
+      (when (dcf-node-streamdb *node*) (streamdb_close (dcf-node-streamdb *node*))))))
 
+#+fiveam
+(fiveam:test transaction-rpc-test
+  "Test new transaction RPCs with StreamDB sync and schema versioning."
+  (let ((node (make-dcf-node :config (make-dcf-config :storage "streamdb" :streamdb-path "test.streamdb"))))
+    (setf *node* node)
+    (unwind-protect
+        (let ((tx-id (uuid:print-bytes nil (uuid:make-v4-uuid))))
+          (dcf-begin-transaction tx-id)
+          (fiveam:is-true (get-cached-tx-context *node* tx-id))
+          (dcf-send "test data" "peer1" tx-id)
+          (dcf-commit-transaction tx-id)
+          (fiveam:is (null (get-cached-tx-context *node* tx-id)))
+          (fiveam:is-true (find "/messages/sent/" (dcf-db-search *node* "/messages/sent/")))
+          (fiveam:signals dcf-error (dcf-commit-transaction "invalid-tx")))
+      (when (dcf-node-streamdb node) (streamdb_close (dcf-node-streamdb node))))))
+
+#+fiveam
 (defun run-tests ()
   "Run all FiveAM tests."
   (fiveam:run! 'd-lisp-suite)
