@@ -1,7 +1,7 @@
-(asdf:defsystem #:d-lisp
+(asdf:defsystem #:HydraMesh
   :description "Lisp SDK for DeMoD Communications Framework (DCF)"
   :author "ALH477"
-  :license "GPL-3.0"
+  :license "LGPL-3.0"
   :version "1.4.0"
   :depends-on (:cl-protobufs :cl-grpc :cffi :uuid :cl-json :jsonschema
                :cl-ppcre :cl-csv :usocket :bordeaux-threads :curses
