@@ -1,4 +1,3 @@
-
 syntax = "proto3";
 
 package dcf;
@@ -7,6 +6,10 @@ service DCFService {
   rpc SendMessage (DCFMessage) returns (DCFMessageResponse);
   rpc ReceiveStream (Empty) returns (stream DCFMessage);
   rpc HealthCheck (HealthRequest) returns (HealthResponse);
+  // New: Transactional RPC for batch operations
+  rpc BeginTransaction (TransactionRequest) returns (TransactionResponse);
+  rpc CommitTransaction (TransactionRequest) returns (TransactionResponse);
+  rpc RollbackTransaction (TransactionRequest) returns (TransactionResponse);
 }
 
 service DCFMasterService {
@@ -29,20 +32,34 @@ message DCFMessage {
   uint32 sequence = 7;
   string redundancy_path = 8;
   string group_id = 9;
+  // New: Transaction context for ACID ops
+  TransactionContext tx_context = 10;
+  // New: Schema version for forward/backward compatibility
+  string schema_version = 11 [default = "2.1.0"];
+  // Reserved for future fields (best practice for evolution)
+  reserved 12 to 20;
 }
 
 message DCFMessageResponse {
   string data = 1;
+  // New: Error field for robust handling
+  Error error = 2;
+  TransactionContext tx_context = 3;
+  string schema_version = 4 [default = "2.1.0"];
 }
 
 message HealthRequest {
   string peer = 1;
+  TransactionContext tx_context = 2;
 }
 
 message HealthResponse {
   bool healthy = 1;
   string status = 2;
   int32 rtt = 3;
+  Error error = 4;
+  TransactionContext tx_context = 5;
+  string schema_version = 6 [default = "2.1.0"];
 }
 
 message MasterCommand {
@@ -51,22 +68,59 @@ message MasterCommand {
   string role = 3;
   string key = 4;
   string value = 5;
+  TransactionContext tx_context = 6;
+  string schema_version = 7 [default = "2.1.0"];
 }
 
 message Metrics {
   string node_id = 1;
   repeated RTT rtts = 2;
   repeated Group groups = 3;
+  TransactionContext tx_context = 4;
+  string schema_version = 5 [default = "2.1.0"];
 }
 
 message RTT {
   string peer = 1;
   int32 rtt = 2;
+  string schema_version = 3 [default = "2.1.0"];
 }
 
 message Group {
   string group_id = 1;
   repeated string peers = 2;
+  string schema_version = 3 [default = "2.1.0"];
+}
+
+// New: Message for transaction management (best practice for ACID in RPCs)
+message TransactionRequest {
+  string tx_id = 1;  // UUID for transaction
+  TransactionContext tx_context = 2;
+  string schema_version = 3 [default = "2.1.0"];
+}
+
+message TransactionResponse {
+  bool success = 1;
+  Error error = 2;
+  TransactionContext tx_context = 3;
+  string schema_version = 4 [default = "2.1.0"];
+}
+
+// New: Context for transactions (e.g., ID, timestamp for MVCC-like versioning)
+message TransactionContext {
+  string tx_id = 1;
+  int64 timestamp = 2;
+  string schema_version = 3 [default = "2.1.0"];
+  // Reserved for extensions (e.g., isolation level)
+  reserved 4 to 10;
+}
+
+// New: Standardized error message (best practice for robust APIs)
+message Error {
+  int32 code = 1;  // e.g., 0=success, -1=io, -2=not-found
+  string message = 2;
+  string details = 3;  // Optional backtrace or info
+  string schema_version = 4 [default = "2.1.0"];
 }
 
 message Empty {}
