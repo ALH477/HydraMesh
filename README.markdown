@@ -1,6 +1,6 @@
 # HydraMesh
 
-![logo](logo.png)
+![logo](hydramesh.svg)
 
 **Version 5.0.1 | Oct 10, 2025**  
 **Developed by DeMoD LLC**  
