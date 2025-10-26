@@ -153,29 +153,82 @@ Use Case: Map gRPC errors (e.g., -1=io) to dcf-error for clear IoT failure handl
   group-rtt-threshold
   storage
   streamdb-path
-  optimization-level)
+  optimization-level
+  retry-max)  ;; NEW: Maximum retries for transient errors
 
-;; Function stubs
-(defun load-config (file) 
-  "Load and validate config.json."
-  (with-open-file (stream file)
-    (let ((config (cl-json:decode-json stream)))
-      (jsonschema:validate *config-schema* config)
-      (make-dcf-config :transport (getf config :transport) :host (getf config :host) :port (getf config :port) :mode (getf config :mode)
-                       :node-id (getf config :node-id) :peers (getf config :peers) :group-rtt-threshold (getf config :group-rtt-threshold)
-                       :storage (getf config :storage) :streamdb-path (getf config :streamdb-path) :optimization-level (getf config :optimization-level 0)))))
-
+;; Updated config schema
 (defvar *config-schema* 
-  '(:object (:required "transport" "host" "port" "mode")
-    :properties (("transport" :string) ("host" :string) ("port" :integer) ("mode" :string) ("storage" :string) ("streamdb-path" :string))))
+  '(:object 
+    (:required "transport" "host" "port" "mode")
+    :properties (
+      ("transport" :string :enum ("gRPC" "native-lisp" "WebSocket") :description "Communication transport protocol (e.g., 'gRPC' for default interop).")
+      ("host" :string :description "Host address (e.g., 'localhost' for local testing).")
+      ("port" :integer :minimum 0 :maximum 65535 :description "Port number (e.g., 50051 for gRPC).")
+      ("mode" :string :enum ("client" "server" "p2p" "auto" "master") :description "Node operating mode (e.g., 'p2p' for self-healing redundancy).")
+      ("node-id" :string :description "Unique node identifier (e.g., UUID for distributed systems).")
+      ("peers" :array :items (:type :string) :description "List of peer addresses for P2P (e.g., ['peer1:50051', 'peer2:50052']).")
+      ("group-rtt-threshold" :integer :minimum 0 :maximum 1000 :description "RTT threshold in ms for peer grouping (default 50 for <50ms clusters).")
+      ("plugins" :object :additionalProperties t :description "Plugin configurations (e.g., {'udp': true} for custom transports).")
+      ("storage" :string :enum ("streamdb" "in-memory") :description "Persistence backend (e.g., 'streamdb' for StreamDB integration).")
+      ("streamdb-path" :string :description "Path to StreamDB file (required if storage='streamdb', e.g., 'dcf.streamdb').")
+      ("optimization-level" :integer :minimum 0 :maximum 3 :description "Optimization level (e.g., 2+ enables StreamDB quick mode for ~100MB/s reads).")
+      ("retry-max" :integer :minimum 1 :maximum 10 :default 3 :description "Max retries for transient errors (e.g., in StreamDB ops or gRPC calls)."))
+    :additionalProperties t
+    :dependencies (("storage" :oneOf (
+                    (:properties (("storage" :const "streamdb")) :required ("streamdb-path"))
+                    (:properties (("storage" :const "in-memory")))))))
+  "JSON schema for DCF configuration, updated for v2.1.0 with StreamDB and transaction support.")
+
+;; Updated load-config
+(defun load-config (file)
+  "Loads and validates config.json against schema, setting defaults for optional fields.
+Use Case: Initialize node with StreamDB for IoT persistence, e.g., (load-config 'config.json') with 'storage: streamdb'.
+Robustness: Validates storage dependencies and handles errors explicitly.
+Optimization: Provides defaults for retry-max to streamline transient error handling.
+Example:
+  {
+    \"transport\": \"gRPC\",
+    \"host\": \"localhost\",
+    \"port\": 50051,
+    \"mode\": \"p2p\",
+    \"node-id\": \"node1\",
+    \"peers\": [\"peer1:50052\", \"peer2:50053\"],
+    \"group-rtt-threshold\": 50,
+    \"storage\": \"streamdb\",
+    \"streamdb-path\": \"dcf.streamdb\",
+    \"optimization-level\": 2,
+    \"retry-max\": 5
+  }"
+  (handler-case
+      (with-open-file (stream file :direction :input :if-does-not-exist :error)
+        (let ((config (cl-json:decode-json stream)))
+          (jsonschema:validate *config-schema* config)
+          (make-dcf-config
+            :transport (getf config :transport)
+            :host (getf config :host)
+            :port (getf config :port)
+            :mode (getf config :mode)
+            :node-id (getf config :node-id)
+            :peers (getf config :peers)
+            :group-rtt-threshold (getf config :group-rtt-threshold 50)  ;; Default
+            :storage (getf config :storage "in-memory")  ;; Default
+            :streamdb-path (getf config :streamdb-path)
+            :optimization-level (getf config :optimization-level 0)  ;; Default
+            :retry-max (getf config :retry-max 3))))  ;; NEW: Default retry-max
+    (jsonschema:validation-error (e)
+      (signal-dcf-error :config-validation (format nil "Configuration validation failed: ~A" e)))
+    (file-error (e)
+      (signal-dcf-error :file-error (format nil "Failed to read config file: ~A" e)))))
 
 (defun high-optimization? (config)
+  "Checks if optimization level enables high-performance features (e.g., StreamDB quick mode)."
   (>= (dcf-config-optimization-level config) 2))
 
-(defun make-streamdb-config (&key use-mmap)
-  "Stub for StreamDB config pointer."
-  (cffi:foreign-alloc :string :initial-contents (cl-json:encode-json-to-string `(:use-mmap ,use-mmap))))
-
+(defun make-streamdb-config (&key use-mmap cache-size)
+  "Creates StreamDB config for CFFI, including cache size for optimization.
+Use Case: Configure StreamDB for WASM with no-mmap or high-performance caching."
+  (cffi:foreign-alloc :string :initial-contents
+                      (cl-json:encode-json-to-string `(:use-mmap ,use-mmap :cache-size ,(or cache-size 1000)))))
 ;; dcf-node structure
 (defstruct (dcf-node (:conc-name dcf-node-))
   config
