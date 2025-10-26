@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "transport": {
+      "type": "string",
+      "enum": ["gRPC", "native-lisp", "WebSocket"],
+      "description": "Communication transport protocol (e.g., 'gRPC' for default interop)."
+    },
+    "host": {
+      "type": "string",
+      "description": "Host address (e.g., 'localhost' for local testing)."
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535,
+      "description": "Port number (e.g., 50051 for gRPC)."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["client", "server", "p2p", "auto", "master"],
+      "description": "Node operating mode (e.g., 'p2p' for self-healing redundancy)."
+    },
+    "node-id": {
+      "type": "string",
+      "description": "Unique node identifier (e.g., UUID for distributed systems)."
+    },
+    "peers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of peer addresses for P2P (e.g., ['peer1:50051', 'peer2:50052'])."
+    },
+    "group-rtt-threshold": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000,
+      "description": "RTT threshold in ms for peer grouping (default 50 for <50ms clusters)."
+    },
+    "plugins": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Plugin configurations (e.g., {'udp': true} for custom transports)."
+    },
+    "storage": {
+      "type": "string",
+      "enum": ["streamdb", "in-memory"],
+      "description": "Persistence backend (e.g., 'streamdb' for StreamDB integration)."
+    },
+    "streamdb-path": {
+      "type": "string",
+      "description": "Path to StreamDB file (required if storage='streamdb', e.g., 'dcf.streamdb')."
+    },
+    "optimization-level": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3,
+      "description": "Optimization level (e.g., 2+ enables StreamDB quick mode for ~100MB/s reads)."
+    },
+    "retry-max": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "default": 3,
+      "description": "Max retries for transient errors (e.g., in StreamDB ops or gRPC calls)."
+    }
+  },
+  "required": ["transport", "host", "port", "mode"],
+  "additionalProperties": true,
+  "dependencies": {
+    "storage": {
+      "oneOf": [
+        { "properties": { "storage": { "const": "streamdb" } }, "required": ["streamdb-path"] },
+        { "properties": { "storage": { "const": "in-memory" } } }
+      ]
+    }
+  }
+}
