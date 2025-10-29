@@ -1,10 +1,13 @@
 {
   description = "Nix flake for HydraMesh (D-LISP) SDK";
 
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs?rev=3d2d08824ce5f074a6ce9f74f9c26a8e5ba570e7"; # Pinned to a specific commit for determinism (nixpkgs 24.05 as of 2024-05-27; update as needed for 2025)
-    flake-utils.url = "github:numtide/flake-utils";
-  };
+# HydraMesh/flake.nix
+inputs = {
+  nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";  # ← Follow main flake
+  # OR just:
+  # nixpkgs.follows = "nixpkgs";  # ← BEST: inherit from parent
+  flake-utils.url = "github:numtide/flake-utils";
+};
 
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
