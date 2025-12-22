@@ -1,0 +1,625 @@
+;;;; HydraMesh Modular DSL Architecture
+;;;; Lightweight, composable DSLs for specific use cases
+;;;; Each DSL is independent and can be loaded separately
+
+;;; ============================================================================
+;;; CORE: Minimal Foundation (Always Required)
+;;; ============================================================================
+
+(defpackage :hydramesh.core
+  (:use :cl)
+  (:export #:*node* #:node #:make-node #:node-transport
+           #:send-raw #:receive-raw #:with-node
+           #:define-transport #:def-message-codec))
+
+(in-package :hydramesh.core)
+
+;;; Core node abstraction
+(defstruct node
+  transport
+  handlers
+  config)
+
+(defvar *node* nil "Dynamic node context")
+
+;;; Transport protocol
+(defgeneric send-raw (transport data destination))
+(defgeneric receive-raw (transport))
+(defgeneric start-transport (transport))
+(defgeneric stop-transport (transport))
+
+;;; Minimal macro for node context
+(defmacro with-node ((node-or-config) &body body)
+  `(let ((*node* (if (node-p ,node-or-config)
+                     ,node-or-config
+                     (make-node :config ,node-or-config))))
+     (unwind-protect (progn ,@body)
+       (when (node-transport *node*)
+         (stop-transport (node-transport *node*))))))
+
+;;; Transport registry
+(defvar *transports* (make-hash-table :test 'eq))
+
+(defmacro define-transport (name params &body body)
+  `(setf (gethash ',name *transports*)
+         (lambda ,params ,@body)))
+
+;;; Message codec registry
+(defvar *codecs* (make-hash-table :test 'eq))
+
+(defmacro def-message-codec (name encode-fn decode-fn)
+  `(setf (gethash ',name *codecs*)
+         (list :encode ,encode-fn :decode ,decode-fn)))
+
+;;; ============================================================================
+;;; DSL 1: GAME-NET - Multiplayer Game Networking
+;;; ============================================================================
+
+(defpackage :hydramesh.game-net
+  (:use :cl :hydramesh.core)
+  (:export #:defgame #:defplayer-message #:on-receive
+           #:broadcast #:send-to #:tick))
+
+(in-package :hydramesh.game-net)
+
+;;; Game session definition DSL
+(defmacro defgame (name &body clauses)
+  (let ((update-rate 60)
+        (messages nil)
+        (handlers nil)
+        (peers nil))
+    ;; Parse clauses
+    (dolist (clause clauses)
+      (case (car clause)
+        (:tick-rate (setf update-rate (cadr clause)))
+        (:players (setf peers (cdr clause)))
+        (:on (push clause handlers))
+        (t (push clause messages))))
+    
+    `(progn
+       ;; Define message types
+       ,@(mapcar (lambda (msg)
+                   `(defplayer-message ,@msg))
+                 (reverse messages))
+       
+       ;; Create game context
+       (defvar ,name
+         (make-game-session
+          :name ',name
+          :tick-rate ,update-rate
+          :peers ',peers
+          :handlers ',(reverse handlers)))
+       
+       ;; Start game loop
+       (defun ,(intern (format nil "START-~A" name)) ()
+         (start-game-loop ,name)))))
+
+;;; Player message definition (generates codecs + senders)
+(defmacro defplayer-message (name &key fields reliable priority)
+  (let ((sender-name (intern (format nil "SEND-~A" name)))
+        (field-names (mapcar #'car fields)))
+    `(progn
+       ;; Generate codec
+       (def-message-codec ,name
+         (lambda (,@field-names)
+           (encode-game-message ',name (list ,@field-names)))
+         (lambda (data)
+           (decode-game-message ',name data)))
+       
+       ;; Generate sender
+       (defun ,sender-name (,@field-names &key (to :all))
+         (let ((msg (encode-game-message ',name (list ,@field-names))))
+           (if (eq to :all)
+               (broadcast-game-msg msg :reliable ,reliable :priority ,priority)
+               (send-game-msg-to to msg :reliable ,reliable)))))))
+
+;;; Event handler registration
+(defmacro on-receive (message-type args &body body)
+  `(register-game-handler ',message-type
+                          (lambda ,args ,@body)))
+
+;;; Example usage macro
+(defmacro with-game-tick ((dt) &body body)
+  `(schedule-tick (lambda (,dt) ,@body)))
+
+;;; ============================================================================
+;;; DSL 2: AUDIO-STREAM - Real-time Audio Streaming
+;;; ============================================================================
+
+(defpackage :hydramesh.audio-stream
+  (:use :cl :hydramesh.core)
+  (:export #:defaudio-stream #:with-audio-input #:with-audio-output
+           #:stream-audio #:set-codec #:add-filter))
+
+(in-package :hydramesh.audio-stream)
+
+;;; Audio stream definition DSL
+(defmacro defaudio-stream (name &body specs)
+  (let ((sample-rate 48000)
+        (channels 1)
+        (codec :opus)
+        (frame-size 960)
+        (filters nil))
+    
+    (dolist (spec specs)
+      (case (car spec)
+        (:sample-rate (setf sample-rate (cadr spec)))
+        (:channels (setf channels (cadr spec)))
+        (:codec (setf codec (cadr spec)))
+        (:frame-size (setf frame-size (cadr spec)))
+        (:filters (setf filters (cdr spec)))))
+    
+    `(defvar ,name
+       (make-audio-stream
+        :sample-rate ,sample-rate
+        :channels ,channels
+        :codec ',codec
+        :frame-size ,frame-size
+        :filters ',filters))))
+
+;;; Audio input/output contexts
+(defmacro with-audio-input ((stream-name &key device) &body body)
+  `(with-audio-device (:input ,stream-name :device ,device)
+     ,@body))
+
+(defmacro with-audio-output ((stream-name &key device) &body body)
+  `(with-audio-device (:output ,stream-name :device ,device)
+     ,@body))
+
+;;; Streaming pipeline
+(defmacro stream-audio (from to &key (chunk-size 20) filters)
+  `(create-audio-pipeline
+    :source ,from
+    :destination ,to
+    :chunk-ms ,chunk-size
+    :filters ',filters))
+
+;;; Dynamic codec switching
+(defmacro set-codec (stream codec &key bitrate)
+  `(configure-audio-codec ,stream ',codec :bitrate ,bitrate))
+
+;;; Filter chain DSL
+(defmacro add-filter (stream filter-type &rest params)
+  `(push-audio-filter ,stream ',filter-type ',params))
+
+;;; ============================================================================
+;;; DSL 3: SENSOR-NET - IoT Sensor Networks
+;;; ============================================================================
+
+(defpackage :hydramesh.sensor-net
+  (:use :cl :hydramesh.core)
+  (:export #:defsensor #:defmetric #:report #:on-threshold
+           #:aggregate #:time-window))
+
+(in-package :hydramesh.sensor-net)
+
+;;; Sensor definition DSL
+(defmacro defsensor (name &body specs)
+  (let ((type nil)
+        (unit nil)
+        (range nil)
+        (interval 60)
+        (aggregation nil))
+    
+    (dolist (spec specs)
+      (case (car spec)
+        (:type (setf type (cadr spec)))
+        (:unit (setf unit (cadr spec)))
+        (:range (setf range (cdr spec)))
+        (:report-every (setf interval (cadr spec)))
+        (:aggregate (setf aggregation (cadr spec)))))
+    
+    `(progn
+       (defvar ,name
+         (make-sensor
+          :type ',type
+          :unit ',unit
+          :range ',range
+          :interval ,interval
+          :aggregation ',aggregation))
+       
+       ;; Auto-generate reporter
+       (defun ,(intern (format nil "REPORT-~A" name)) (value)
+         (report-sensor ,name value)))))
+
+;;; Metric definition (lightweight telemetry)
+(defmacro defmetric (name &key tags threshold alert-fn)
+  `(register-metric ',name
+                    :tags ',tags
+                    :threshold ,threshold
+                    :alert-fn ,alert-fn))
+
+;;; Reporting macro
+(defmacro report (sensor value &key timestamp metadata)
+  `(send-sensor-data ,sensor ,value
+                     :timestamp (or ,timestamp (get-universal-time))
+                     :metadata ',metadata))
+
+;;; Threshold monitoring
+(defmacro on-threshold (sensor condition &body body)
+  `(register-threshold-handler ,sensor
+                               (lambda (value)
+                                 (when ,condition
+                                   ,@body))))
+
+;;; Aggregation helpers
+(defmacro aggregate (sensor &key (window 60) (fn :avg))
+  `(create-aggregator ,sensor :window-seconds ,window :function ',fn))
+
+(defmacro time-window (duration &key (unit :seconds))
+  `(* ,duration ,(case unit
+                   (:seconds 1)
+                   (:minutes 60)
+                   (:hours 3600))))
+
+;;; ============================================================================
+;;; DSL 4: MESSAGE-PROTO - Protocol Buffer Message Definition
+;;; ============================================================================
+
+(defpackage :hydramesh.message-proto
+  (:use :cl :hydramesh.core)
+  (:export #:defmessage #:message-field #:serialize #:deserialize))
+
+(in-package :hydramesh.message-proto)
+
+;;; Message definition DSL (inspired by protobuf)
+(defmacro defmessage (name &body fields)
+  (let ((struct-fields nil)
+        (encode-body nil)
+        (decode-body nil)
+        (offset 0))
+    
+    (dolist (field fields)
+      (destructuring-bind (field-name field-type &key default) field
+        (push `(,field-name ,default :type ,field-type) struct-fields)
+        
+        ;; Generate encoding logic based on type
+        (let ((encoder (get-type-encoder field-type)))
+          (push `(setf offset (,encoder (,field-name msg) buffer offset))
+                encode-body))
+        
+        ;; Generate decoding logic
+        (let ((decoder (get-type-decoder field-type)))
+          (push `(multiple-value-bind (val new-offset) 
+                     (,decoder buffer offset)
+                   (setf ,field-name val offset new-offset))
+                decode-body))))
+    
+    `(progn
+       ;; Define struct
+       (defstruct ,name
+         ,@(reverse struct-fields))
+       
+       ;; Define codec
+       (def-message-codec ,name
+         ;; Encoder
+         (lambda (msg)
+           (let ((buffer (make-array 1024 :element-type '(unsigned-byte 8)
+                                          :adjustable t :fill-pointer 0))
+                 (offset 0))
+             ,@(reverse encode-body)
+             (subseq buffer 0 offset)))
+         
+         ;; Decoder
+         (lambda (buffer)
+           (let ((offset 0)
+                 ,@(mapcar #'car (reverse struct-fields)))
+             ,@(reverse decode-body)
+             (,(intern (format nil "MAKE-~A" name))
+              ,@(mapcan (lambda (f) `(,(intern (symbol-name (car f)) :keyword)
+                                     ,(car f)))
+                        (reverse struct-fields)))))))))
+
+;;; Field type registry
+(defun get-type-encoder (type)
+  (case type
+    (:uint8 'write-u8)
+    (:uint32 'write-u32)
+    (:float32 'write-f32)
+    (:string 'write-string-field)
+    (t (error "Unknown type: ~A" type))))
+
+(defun get-type-decoder (type)
+  (case type
+    (:uint8 'read-u8)
+    (:uint32 'read-u32)
+    (:float32 'read-f32)
+    (:string 'read-string-field)
+    (t (error "Unknown type: ~A" type))))
+
+;;; ============================================================================
+;;; DSL 5: NET-TOPOLOGY - Network Topology Configuration
+;;; ============================================================================
+
+(defpackage :hydramesh.net-topology
+  (:use :cl :hydramesh.core)
+  (:export #:defnetwork #:peer #:group #:route #:policy))
+
+(in-package :hydramesh.net-topology)
+
+;;; Network topology DSL
+(defmacro defnetwork (name &body topology)
+  (let ((mode :p2p)
+        (peers nil)
+        (groups nil)
+        (routes nil)
+        (policies nil))
+    
+    (dolist (clause topology)
+      (case (car clause)
+        (:mode (setf mode (cadr clause)))
+        (:peers (setf peers (cdr clause)))
+        (:groups (setf groups (cdr clause)))
+        (:routes (setf routes (cdr clause)))
+        (:policy (setf policies (cdr clause)))))
+    
+    `(defvar ,name
+       (make-network-topology
+        :mode ',mode
+        :peers (list ,@(mapcar (lambda (p) `(peer ,@p)) peers))
+        :groups (list ,@(mapcar (lambda (g) `(group ,@g)) groups))
+        :routes (list ,@(mapcar (lambda (r) `(route ,@r)) routes))
+        :policies (list ,@(mapcar (lambda (p) `(policy ,@p)) policies))))))
+
+;;; Peer definition
+(defmacro peer (id &key host port (reliable t))
+  `(make-peer :id ',id :host ,host :port ,port :reliable ,reliable))
+
+;;; Group definition (for multicast/broadcast)
+(defmacro group (name &rest peer-ids)
+  `(make-group :name ',name :members ',peer-ids))
+
+;;; Route definition (for message routing)
+(defmacro route (from to &key via priority)
+  `(make-route :from ',from :to ',to :via ',via :priority ,priority))
+
+;;; Policy definition (QoS, rate limiting, etc.)
+(defmacro policy (type &rest params)
+  `(make-policy :type ',type :params ',params))
+
+;;; ============================================================================
+;;; DSL 6: RELIABILITY - Reliability & Error Handling
+;;; ============================================================================
+
+(defpackage :hydramesh.reliability
+  (:use :cl :hydramesh.core)
+  (:export #:with-retry #:with-timeout #:with-circuit-breaker
+           #:ensure-delivery #:on-error))
+
+(in-package :hydramesh.reliability)
+
+;;; Retry logic DSL
+(defmacro with-retry ((&key (attempts 3) (delay 1) (backoff :exponential)) 
+                      &body body)
+  (let ((attempt (gensym "ATTEMPT"))
+        (delay-var (gensym "DELAY")))
+    `(let ((,delay-var ,delay))
+       (dotimes (,attempt ,attempts)
+         (handler-case
+             (return-from nil (progn ,@body))
+           (error (e)
+             (when (= ,attempt (1- ,attempts))
+               (error e))
+             (sleep ,delay-var)
+             ,(case backoff
+                (:exponential `(setf ,delay-var (* ,delay-var 2)))
+                (:linear `(incf ,delay-var ,delay))
+                (t nil))))))))
+
+;;; Timeout wrapper
+(defmacro with-timeout ((seconds) &body body)
+  `(bt:with-timeout (,seconds)
+     ,@body))
+
+;;; Circuit breaker pattern
+(defmacro with-circuit-breaker ((name &key (threshold 5) (timeout 60)) 
+                                &body body)
+  `(call-with-circuit-breaker ',name ,threshold ,timeout
+                              (lambda () ,@body)))
+
+;;; Guaranteed delivery
+(defmacro ensure-delivery (message destination &key (max-attempts 10))
+  `(with-retry (:attempts ,max-attempts :backoff :exponential)
+     (send-with-ack ,message ,destination)))
+
+;;; Error handling DSL
+(defmacro on-error (condition-type handler-fn)
+  `(push (cons ',condition-type ,handler-fn) *error-handlers*))
+
+;;; ============================================================================
+;;; DSL 7: METRICS - Observability & Monitoring
+;;; ============================================================================
+
+(defpackage :hydramesh.metrics
+  (:use :cl :hydramesh.core)
+  (:export #:defcounter #:defgauge #:defhistogram
+           #:inc #:dec #:set-gauge #:observe
+           #:with-timing #:track))
+
+(in-package :hydramesh.metrics)
+
+;;; Metric definition macros
+(defmacro defcounter (name &key documentation labels)
+  `(register-metric ',name :type :counter 
+                    :doc ,documentation :labels ',labels))
+
+(defmacro defgauge (name &key documentation labels)
+  `(register-metric ',name :type :gauge 
+                    :doc ,documentation :labels ',labels))
+
+(defmacro defhistogram (name &key documentation buckets labels)
+  `(register-metric ',name :type :histogram 
+                    :doc ,documentation :buckets ',buckets :labels ',labels))
+
+;;; Metric operations
+(defmacro inc (counter &optional (delta 1) &rest label-values)
+  `(increment-counter ',counter ,delta ',label-values))
+
+(defmacro dec (counter &optional (delta 1) &rest label-values)
+  `(decrement-counter ',counter ,delta ',label-values))
+
+(defmacro set-gauge (gauge value &rest label-values)
+  `(set-gauge-value ',gauge ,value ',label-values))
+
+(defmacro observe (histogram value &rest label-values)
+  `(record-histogram ',histogram ,value ',label-values))
+
+;;; Timing helper
+(defmacro with-timing (metric &body body)
+  `(let ((start (get-internal-real-time)))
+     (unwind-protect (progn ,@body)
+       (observe ,metric 
+                (/ (- (get-internal-real-time) start)
+                   internal-time-units-per-second)))))
+
+;;; Auto-tracking wrapper
+(defmacro track (what &body body)
+  `(progn
+     (inc ',(intern (format nil "~A-CALLS" what)))
+     (with-timing ',(intern (format nil "~A-DURATION" what))
+       ,@body)))
+
+;;; ============================================================================
+;;; EXAMPLE USAGE: FPS Game
+;;; ============================================================================
+
+(defpackage :example.fps-game
+  (:use :cl :hydramesh.core :hydramesh.game-net 
+        :hydramesh.message-proto :hydramesh.net-topology
+        :hydramesh.metrics))
+
+(in-package :example.fps-game)
+
+;; Define game messages
+(defmessage player-position
+  (x :float32 :default 0.0)
+  (y :float32 :default 0.0)
+  (z :float32 :default 0.0))
+
+(defmessage player-shoot
+  (weapon-id :uint8)
+  (target-id :uint32))
+
+;; Define network topology
+(defnetwork fps-network
+  (:mode :p2p)
+  (:peers
+   (player1 :host "192.168.1.10" :port 7777)
+   (player2 :host "192.168.1.11" :port 7777))
+  (:groups
+   (team-alpha player1 player2))
+  (:policy :rate-limit :max-pps 1000)
+  (:policy :priority :audio > :position > :chat))
+
+;; Define game session
+(defgame fps-match
+  (:tick-rate 60)
+  (:players player1 player2)
+  
+  ;; Player position updates (unreliable, high frequency)
+  (position-update
+   :fields ((x :float) (y :float) (z :float))
+   :reliable nil
+   :priority :high)
+  
+  ;; Player actions (reliable, critical)
+  (player-action
+   :fields ((action-type :uint8) (data :string))
+   :reliable t
+   :priority :critical)
+  
+  ;; Event handlers
+  (:on position-update (x y z)
+    (update-player-transform x y z))
+  
+  (:on player-action (action-type data)
+    (handle-player-action action-type data)))
+
+;; Define metrics
+(defcounter position-updates-sent 
+  :documentation "Total position updates sent")
+(defhistogram network-latency 
+  :documentation "Network round-trip time"
+  :buckets (0.001 0.005 0.01 0.05 0.1))
+
+;; Usage
+(defun run-game ()
+  (with-node (fps-network)
+    (start-fps-match)
+    
+    ;; Game loop
+    (loop
+      (track position-broadcast
+        (send-position-update 100.0 50.0 25.0))
+      (inc position-updates-sent)
+      (sleep (/ 1.0 60)))))
+
+;;; ============================================================================
+;;; EXAMPLE USAGE: Audio Streaming
+;;; ============================================================================
+
+(defpackage :example.voip
+  (:use :cl :hydramesh.core :hydramesh.audio-stream
+        :hydramesh.reliability))
+
+(in-package :example.voip)
+
+;; Define audio stream
+(defaudio-stream voice-call
+  (:sample-rate 48000)
+  (:channels 1)
+  (:codec :opus)
+  (:frame-size 960)  ; 20ms at 48kHz
+  (:filters 
+   (noise-reduction :level 0.5)
+   (auto-gain :target-db -20)))
+
+;; Usage
+(defun start-voice-call (peer)
+  (with-node ((:transport :udp :port 8888))
+    (with-audio-input (mic)
+      (with-audio-output (speaker)
+        
+        ;; Stream with automatic retry on failure
+        (with-retry (:attempts 5 :backoff :exponential)
+          (stream-audio mic peer :chunk-size 20
+                        :filters (noise-reduction echo-cancellation)))))))
+
+;;; ============================================================================
+;;; EXAMPLE USAGE: IoT Sensor
+;;; ============================================================================
+
+(defpackage :example.temperature-sensor
+  (:use :cl :hydramesh.core :hydramesh.sensor-net))
+
+(in-package :example.temperature-sensor)
+
+;; Define sensor
+(defsensor room-temperature
+  (:type :temperature)
+  (:unit :celsius)
+  (:range -20 60)
+  (:report-every 60)  ; seconds
+  (:aggregate :avg))
+
+;; Define metric with alerting
+(defmetric temp-critical
+  :tags (location sensor-type)
+  :threshold 40
+  :alert-fn (lambda (value) 
+              (send-alert "Temperature critical: ~A°C" value)))
+
+;; Threshold monitoring
+(on-threshold room-temperature (> value 35)
+  (log:warn "High temperature detected: ~A°C" value)
+  (report temp-critical value :timestamp (get-universal-time)))
+
+;; Usage
+(defun monitor-temperature ()
+  (with-node ((:transport :udp :port 9999))
+    (loop
+      (let ((temp (read-sensor-hardware)))
+        (report room-temperature temp))
+      (sleep 60))))
+
+;;; End of modular DSL architecture
