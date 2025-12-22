@@ -12,7 +12,7 @@ This Nix flake provides a **reproducible, production-grade environment** for dev
 #### 1. Setup and Enter the Development Environment
 ```bash
 # Clone the repo (assuming flake.nix is in the root)
-git clone https://github.com/your-repo/hydramesh.git
+git clone https://github.com/your-repo/hydramesh/lisp.git
 cd hydramesh
 
 # Enter the dev shell (reproducible environment)
