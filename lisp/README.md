@@ -331,4 +331,4 @@ This project is licensed under the GNU Lesser General Public License v3.0 (LGPL-
 ---
 
 **DeMoD LLC** | Empowering Scalable, Fault-Tolerant Communication  
-**Built with ❤️ and Lisp** | Powered by **Grok 4 Heavy** & **O B S E S S I O N**
+**Built with ❤️ and Lisp** | Powered by **LLM MONGLOIDS** & **O B S E S S I O N**
