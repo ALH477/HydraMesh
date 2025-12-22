@@ -17,7 +17,7 @@ HydraMesh achieves its extensive functionality in approximately **899 non-commen
 
 - **Core Breakdown**:
   - `d-lisp.lisp` (main SDK/DSL): ~899 lines
-  - Plugins (e.g., LoRaWAN, Serial, CAN, SCTP, Zigbee): ~2500 lines total (~21-1000 lines each)
+  - Plugins (e.g., LoRaWAN, Serial, USB, CAN, SCTP, Zigbee): ~2500 lines total (~21-1000 lines each)
 
 ## Key Features
 
