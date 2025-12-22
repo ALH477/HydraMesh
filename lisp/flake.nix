@@ -1,69 +1,44 @@
 {
   description = "Nix flake for HydraMesh (D-LISP) SDK";
 
-# HydraMesh/flake.nix
-inputs = {
-  nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";  # ← Follow main flake
-  # OR just:
-  # nixpkgs.follows = "nixpkgs";  # ← BEST: inherit from parent
-  flake-utils.url = "github:numtide/flake-utils";
-};
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    emacs-overlay.url = "github:nix-community/emacs-overlay";  # For latest Emacs + packages like sly
+  };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, emacs-overlay }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
           inherit system;
-          config.allowUnfree = true; # If any deps require it
+          overlays = [ emacs-overlay.overlays.default ];
+          config.allowUnfree = true;
         };
 
-        # SBCL with required system packages (for CFFI, etc.)
-        sbcl = pkgs.sbcl;
+        # Emacs with native compilation and SLY
+        emacsWithPackages = (pkgs.emacsWithPackagesFromUsePackage {
+          package = pkgs.emacsNativeComp;  # Or pkgs.emacsGtk for GTK build
+          config = ./emacs-config.el;  # Optional: put your full init.el here
+          defaultInitFile = true;
 
-        # Quicklisp setup script for deterministic dist
-        quicklisp-dist = "2023-10-21"; # Pinned Quicklisp dist version for determinism; update to a 2025 dist if available
-        quicklisp-setup = pkgs.writeShellScriptBin "setup-quicklisp.sh" ''
-          mkdir -p $HOME/quicklisp
-          curl -O https://beta.quicklisp.org/quicklisp.lisp
-          ${sbcl}/bin/sbcl --no-userinit --no-sysinit --load quicklisp.lisp \
-            --eval '(quicklisp-quickstart:install :path "~/quicklisp/")' \
-            --eval '(ql-util:without-prompting (ql:update-client) (ql:update-dist "quicklisp" :dist-version "${quicklisp-dist}"))' \
-            --eval '(ql:quickload :ql-dist)' \
-            --quit
-        '';
+          alwaysEnsure = true;
 
-        # List of Quicklisp packages from the code (for ql:quickload)
-        ql-packages = [
-          "cl-protobufs" "cl-grpc" "cffi" "uuid" "cl-json" "jsonschema"
-          "cl-ppcre" "cl-csv" "usocket" "bordeaux-threads" "curses"
-          "log4cl" "trivial-backtrace" "cl-store" "mgl" "hunchensocket"
-          "fiveam" "cl-dot" "cl-lsquic" "cl-serial" "cl-can" "cl-sctp"
-          "cl-zigbee" "cl-lorawan"
-        ];
+          extraEmacsPackages = epkgs: [
+            epkgs.sly
+            # Add more if needed, e.g., epkgs.use-package, epkgs.magit, etc.
+          ];
+        });
 
-        # Script to load all Quicklisp deps deterministically
-        load-deps = pkgs.writeShellScriptBin "load-deps.lisp" ''
-          (load "~/quicklisp/setup.lisp")
-          (ql:quickload '(${pkgs.lib.concatStringsSep " " (map (p: ":${p}") ql-packages)}))
-          (quit)
-        '';
-
-        # Build the D-LISP executable using sbcl --load
+        # The HydraMesh executable (no Quicklisp preloading)
         hydramesh = pkgs.stdenv.mkDerivation {
           name = "hydramesh";
-          src = self; # Use the flake source (assuming hydramesh.lisp is in the repo root)
+          src = self;
 
-          nativeBuildInputs = [ sbcl quicklisp-setup ];
+          nativeBuildInputs = [ pkgs.sbcl ];
 
           buildPhase = ''
-            export HOME=$PWD
-            setup-quicklisp.sh
-
-            # Load dependencies
-            ${sbcl}/bin/sbcl --script ${load-deps}/bin/load-deps.lisp
-
-            # Build the executable as per dcf-deploy
-            ${sbcl}/bin/sbcl --no-userinit --load hydramesh.lisp \
+            ${pkgs.sbcl}/bin/sbcl --no-userinit --load hydramesh.lisp \
               --eval '(dcf-deploy "dcf-lisp")' \
               --quit
           '';
@@ -73,8 +48,7 @@ inputs = {
             cp dcf-lisp $out/bin/dcf-lisp
           '';
 
-          # Note: libstreamdb.so/.wasm needs to be provided separately; this assumes it's in LD_LIBRARY_PATH or built elsewhere
-          # For full determinism, add derivations for libstreamdb if source is available
+          # Note: libstreamdb.so/.dylib/.wasm must be available in runtime path
         };
 
       in {
@@ -82,23 +56,25 @@ inputs = {
 
         devShells.default = pkgs.mkShell {
           buildInputs = [
-            sbcl
-            quicklisp-setup
-            # Add system deps for CFFI bindings (e.g., for gRPC, etc.)
+            pkgs.sbcl
+            emacsWithPackages
             pkgs.grpc
             pkgs.protobuf
             pkgs.openssl
             pkgs.zlib
+            # Add other system deps for CFFI if needed
           ];
 
           shellHook = ''
-            export HOME=$PWD
-            if [ ! -d "$HOME/quicklisp" ]; then
-              setup-quicklisp.sh
-            fi
-            echo "Quicklisp set up with dist ${quicklisp-dist}. Load deps with: sbcl --script ${load-deps}/bin/load-deps.lisp"
-            echo "Load the project: sbcl --load hydramesh.lisp"
+            echo "HydraMesh devShell ready!"
+            echo " - Run 'emacs' to start Emacs with SLY configured."
+            echo " - In Emacs: M-x sly to connect to SBCL REPL (inferior-lisp-program is set to sbcl)."
+            echo " - Load your project: C-x C-f hydramesh.lisp, then M-x sly"
+            echo "Basic SLY config applied via environment (expand in ~/.emacs.d/init.el if needed)."
           '';
+
+          # Minimal SLY setup injected into Emacs environment
+          EMACSLOADPATH = "${emacsWithPackages.deps}/share/emacs/site-lisp/elpa/*:";
         };
       }
     );
