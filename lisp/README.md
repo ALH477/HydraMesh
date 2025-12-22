@@ -12,12 +12,12 @@ HydraMesh (formerly DeMoD-LISP / D-LISP) is a high-performance, production-ready
 
 This SDK, developed by **DeMoD LLC** with significant contributions from **Grok 4 Heavy** (xAI's advanced AI model), emphasizes reliability, extensibility, and compliance with U.S. export regulations (no encryption by default). It is part of the DCF mono repository and interoperates with other language SDKs (e.g., C, Python) for cross-platform compatibility. The rebranding to HydraMesh reflects a focus on resilient, multi-headed network topologies, while retaining full compatibility with DCF's command set (e.g., `dcf-send`, `dcf-db-insert`) for seamless migration.
 
-### Efficiency Highlight: ~850 Lines of Code
-HydraMesh achieves its extensive functionality in approximately **850 non-comment, non-blank lines of code** (verified across the core implementation and plugins). This remarkable efficiency is made possible by Common Lisp's expressive features, such as macros (e.g., `def-dcf-plugin` for concise plugin definitions) and CLOS for type-safe abstractions. The enhanced integration of StreamDB adds powerful persistence with minimal overhead, maintaining a lean codebase while delivering a full SDK/DSL. This compactness ensures maintainability, reduces deployment overhead, and highlights Lisp's power for building complex systems with minimal verbosity.
+### Efficiency Highlight: ~899 Lines of Code
+HydraMesh achieves its extensive functionality in approximately **899 non-comment, non-blank lines of code** (verified across the core implementation and plugins). This remarkable efficiency is made possible by Common Lisp's expressive features, such as macros (e.g., `def-dcf-plugin` for concise plugin definitions) and CLOS for type-safe abstractions. The enhanced integration of StreamDB adds powerful persistence with minimal overhead, maintaining a lean codebase while delivering a full SDK/DSL. This compactness ensures maintainability, reduces deployment overhead, and highlights Lisp's power for building complex systems with minimal verbosity.
 
 - **Core Breakdown**:
-  - `d-lisp.lisp` (main SDK/DSL): ~850 lines
-  - Plugins (e.g., LoRaWAN, Serial, CAN, SCTP, Zigbee): ~150 lines total (~21-26 lines each)
+  - `d-lisp.lisp` (main SDK/DSL): ~899 lines
+  - Plugins (e.g., LoRaWAN, Serial, CAN, SCTP, Zigbee): ~2500 lines total (~21-1000 lines each)
 
 ## Key Features
 
