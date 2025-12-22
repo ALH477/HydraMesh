@@ -1,10 +1,10 @@
 {
-  description = "Nix flake for HydraMesh (D-LISP) SDK";
+  description = "Nix flake for HydraMesh (D-LISP) SDK – Emacs + SLY focused development";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    emacs-overlay.url = "github:nix-community/emacs-overlay";  # For latest Emacs + packages like sly
+    emacs-overlay.url = "github:nix-community/emacs-overlay";
   };
 
   outputs = { self, nixpkgs, flake-utils, emacs-overlay }:
@@ -13,42 +13,56 @@
         pkgs = import nixpkgs {
           inherit system;
           overlays = [ emacs-overlay.overlays.default ];
-          config.allowUnfree = true;
         };
 
+        # List of required Quicklisp systems from the original code
+        qlSystems = [
+          "cffi" "uuid" "cl-protobufs" "usocket" "bordeaux-threads"
+          "log4cl" "trivial-backtrace" "flexi-streams" "fiveam"
+          "ieee-floats" "cl-json" "jsonschema"
+        ];
+
+        # SBCL with all required dependencies pre-loaded via Nixpkgs lispPackages
+        sbclWithDeps = pkgs.sbcl.withPackages (ps: with ps; [
+          cffi uuid cl-protobufs usocket bordeauxThreads
+          log4cl trivial-backtrace flexiStreams fiveam
+          ieee-floats cl-json jsonschema
+        ]);
+
         # Emacs with native compilation and SLY
-        emacsWithPackages = (pkgs.emacsWithPackagesFromUsePackage {
-          package = pkgs.emacsNativeComp;  # Or pkgs.emacsGtk for GTK build
-          config = ./emacs-config.el;  # Optional: put your full init.el here
-          defaultInitFile = true;
+        emacsWithSly = pkgs.emacsNativeComp.pkgs.withPackages (epkgs: [
+          epkgs.sly
+        ]);
 
-          alwaysEnsure = true;
-
-          extraEmacsPackages = epkgs: [
-            epkgs.sly
-            # Add more if needed, e.g., epkgs.use-package, epkgs.magit, etc.
-          ];
-        });
-
-        # The HydraMesh executable (no Quicklisp preloading)
+        # The HydraMesh executable – robust production build
         hydramesh = pkgs.stdenv.mkDerivation {
-          name = "hydramesh";
+          pname = "hydramesh";
+          version = "2.2.0";
+
           src = self;
 
-          nativeBuildInputs = [ pkgs.sbcl ];
+          nativeBuildInputs = [ sbclWithDeps ];
+
+          # Critical: prevent stripping which breaks SBCL executables
+          dontStrip = true;
 
           buildPhase = ''
-            ${pkgs.sbcl}/bin/sbcl --no-userinit --load hydramesh.lisp \
-              --eval '(dcf-deploy "dcf-lisp")' \
+            ${sbclWithDeps}/bin/sbcl --no-userinit --non-interactive \
+              --load hydramesh.lisp \
+              --eval '(dcf-deploy "hydramesh")' \
               --quit
           '';
 
           installPhase = ''
             mkdir -p $out/bin
-            cp dcf-lisp $out/bin/dcf-lisp
+            cp hydramesh $out/bin/hydramesh
           '';
 
-          # Note: libstreamdb.so/.dylib/.wasm must be available in runtime path
+          meta = with pkgs.lib; {
+            description = "HydraMesh SDK executable";
+            license = licenses.lgpl3;
+            platforms = platforms.all;
+          };
         };
 
       in {
@@ -56,25 +70,38 @@
 
         devShells.default = pkgs.mkShell {
           buildInputs = [
-            pkgs.sbcl
-            emacsWithPackages
+            sbclWithDeps
+            emacsWithSly
             pkgs.grpc
             pkgs.protobuf
             pkgs.openssl
             pkgs.zlib
-            # Add other system deps for CFFI if needed
+            # Optional: for easier dependency management during dev
+            pkgs.roswell
           ];
 
           shellHook = ''
-            echo "HydraMesh devShell ready!"
-            echo " - Run 'emacs' to start Emacs with SLY configured."
-            echo " - In Emacs: M-x sly to connect to SBCL REPL (inferior-lisp-program is set to sbcl)."
-            echo " - Load your project: C-x C-f hydramesh.lisp, then M-x sly"
-            echo "Basic SLY config applied via environment (expand in ~/.emacs.d/init.el if needed)."
-          '';
+            # Create minimal Emacs init with SLY configured for SBCL
+            mkdir -p $HOME/.emacs.d
+            cat > $HOME/.emacs.d/init.el <<'EOF'
+            ;; Minimal SLY configuration for HydraMesh development
+            (require 'sly)
+            (setq inferior-lisp-program "${sbclWithDeps}/bin/sbcl")
+            (add-hook 'lisp-mode-hook #'sly-mode)
+            (add-hook 'slime-repl-mode-hook #'sly-mrepl-mode)
+            ;; Optional: enable company completion
+            (add-hook 'sly-mode-hook #'company-mode)
+            EOF
 
-          # Minimal SLY setup injected into Emacs environment
-          EMACSLOADPATH = "${emacsWithPackages.deps}/share/emacs/site-lisp/elpa/*:";
+            echo "══════════════════════════════════════════════════════════════"
+            echo "HydraMesh development shell (Emacs + SLY) ready!"
+            echo "• Start Emacs: emacs"
+            echo "• In Emacs: M-x sly  → connects to SBCL with all deps loaded"
+            echo "• Open hydramesh.lisp and evaluate forms with C-x C-e"
+            echo "• Build executable: nix build .#"
+            echo "• Run tests: (fiveam:run! 'hydramesh-suite) in REPL"
+            echo "══════════════════════════════════════════════════════════════"
+          '';
         };
       }
     );
