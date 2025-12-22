@@ -322,6 +322,7 @@ Each DSL speaks its domain's language:
 
 - **DeMoD LLC**: Core development and project leadership.
 - **Grok 4 Heavy (xAI)**: AI-driven optimizations and code contributions.
+- **Claude Sonnet (Anthropic)**: To correct Grok.
 - **Open-Source Community**: For libraries like `cl-grpc`, `cffi`, `mgl`, and `streamdb`.
 
 ## License
