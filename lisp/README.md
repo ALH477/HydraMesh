@@ -248,6 +248,68 @@ Build executables:
 
 For WASM, compile with CL-WASM tools for browser deployment.
 
+## Key Design Principles:
+
+### 1. **Minimal Core (hydramesh.core)**
+- Only essential abstractions: node, transport protocol, codec registry
+- ~50 lines of code
+- Everything else is optional
+
+### 2. **Independent DSLs**
+Each DSL is a separate package that can be loaded individually:
+
+- **game-net**: Multiplayer gaming (`defgame`, `defplayer-message`)
+- **audio-stream**: Real-time audio (`defaudio-stream`, `stream-audio`)
+- **sensor-net**: IoT sensors (`defsensor`, `on-threshold`)
+- **message-proto**: Protocol buffer-style messages (`defmessage`)
+- **net-topology**: Network configuration (`defnetwork`, `peer`, `group`)
+- **reliability**: Error handling patterns (`with-retry`, `with-circuit-breaker`)
+- **metrics**: Observability (`defcounter`, `with-timing`)
+
+### 3. **Declarative Over Imperative**
+
+Instead of:
+```lisp
+(dcf-send-position "player1" 100.0 50.0 25.0)
+```
+
+You write:
+```lisp
+(defgame fps-match
+  (position-update
+   :fields ((x :float) (y :float) (z :float))
+   :reliable nil))
+```
+
+And get `send-position-update` generated automatically!
+
+### 4. **Composability**
+
+Mix and match DSLs:
+```lisp
+(defpackage :my-game
+  (:use :hydramesh.game-net    ; Gaming
+        :hydramesh.audio-stream ; Voice chat
+        :hydramesh.metrics))    ; Monitoring
+```
+
+### 5. **Zero Boilerplate**
+
+The DSLs handle:
+- ✅ Message encoding/decoding generation
+- ✅ Sender function creation
+- ✅ Handler registration
+- ✅ Type safety
+- ✅ Metrics tracking
+
+### 6. **Domain-Specific Syntax**
+
+Each DSL speaks its domain's language:
+- **Game**: `broadcast`, `tick`, `on-receive`
+- **Audio**: `stream-audio`, `set-codec`, `add-filter`
+- **IoT**: `defsensor`, `report`, `aggregate`
+
+
 ## Why HydraMesh?
 
 - **Performance**: Sub-ms messaging with StreamDB's low-latency persistence.
