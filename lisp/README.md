@@ -6,6 +6,8 @@
 **Repository**: [https://github.com/ALH477/DeMoD-Communication-Framework](https://github.com/ALH477/DeMoD-Communication-Framework)  
 **Demo (soon)**: [YouTube Video](https://youtu.be/IXbIB8jCvDE)
 
+[Technical Analysis](https://claude.ai/public/artifacts/3ca314b7-e7e5-4ede-8878-ab3ab8130146)
+
 ## Overview
 
 HydraMesh (formerly DeMoD-LISP / D-LISP) is a high-performance, production-ready Common Lisp implementation of the DeMoD Communication Framework (DCF), a free and open-source (FOSS) framework designed for low-latency, modular, and interoperable data exchange. Tailored for applications in IoT, gaming, distributed computing, and edge networking, HydraMesh provides a robust Domain-Specific Language (DSL) for seamless integration with DCF's modular architecture. It supports multiple transport protocols, self-healing P2P redundancy, AI-driven network optimization, and integrates **StreamDB** for persistent storage, making it ideal for developers building scalable, fault-tolerant communication systems.
