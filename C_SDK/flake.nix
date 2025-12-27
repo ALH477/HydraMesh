@@ -1,5 +1,5 @@
 {
-  description = "DCF - Distributed Communication Framework (Battle Tested)";
+  description = "DCF - DeMoD Communication Framework";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
