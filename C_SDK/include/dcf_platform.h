@@ -146,7 +146,17 @@ extern "C" {
     #define DCF_UNREACHABLE()
 #endif
 
-/* Thread-local storage */
+/* Thread-local storage
+ * 
+ * NOTE: When building shared libraries (.so), the TLS model matters!
+ * By default, GCC/Clang use "initial-exec" which generates R_X86_64_TPOFF32
+ * relocations that cannot be used in shared objects.
+ * 
+ * Solution: Compile shared library code with -ftls-model=global-dynamic
+ * This is handled automatically by CMakeLists.txt for dcf_shared target.
+ * 
+ * For manual builds, see Makefile CFLAGS_SHARED variable.
+ */
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_THREADS__)
     #define DCF_THREAD_LOCAL _Thread_local
 #elif defined(DCF_COMPILER_GCC_COMPAT)
