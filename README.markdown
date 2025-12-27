@@ -134,16 +134,6 @@ Use `protoc` to generate bindings for each language:
 - **Lisp**: Load via SBCL: `(load "lisp/src/hydramesh.lisp")`
 - **Others**: Follow language-specific build tools (e.g., `cargo build` for Rust).
 
-### Docker Deployment
-```bash
-# Pull and run
-docker pull demood/hydramesh:1.8.0
-docker run -d -p 50051:50051 -v ./data:/data demood/hydramesh:1.8.0
-
-# Send message
-docker run --rm --network container:hydramesh demood/hydramesh:1.8.0 main "send" "Hello!" "node:50051"
-```
-[Docker Hub](https://hub.docker.com/r/demood/hydramesh)
 
 ## Examples
 
