@@ -1,1124 +1,1230 @@
-use std::collections::{HashMap, HashSet};
-use std::fs::{File, OpenOptions};
-use std::io::{self, BufReader, BufWriter, Cursor, Read, Seek, SeekFrom, Write};
-use std::path::Path;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
-use std::time::{SystemTime, UNIX_EPOCH};
+//! DCF Rust SDK - HydraMesh Compatible
+//! Version 2.2.0 | Compatible with D-LISP HydraMesh
+//! 
+//! This SDK provides a production-ready Rust implementation for DCF,
+//! optimized for gaming and real-time audio with UDP transport, binary Protobuf,
+//! unreliable/reliable channels, and network stats.
+
+use std::collections::HashMap;
+use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
+use std::net::{SocketAddr, UdpSocket};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
 use parking_lot::{Mutex, RwLock};
-use memmap2::{MmapMut, MmapOptions};
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use uuid::Uuid;
-use crc::{Crc, CRC_32_ISO_HDLC};
-use lru::LruCache;
-use snappy;
-use futures::future::Future;
 use serde::{Deserialize, Serialize};
-use async_trait::AsyncTrait;
-use mdns_sd::{ServiceDaemon, ServiceInfo};
+use thiserror::Error;
+use tokio::sync::mpsc;
+use uuid::Uuid;
 
-const MAGIC: [u8; 8] = [0x55, 0xAA, 0xFE, 0xED, 0xFA, 0xCE, 0xDA, 0x7A];
-const DEFAULT_PAGE_RAW_SIZE: u64 = 8192;
-const DEFAULT_PAGE_HEADER_SIZE: u64 = 32;
-const FREE_LIST_HEADER_SIZE: u64 = 12;
-const FREE_LIST_ENTRIES_PER_PAGE: usize = ((DEFAULT_PAGE_RAW_SIZE - DEFAULT_PAGE_HEADER_SIZE - FREE_LIST_HEADER_SIZE) / 8) as usize;
-const DEFAULT_MAX_DB_SIZE: u64 = 8000 * 1024 * 1024 * 1024;
-const DEFAULT_MAX_PAGES: i64 = i64::MAX;
-const DEFAULT_MAX_DOCUMENT_SIZE: u64 = 256 * 1024 * 1024;
-const BATCH_GROW_PAGES: u64 = 16;
-const DEFAULT_PAGE_CACHE_SIZE: usize = 2048;
-const DEFAULT_VERSIONS_TO_KEEP: i32 = 2;
-const MAX_CONSECUTIVE_EMPTY_FREE_LIST: u64 = 5;
+/// Generated protocol buffer definitions
+/// In production, uncomment the tonic::include_proto! line and remove the module include
+/// after running `cargo build` which invokes build.rs to generate the code.
+// pub mod proto {
+//     tonic::include_proto!("dcf");
+// }
 
-const FLAG_DATA_PAGE: u8 = 0b00000001;
-const FLAG_TRIE_PAGE: u8 = 0b00000010;
-const FLAG_FREE_LIST_PAGE: u8 = 0b00000100;
-const FLAG_INDEX_PAGE: u8 = 0b00001000;
+pub mod generated;
+pub use generated::dcf as proto;
 
-#[derive(Clone, Copy, Debug)]
-struct VersionedLink {
-    page_id: i64,
-    version: i32,
+// Re-exports for convenience
+pub use proto::{
+    DcfMessage, DcfResponse, Empty, Metrics, PeerInfo, RoleAssignment,
+};
+
+// ============================================================================
+// Constants - Compatible with Lisp HydraMesh
+// ============================================================================
+
+/// Message types matching Lisp implementation
+pub mod msg_type {
+    pub const POSITION: u8 = 1;
+    pub const AUDIO: u8 = 2;
+    pub const GAME_EVENT: u8 = 3;
+    pub const STATE_SYNC: u8 = 4;
+    pub const RELIABLE: u8 = 5;
+    pub const ACK: u8 = 6;
+    pub const PING: u8 = 7;
+    pub const PONG: u8 = 8;
 }
 
-#[derive(Debug)]
-struct DatabaseHeader {
-    magic: [u8; 8],
-    index_root: VersionedLink,
-    path_lookup_root: VersionedLink,
-    free_list_root: VersionedLink,
+const DEFAULT_UDP_PORT: u16 = 7777;
+const DEFAULT_GRPC_PORT: u16 = 50051;
+const DEFAULT_UDP_MTU: usize = 1400;
+const DEFAULT_RELIABLE_TIMEOUT_MS: u64 = 500;
+const DEFAULT_MAX_RETRIES: u32 = 3;
+const DEFAULT_RTT_ALPHA: f64 = 0.125;
+
+// ============================================================================
+// Error Types
+// ============================================================================
+
+#[derive(Error, Debug)]
+pub enum DcfError {
+    #[error("IO error: {0}")]
+    Io(#[from] io::Error),
+    
+    #[error("Not initialized: {0}")]
+    NotInitialized(String),
+    
+    #[error("Peer not found: {0}")]
+    PeerNotFound(String),
+    
+    #[error("Invalid message: {0}")]
+    InvalidMessage(String),
+    
+    #[error("Network error: {0}")]
+    Network(String),
+    
+    #[error("Serialization error: {0}")]
+    Serialization(String),
+    
+    #[error("Database error: {0}")]
+    Database(String),
+    
+    #[error("Transaction error: {0}")]
+    Transaction(String),
+    
+    #[error("Configuration error: {0}")]
+    Config(String),
+}
+
+pub type Result<T> = std::result::Result<T, DcfError>;
+
+// ============================================================================
+// Binary Protocol - Compatible with Lisp HydraMesh
+// ============================================================================
+
+/// Protocol message header (17 bytes minimum)
+/// Layout: type(1) + sequence(4) + timestamp(8) + payload_len(4) + payload(N)
+#[derive(Debug, Clone)]
+pub struct ProtoMessage {
+    pub msg_type: u8,
+    pub sequence: u32,
+    pub timestamp: u64,
+    pub payload: Vec<u8>,
+}
+
+impl ProtoMessage {
+    pub fn new(msg_type: u8, sequence: u32, payload: Vec<u8>) -> Self {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_micros() as u64)
+            .unwrap_or(0);
+        Self { msg_type, sequence, timestamp, payload }
+    }
+
+    /// Serialize to bytes (big-endian, matching Lisp)
+    pub fn serialize(&self) -> Vec<u8> {
+        let total_len = 1 + 4 + 8 + 4 + self.payload.len();
+        let mut vec = Vec::with_capacity(total_len);
+        vec.push(self.msg_type);
+        vec.extend_from_slice(&self.sequence.to_be_bytes());
+        vec.extend_from_slice(&self.timestamp.to_be_bytes());
+        vec.extend_from_slice(&(self.payload.len() as u32).to_be_bytes());
+        vec.extend_from_slice(&self.payload);
+        vec
+    }
+
+    /// Deserialize from bytes
+    pub fn deserialize(data: &[u8]) -> Result<Self> {
+        if data.len() < 17 {
+            return Err(DcfError::InvalidMessage("Message too short".to_string()));
+        }
+        
+        let mut cursor = Cursor::new(data);
+        let msg_type = cursor.read_u8()?;
+        let sequence = cursor.read_u32::<BigEndian>()?;
+        let timestamp = cursor.read_u64::<BigEndian>()?;
+        let payload_len = cursor.read_u32::<BigEndian>()? as usize;
+        
+        if data.len() < 17 + payload_len {
+            return Err(DcfError::InvalidMessage("Payload length exceeds message size".to_string()));
+        }
+        
+        let payload = data[17..17 + payload_len].to_vec();
+        Ok(Self { msg_type, sequence, timestamp, payload })
+    }
+}
+
+// ============================================================================
+// Position Encoding (12 bytes: x, y, z as float32)
+// ============================================================================
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Position {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+impl Position {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
+        Self { x, y, z }
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        let mut vec = Vec::with_capacity(12);
+        vec.extend_from_slice(&self.x.to_be_bytes());
+        vec.extend_from_slice(&self.y.to_be_bytes());
+        vec.extend_from_slice(&self.z.to_be_bytes());
+        vec
+    }
+
+    pub fn decode(data: &[u8]) -> Result<Self> {
+        if data.len() < 12 {
+            return Err(DcfError::InvalidMessage("Position payload too short".to_string()));
+        }
+        let mut cursor = Cursor::new(data);
+        let x = cursor.read_f32::<BigEndian>()?;
+        let y = cursor.read_f32::<BigEndian>()?;
+        let z = cursor.read_f32::<BigEndian>()?;
+        Ok(Self { x, y, z })
+    }
+}
+
+// ============================================================================
+// Game Event Encoding
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GameEvent {
+    pub event_type: u8,
+    pub data: String,
+}
+
+impl GameEvent {
+    pub fn new(event_type: u8, data: impl Into<String>) -> Self {
+        Self { event_type, data: data.into() }
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        let data_bytes = self.data.as_bytes();
+        let mut vec = Vec::with_capacity(1 + data_bytes.len());
+        vec.push(self.event_type);
+        vec.extend_from_slice(data_bytes);
+        vec
+    }
+
+    pub fn decode(data: &[u8]) -> Result<Self> {
+        if data.is_empty() {
+            return Err(DcfError::InvalidMessage("Event payload too short".to_string()));
+        }
+        let event_type = data[0];
+        let data_str = String::from_utf8(data[1..].to_vec())
+            .map_err(|e| DcfError::InvalidMessage(e.to_string()))?;
+        Ok(Self { event_type, data: data_str })
+    }
+}
+
+// ============================================================================
+// Network Statistics - Matching Lisp Implementation
+// ============================================================================
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct NetworkStats {
+    pub packets_sent: u64,
+    pub packets_received: u64,
+    pub bytes_sent: u64,
+    pub bytes_received: u64,
+    pub packets_lost: u64,
+    pub retransmits: u64,
+    pub last_rtt: f64,
+    pub avg_rtt: f64,
+    pub jitter: f64,
+}
+
+impl NetworkStats {
+    pub fn update_rtt(&mut self, rtt: f64) {
+        let prev_rtt = self.last_rtt;
+        self.last_rtt = rtt;
+        self.avg_rtt = DEFAULT_RTT_ALPHA * rtt + (1.0 - DEFAULT_RTT_ALPHA) * self.avg_rtt;
+        let jitter = (rtt - prev_rtt).abs();
+        self.jitter = DEFAULT_RTT_ALPHA * jitter + (1.0 - DEFAULT_RTT_ALPHA) * self.jitter;
+    }
+}
+
+// ============================================================================
+// Reliable Packet Tracking
+// ============================================================================
+
+#[derive(Debug, Clone)]
+struct ReliablePacket {
+    msg: ProtoMessage,
+    host: String,
+    port: u16,
+    attempts: u32,
+    sent_time: Instant,
+}
+
+// ============================================================================
+// UDP Endpoint
+// ============================================================================
+
+pub struct UdpEndpoint {
+    socket: Arc<UdpSocket>,
+    port: u16,
+    running: Arc<AtomicBool>,
+    stats: Arc<RwLock<NetworkStats>>,
+    reliable_packets: Arc<Mutex<HashMap<u32, ReliablePacket>>>,
+    ack_received: Arc<Mutex<HashMap<u32, bool>>>,
+    reliable_timeout_ms: u64,
+    max_retries: u32,
+}
+
+impl UdpEndpoint {
+    pub fn new(port: u16) -> Result<Self> {
+        let addr = format!("0.0.0.0:{}", port);
+        let socket = UdpSocket::bind(&addr)?;
+        socket.set_nonblocking(true)?;
+        
+        Ok(Self {
+            socket: Arc::new(socket),
+            port,
+            running: Arc::new(AtomicBool::new(false)),
+            stats: Arc::new(RwLock::new(NetworkStats::default())),
+            reliable_packets: Arc::new(Mutex::new(HashMap::new())),
+            ack_received: Arc::new(Mutex::new(HashMap::new())),
+            reliable_timeout_ms: DEFAULT_RELIABLE_TIMEOUT_MS,
+            max_retries: DEFAULT_MAX_RETRIES,
+        })
+    }
+
+    pub fn send_raw(&self, data: &[u8], addr: &SocketAddr) -> Result<()> {
+        self.socket.send_to(data, addr)?;
+        let mut stats = self.stats.write();
+        stats.packets_sent += 1;
+        stats.bytes_sent += data.len() as u64;
+        Ok(())
+    }
+
+    pub fn send_message(&self, msg: &ProtoMessage, host: &str, port: u16, reliable: bool) -> Result<()> {
+        let addr: SocketAddr = format!("{}:{}", host, port).parse()
+            .map_err(|e| DcfError::Network(format!("Invalid address: {}", e)))?;
+        
+        let data = msg.serialize();
+        
+        if reliable {
+            let packet = ReliablePacket {
+                msg: msg.clone(),
+                host: host.to_string(),
+                port,
+                attempts: 1,
+                sent_time: Instant::now(),
+            };
+            self.reliable_packets.lock().insert(msg.sequence, packet);
+        }
+        
+        self.send_raw(&data, &addr)
+    }
+
+    pub fn send_ack(&self, seq: u32, addr: &SocketAddr) -> Result<()> {
+        let mut payload = Vec::with_capacity(4);
+        payload.extend_from_slice(&seq.to_be_bytes());
+        let msg = ProtoMessage::new(msg_type::ACK, 0, payload);
+        self.send_raw(&msg.serialize(), addr)
+    }
+
+    pub fn send_pong(&self, seq: u32, timestamp: u64, addr: &SocketAddr) -> Result<()> {
+        let msg = ProtoMessage {
+            msg_type: msg_type::PONG,
+            sequence: seq,
+            timestamp,
+            payload: vec![],
+        };
+        self.send_raw(&msg.serialize(), addr)
+    }
+
+    pub fn get_stats(&self) -> NetworkStats {
+        self.stats.read().clone()
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running.load(Ordering::SeqCst)
+    }
+
+    pub fn start(&self) {
+        self.running.store(true, Ordering::SeqCst);
+    }
+
+    pub fn stop(&self) {
+        self.running.store(false, Ordering::SeqCst);
+    }
+}
+
+// ============================================================================
+// DCF Configuration
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DcfConfig {
+    #[serde(default = "default_transport")]
+    pub transport: String,
+    #[serde(default = "default_host")]
+    pub host: String,
+    #[serde(default = "default_grpc_port")]
+    pub grpc_port: u16,
+    #[serde(default = "default_udp_port")]
+    pub udp_port: u16,
+    #[serde(default = "default_mode")]
+    pub mode: String,
+    #[serde(default)]
+    pub node_id: Option<String>,
+    #[serde(default)]
+    pub peers: Vec<String>,
+    #[serde(default = "default_rtt_threshold")]
+    pub group_rtt_threshold: u64,
+    #[serde(default = "default_storage")]
+    pub storage: String,
+    #[serde(default)]
+    pub streamdb_path: Option<String>,
+    #[serde(default = "default_optimization")]
+    pub optimization_level: u8,
+    #[serde(default = "default_retry_max")]
+    pub retry_max: u32,
+    #[serde(default = "default_udp_mtu")]
+    pub udp_mtu: usize,
+    #[serde(default = "default_reliable_timeout")]
+    pub udp_reliable_timeout: u64,
+    #[serde(default = "default_audio_priority")]
+    pub audio_priority: bool,
+    #[serde(default)]
+    pub p2p_discovery: bool,
+    #[serde(default)]
+    pub streamdb: StreamDbConfig,
+}
+
+fn default_transport() -> String { "UDP".to_string() }
+fn default_host() -> String { "0.0.0.0".to_string() }
+fn default_grpc_port() -> u16 { DEFAULT_GRPC_PORT }
+fn default_udp_port() -> u16 { DEFAULT_UDP_PORT }
+fn default_mode() -> String { "p2p".to_string() }
+fn default_rtt_threshold() -> u64 { 50 }
+fn default_storage() -> String { "in-memory".to_string() }
+fn default_optimization() -> u8 { 2 }
+fn default_retry_max() -> u32 { 3 }
+fn default_udp_mtu() -> usize { DEFAULT_UDP_MTU }
+fn default_reliable_timeout() -> u64 { DEFAULT_RELIABLE_TIMEOUT_MS }
+fn default_audio_priority() -> bool { true }
+
+impl Default for DcfConfig {
+    fn default() -> Self {
+        Self {
+            transport: default_transport(),
+            host: default_host(),
+            grpc_port: default_grpc_port(),
+            udp_port: default_udp_port(),
+            mode: default_mode(),
+            node_id: None,
+            peers: vec![],
+            group_rtt_threshold: default_rtt_threshold(),
+            storage: default_storage(),
+            streamdb_path: None,
+            optimization_level: default_optimization(),
+            retry_max: default_retry_max(),
+            udp_mtu: default_udp_mtu(),
+            udp_reliable_timeout: default_reliable_timeout(),
+            audio_priority: default_audio_priority(),
+            p2p_discovery: false,
+            streamdb: StreamDbConfig::default(),
+        }
+    }
+}
+
+// ============================================================================
+// StreamDB Configuration
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamDbConfig {
+    #[serde(default = "default_page_size")]
+    pub page_size: u64,
+    #[serde(default = "default_max_db_size")]
+    pub max_db_size: u64,
+    #[serde(default = "default_cache_size")]
+    pub page_cache_size: usize,
+    #[serde(default = "default_versions_to_keep")]
+    pub versions_to_keep: i32,
+    #[serde(default = "default_use_mmap")]
+    pub use_mmap: bool,
+    #[serde(default = "default_use_compression")]
+    pub use_compression: bool,
+}
+
+fn default_page_size() -> u64 { 8192 }
+fn default_max_db_size() -> u64 { 8_000 * 1024 * 1024 * 1024 }
+fn default_cache_size() -> usize { 2048 }
+fn default_versions_to_keep() -> i32 { 2 }
+fn default_use_mmap() -> bool { true }
+fn default_use_compression() -> bool { true }
+
+impl Default for StreamDbConfig {
+    fn default() -> Self {
+        Self {
+            page_size: default_page_size(),
+            max_db_size: default_max_db_size(),
+            page_cache_size: default_cache_size(),
+            versions_to_keep: default_versions_to_keep(),
+            use_mmap: default_use_mmap(),
+            use_compression: default_use_compression(),
+        }
+    }
+}
+
+// ============================================================================
+// Gaming Metrics
+// ============================================================================
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct GamingMetrics {
+    pub positions_sent: u64,
+    pub positions_received: u64,
+    pub audio_packets_sent: u64,
+    pub audio_packets_received: u64,
+    pub events_sent: u64,
+    pub events_received: u64,
+}
+
+// ============================================================================
+// DCF Node - Main Service
+// ============================================================================
+
+pub struct DcfNode {
+    config: DcfConfig,
+    node_id: String,
+    udp_endpoint: Option<Arc<UdpEndpoint>>,
+    peers: Arc<RwLock<Vec<String>>>,
+    peer_map: Arc<RwLock<HashMap<String, (String, u16)>>>,
+    metrics: Arc<RwLock<GamingMetrics>>,
+    network_stats: Arc<RwLock<NetworkStats>>,
+    sequence_counter: AtomicU32,
+    running: AtomicBool,
+    role: Arc<RwLock<String>>,
+    master_address: Arc<RwLock<String>>,
+    tx_cache: Arc<Mutex<HashMap<String, TxContext>>>,
 }
 
 #[derive(Debug, Clone)]
-struct PageHeader {
-    crc: u32,
-    version: i32,
-    prev_page_id: i64,
-    next_page_id: i64,
-    flags: u8,
-    data_length: i32,
-    padding: [u8; 3],
+struct TxContext {
+    tx_id: String,
+    start_time: u64,
 }
 
-#[derive(Debug)]
-struct FreeListPage {
-    next_free_list_page: i64,
-    used_entries: i32,
-    free_page_ids: Vec<i64>,
-}
-
-#[derive(Debug)]
-struct ReverseTrieNode {
-    edge: String,
-    parent_index: i64,
-    self_index: i64,
-    document_id: Option<Uuid>,
-    children: HashMap<char, i64>,
-}
-
-#[derive(Clone, Debug)]
-struct Document {
-    id: Uuid,
-    first_page_id: i64,
-    current_version: i32,
-    paths: Vec<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Config {
-    page_size: u64,
-    page_header_size: u64,
-    max_db_size: u64,
-    max_pages: i64,
-    max_document_size: u64,
-    page_cache_size: usize,
-    versions_to_keep: i32,
-    use_mmap: bool,
-    use_compression: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            page_size: DEFAULT_PAGE_RAW_SIZE,
-            page_header_size: DEFAULT_PAGE_HEADER_SIZE,
-            max_db_size: DEFAULT_MAX_DB_SIZE,
-            max_pages: DEFAULT_MAX_PAGES,
-            max_document_size: DEFAULT_MAX_DOCUMENT_SIZE,
-            page_cache_size: DEFAULT_PAGE_CACHE_SIZE,
-            versions_to_keep: DEFAULT_VERSIONS_TO_KEEP,
-            use_mmap: true,
-            use_compression: true,
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct CacheStats {
-    hits: usize,
-    misses: usize,
-}
-
-#[derive(Debug)]
-pub enum StreamDbError {
-    IoError(io::Error),
-    InvalidData(String),
-    NotFound(String),
-    PageAllocationFailed,
-    TrieCorruption,
-}
-
-impl From<io::Error> for StreamDbError {
-    fn from(err: io::Error) -> Self {
-        StreamDbError::IoError(err)
-    }
-}
-
-pub trait Database {
-    fn write_document(&mut self, path: &str, data: &mut dyn Read) -> Result<Uuid, StreamDbError>;
-    fn get(&self, path: &str) -> Result<Vec<u8>, StreamDbError>;
-    fn get_quick(&self, path: &str, quick: bool) -> Result<Vec<u8>, StreamDbError>;
-    fn get_id_by_path(&self, path: &str) -> Result<Option<Uuid>, StreamDbError>;
-    fn delete(&mut self, path: &str) -> Result<(), StreamDbError>;
-    fn delete_by_id(&mut self, id: Uuid) -> Result<(), StreamDbError>;
-    fn bind_to_path(&mut self, id: Uuid, path: &str) -> Result<(), StreamDbError>;
-    fn unbind_path(&mut self, id: Uuid, path: &str) -> Result<(), StreamDbError>;
-    fn search(&self, prefix: &str) -> Result<Vec<String>, StreamDbError>;
-    fn list_paths(&self, id: Uuid) -> Result<Vec<String>, StreamDbError>;
-    fn flush(&self) -> Result<(), StreamDbError>;
-    fn calculate_statistics(&self) -> Result<(i64, i64), StreamDbError>;
-    fn set_quick_mode(&mut self, enabled: bool);
-    fn snapshot(&self) -> Result<Self, StreamDbError> where Self: Sized;
-    fn get_cache_stats(&self) -> Result<CacheStats, StreamDbError>;
-    fn get_stream(&self, path: &str) -> Result<impl Iterator<Item = Result<Vec<u8>, StreamDbError>>, StreamDbError>;
-    fn get_async(&self, path: &str) -> impl Future<Output = Result<Vec<u8>, StreamDbError>>;
-}
-
-pub trait DatabaseBackend {
-    fn write_document(&mut self, data: &mut dyn Read) -> Result<Uuid, StreamDbError>;
-    fn read_document(&self, id: Uuid) -> Result<Vec<u8>, StreamDbError>;
-    fn read_document_quick(&self, id: Uuid, quick: bool) -> Result<Vec<u8>, StreamDbError>;
-    fn delete_document(&mut self, id: Uuid) -> Result<(), StreamDbError>;
-    fn bind_path_to_document(&mut self, path: &str, id: Uuid) -> Result<Uuid, StreamDbError>;
-    fn get_document_id_by_path(&self, path: &str) -> Result<Uuid, StreamDbError>;
-    fn search_paths(&self, prefix: &str) -> Result<Vec<String>, StreamDbError>;
-    fn list_paths_for_document(&self, id: Uuid) -> Result<Vec<String>, StreamDbError>;
-    fn count_free_pages(&self) -> Result<i64, StreamDbError>;
-    fn get_info(&self, id: Uuid) -> Result<String, StreamDbError>;
-    fn delete_paths_for_document(&mut self, id: Uuid) -> Result<(), StreamDbError>;
-    fn remove_from_index(&mut self, id: Uuid) -> Result<(), StreamDbError>;
-    fn get_cache_stats(&self) -> Result<CacheStats, StreamDbError>;
-    fn get_stream(&self, id: Uuid) -> Result<impl Iterator<Item = Result<Vec<u8>, StreamDbError>>, StreamDbError>;
-}
-
-fn write_varint<W: Write>(writer: &mut W, mut value: u64) -> Result<(), StreamDbError> {
-    loop {
-        if value < 0x80 {
-            writer.write_u8(value as u8)?;
-            break;
-        }
-        writer.write_u8((value as u8 & 0x7F) | 0x80)?;
-        value >>= 7;
-    }
-    Ok(())
-}
-
-fn read_varint<R: Read>(reader: &mut R) -> Result<u64, StreamDbError> {
-    let mut value = 0u64;
-    let mut shift = 0u32;
-    loop {
-        let byte = reader.read_u8()?;
-        value |= ((byte & 0x7F) as u64) << shift;
-        shift += 7;
-        if byte & 0x80 == 0 {
-            break;
-        }
-        if shift > 63 {
-            return Err(StreamDbError::InvalidData("Varint too large".to_string()));
-        }
-    }
-    Ok(value)
-}
-
-fn zigzag_encode(value: i64) -> u64 {
-    ((value << 1) ^ (value >> 63)) as u64
-}
-
-fn zigzag_decode(value: u64) -> i64 {
-    ((value >> 1) as i64) ^ -((value & 1) as i64)
-}
-
-struct FileBackend {
-    file: Mutex<File>,
-    mmap: RwLock<Option<MmapMut>>,
-    config: Config,
-    page_cache: Mutex<LruCache<i64, Vec<u8>>>,
-    cache_stats: Mutex<CacheStats>,
-    quick_mode: AtomicBool,
-    trie_root: Mutex<VersionedLink>,
-    free_list_root: Mutex<VersionedLink>,
-    document_index_root: Mutex<VersionedLink>,
-    old_versions: Mutex<HashMap<Uuid, Vec<(i32, i64)>>>,
-    next_page_id: Mutex<i64>,
-}
-
-impl FileBackend {
-    fn new<P: AsRef<Path>>(path: P, config: Config) -> Result<Self, StreamDbError> {
-        let file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
-        let mmap = if config.use_mmap {
-            Some(unsafe { MmapOptions::new().map_mut(&file)? })
+impl DcfNode {
+    pub fn new(config: DcfConfig) -> Result<Self> {
+        let node_id = config.node_id.clone()
+            .unwrap_or_else(|| format!("node-{}", rand::random::<u32>() % 10000));
+        
+        let udp_endpoint = if config.transport == "UDP" || config.transport == "udp" {
+            Some(Arc::new(UdpEndpoint::new(config.udp_port)?))
         } else {
             None
         };
+
         Ok(Self {
-            file: Mutex::new(file),
-            mmap: RwLock::new(mmap),
             config,
-            page_cache: Mutex::new(LruCache::new(config.page_cache_size)),
-            cache_stats: Mutex::new(CacheStats::default()),
-            quick_mode: AtomicBool::new(false),
-            trie_root: Mutex::new(VersionedLink { page_id: -1, version: 0 }),
-            free_list_root: Mutex::new(VersionedLink { page_id: -1, version: 0 }),
-            document_index_root: Mutex::new(VersionedLink { page_id: -1, version: 0 }),
-            old_versions: Mutex::new(HashMap::new()),
-            next_page_id: Mutex::new(0),
+            node_id,
+            udp_endpoint,
+            peers: Arc::new(RwLock::new(vec![])),
+            peer_map: Arc::new(RwLock::new(HashMap::new())),
+            metrics: Arc::new(RwLock::new(GamingMetrics::default())),
+            network_stats: Arc::new(RwLock::new(NetworkStats::default())),
+            sequence_counter: AtomicU32::new(0),
+            running: AtomicBool::new(false),
+            role: Arc::new(RwLock::new("p2p".to_string())),
+            master_address: Arc::new(RwLock::new(String::new())),
+            tx_cache: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
-    fn allocate_page(&mut self) -> Result<i64, StreamDbError> {
-        let mut free_list_root = self.free_list_root.lock();
-        if free_list_root.page_id != -1 {
-            let mut buffer = vec![0u8; self.config.page_size as usize];
-            let offset = free_list_root.page_id as u64 * self.config.page_size;
-            {
-                let mmap = self.mmap.read();
-                if let Some(mmap) = mmap.as_ref() {
-                    let start = offset as usize;
-                    buffer.copy_from_slice(&mmap[start..start + self.config.page_size as usize]);
-                } else {
-                    let mut file = self.file.lock();
-                    file.seek(SeekFrom::Start(offset))?;
-                    file.read_exact(&mut buffer)?;
-                }
-            }
-            let mut reader = Cursor::new(buffer);
-            let header = self.read_page_header(free_list_root.page_id)?;
-            reader.seek(SeekFrom::Start(self.config.page_header_size))?;
-            let next_free_list_page = reader.read_i64::<LittleEndian>()?;
-            let used_entries = reader.read_i32::<LittleEndian>()?;
-            let mut free_page_ids = vec![];
-            for _ in 0..used_entries {
-                free_page_ids.push(reader.read_i64::<LittleEndian>()?);
-            }
-            if let Some(page_id) = free_page_ids.pop() {
-                let new_used_entries = used_entries - 1;
-                let mut writer = Cursor::new(vec![0u8; self.config.page_size as usize]);
-                writer.write_all(&buffer[0..self.config.page_header_size as usize])?;
-                writer.write_i64::<LittleEndian>(next_free_list_page)?;
-                writer.write_i32::<LittleEndian>(new_used_entries)?;
-                for id in &free_page_ids {
-                    writer.write_i64::<LittleEndian>(*id)?;
-                }
-                self.write_raw_page(free_list_root.page_id, &writer.into_inner()[self.config.page_header_size as usize..], header.version)?;
-                if new_used_entries == 0 {
-                    free_list_root.page_id = next_free_list_page;
-                }
-                return Ok(page_id);
-            }
-        }
-        // Grow file
-        let mut next_page_id = self.next_page_id.lock();
-        let page_id = *next_page_id;
-        *next_page_id += 1;
-        let new_size = (page_id + BATCH_GROW_PAGES as i64) as u64 * self.config.page_size;
-        if new_size > self.config.max_db_size {
-            return Err(StreamDbError::PageAllocationFailed);
-        }
-        let mut file = self.file.lock();
-        file.set_len(new_size)?;
-        if let Some(mmap) = self.mmap.write().as_mut() {
-            *mmap = unsafe { MmapOptions::new().len(new_size as usize).map_mut(&*file)? };
-        }
-        Ok(page_id)
+    pub fn node_id(&self) -> &str {
+        &self.node_id
     }
 
-    fn read_page_header(&self, page_id: i64) -> Result<PageHeader, StreamDbError> {
-        let offset = page_id as u64 * self.config.page_size;
-        let mut buffer = vec![0u8; self.config.page_header_size as usize];
-        {
-            let mmap = self.mmap.read();
-            if let Some(mmap) = mmap.as_ref() {
-                let start = offset as usize;
-                buffer.copy_from_slice(&mmap[start..start + self.config.page_header_size as usize]);
-            } else {
-                let mut file = self.file.lock();
-                file.seek(SeekFrom::Start(offset))?;
-                file.read_exact(&mut buffer)?;
-            }
-        }
-        let mut reader = Cursor::new(buffer);
-        let crc = reader.read_u32::<LittleEndian>()?;
-        let version = reader.read_i32::<LittleEndian>()?;
-        let prev_page_id = reader.read_i64::<LittleEndian>()?;
-        let next_page_id = reader.read_i64::<LittleEndian>()?;
-        let flags = reader.read_u8()?;
-        let data_length = reader.read_i32::<LittleEndian>()?;
-        let mut padding = [0u8; 3];
-        reader.read_exact(&mut padding)?;
-        Ok(PageHeader {
-            crc,
-            version,
-            prev_page_id,
-            next_page_id,
-            flags,
-            data_length,
-            padding,
-        })
+    pub fn config(&self) -> &DcfConfig {
+        &self.config
     }
 
-    fn write_raw_page(&self, page_id: i64, data: &[u8], version: i32) -> Result<(), StreamDbError> {
-        let offset = page_id as u64 * self.config.page_size;
-        let data_length = data.len() as i32;
-        let mut buffer = vec![0u8; self.config.page_size as usize];
-        let crc = Crc::<u32>::new(&CRC_32_ISO_HDLC).checksum(data);
-        let mut writer = Cursor::new(&mut buffer);
-        writer.write_u32::<LittleEndian>(crc)?;
-        writer.write_i32::<LittleEndian>(version)?;
-        writer.write_i64::<LittleEndian>(-1)?; // prev_page_id
-        writer.write_i64::<LittleEndian>(-1)?; // next_page_id
-        writer.write_u8(FLAG_DATA_PAGE)?;
-        writer.write_i32::<LittleEndian>(data_length)?;
-        writer.write_all(&[0u8; 3])?; // padding
-        writer.write_all(data)?;
-        {
-            let mmap = self.mmap.read();
-            if let Some(mmap) = mmap.as_ref() {
-                let start = offset as usize;
-                mmap[start..start + self.config.page_size as usize].copy_from_slice(&buffer);
-            } else {
-                let mut file = self.file.lock();
-                file.seek(SeekFrom::Start(offset))?;
-                file.write_all(&buffer)?;
-            }
+    fn next_sequence(&self) -> u32 {
+        self.sequence_counter.fetch_add(1, Ordering::SeqCst)
+    }
+
+    // ========================================================================
+    // Peer Management - Matching Lisp API
+    // ========================================================================
+
+    pub fn add_peer(&self, peer_id: &str, host: &str, port: u16) -> Result<()> {
+        let mut peers = self.peers.write();
+        if !peers.contains(&peer_id.to_string()) {
+            peers.push(peer_id.to_string());
         }
+        self.peer_map.write().insert(peer_id.to_string(), (host.to_string(), port));
+        log::info!("Peer added: {} at {}:{}", peer_id, host, port);
         Ok(())
     }
 
-    fn read_raw_page(&self, page_id: i64) -> Result<Vec<u8>, StreamDbError> {
-        let mut cache = self.page_cache.lock();
-        if let Some(data) = cache.get(&page_id) {
-            self.cache_stats.lock().hits += 1;
-            return Ok(data.clone());
-        }
-        self.cache_stats.lock().misses += 1;
-        let offset = page_id as u64 * self.config.page_size;
-        let mut buffer = vec![0u8; self.config.page_size as usize];
-        {
-            let mmap = self.mmap.read();
-            if let Some(mmap) = mmap.as_ref() {
-                let start = offset as usize;
-                buffer.copy_from_slice(&mmap[start..start + self.config.page_size as usize]);
-            } else {
-                let mut file = self.file.lock();
-                file.seek(SeekFrom::Start(offset))?;
-                file.read_exact(&mut buffer)?;
-            }
-        }
-        let header = self.read_page_header(page_id)?;
-        if !self.quick_mode.load(Ordering::Relaxed) {
-            let crc = Crc::<u32>::new(&CRC_32_ISO_HDLC).checksum(&buffer[self.config.page_header_size as usize..]);
-            if crc != header.crc {
-                return Err(StreamDbError::InvalidData("CRC mismatch".to_string()));
-            }
-        }
-        let data = buffer[self.config.page_header_size as usize..(self.config.page_header_size as usize + header.data_length as usize)].to_vec();
-        cache.put(page_id, data.clone());
-        Ok(data)
+    pub fn remove_peer(&self, peer_id: &str) -> Result<()> {
+        self.peers.write().retain(|p| p != peer_id);
+        self.peer_map.write().remove(peer_id);
+        log::info!("Peer removed: {}", peer_id);
+        Ok(())
     }
 
-    fn serialize_document(&self, document: &Document) -> Result<Vec<u8>, StreamDbError> {
-        let mut buffer = Vec::new();
-        buffer.write_all(document.id.as_bytes())?;
-        buffer.write_i64::<LittleEndian>(document.first_page_id)?;
-        buffer.write_i32::<LittleEndian>(document.current_version)?;
-        write_varint(&mut buffer, document.paths.len() as u64)?;
-        for path in &document.paths {
-            let bytes = path.as_bytes();
-            write_varint(&mut buffer, bytes.len() as u64)?;
-            buffer.write_all(bytes)?;
+    pub fn list_peers(&self) -> Vec<String> {
+        self.peers.read().clone()
+    }
+
+    pub fn get_peer_info(&self, peer_id: &str) -> Option<(String, u16)> {
+        self.peer_map.read().get(peer_id).cloned()
+    }
+
+    // ========================================================================
+    // Gaming API - Matching Lisp HydraMesh
+    // ========================================================================
+
+    /// Send position update (unreliable, high frequency)
+    pub fn send_position(&self, player_id: &str, x: f32, y: f32, z: f32) -> Result<()> {
+        let endpoint = self.udp_endpoint.as_ref()
+            .ok_or_else(|| DcfError::NotInitialized("UDP endpoint not initialized".to_string()))?;
+
+        let position = Position::new(x, y, z);
+        let msg = ProtoMessage::new(msg_type::POSITION, self.next_sequence(), position.encode());
+
+        let peer_map = self.peer_map.read();
+        for peer_id in self.peers.read().iter() {
+            if let Some((host, port)) = peer_map.get(peer_id) {
+                endpoint.send_message(&msg, host, *port, false)?;
+            }
         }
-        if self.config.use_compression {
-            Ok(snappy::compress(&buffer)?)
+
+        self.metrics.write().positions_sent += 1;
+        log::debug!("Position sent for {}: ({}, {}, {})", player_id, x, y, z);
+        Ok(())
+    }
+
+    /// Send audio packet (unreliable, priority)
+    pub fn send_audio(&self, audio_data: &[u8]) -> Result<()> {
+        let endpoint = self.udp_endpoint.as_ref()
+            .ok_or_else(|| DcfError::NotInitialized("UDP endpoint not initialized".to_string()))?;
+
+        let msg = ProtoMessage::new(msg_type::AUDIO, self.next_sequence(), audio_data.to_vec());
+
+        let peer_map = self.peer_map.read();
+        for peer_id in self.peers.read().iter() {
+            if let Some((host, port)) = peer_map.get(peer_id) {
+                endpoint.send_message(&msg, host, *port, false)?;
+            }
+        }
+
+        self.metrics.write().audio_packets_sent += 1;
+        log::debug!("Audio packet sent ({} bytes)", audio_data.len());
+        Ok(())
+    }
+
+    /// Send game event (reliable, critical)
+    pub fn send_game_event(&self, event_type: u8, data: &str) -> Result<()> {
+        let endpoint = self.udp_endpoint.as_ref()
+            .ok_or_else(|| DcfError::NotInitialized("UDP endpoint not initialized".to_string()))?;
+
+        let event = GameEvent::new(event_type, data);
+        let msg = ProtoMessage::new(msg_type::GAME_EVENT, self.next_sequence(), event.encode());
+
+        let peer_map = self.peer_map.read();
+        for peer_id in self.peers.read().iter() {
+            if let Some((host, port)) = peer_map.get(peer_id) {
+                endpoint.send_message(&msg, host, *port, true)?;
+            }
+        }
+
+        self.metrics.write().events_sent += 1;
+        log::info!("Game event sent: {} {}", event_type, data);
+        Ok(())
+    }
+
+    /// Send UDP message to specific peer
+    pub fn send_udp(&self, data: &[u8], recipient: &str, reliable: bool, msg_type: u8) -> Result<()> {
+        let endpoint = self.udp_endpoint.as_ref()
+            .ok_or_else(|| DcfError::NotInitialized("UDP endpoint not initialized".to_string()))?;
+
+        let (host, port) = self.peer_map.read()
+            .get(recipient)
+            .cloned()
+            .ok_or_else(|| DcfError::PeerNotFound(recipient.to_string()))?;
+
+        let msg = ProtoMessage::new(msg_type, self.next_sequence(), data.to_vec());
+        endpoint.send_message(&msg, &host, port, reliable)?;
+
+        Ok(())
+    }
+
+    /// Send ping for RTT measurement
+    pub fn send_ping(&self, peer_id: &str) -> Result<()> {
+        let endpoint = self.udp_endpoint.as_ref()
+            .ok_or_else(|| DcfError::NotInitialized("UDP endpoint not initialized".to_string()))?;
+
+        let (host, port) = self.peer_map.read()
+            .get(peer_id)
+            .cloned()
+            .ok_or_else(|| DcfError::PeerNotFound(peer_id.to_string()))?;
+
+        let msg = ProtoMessage::new(msg_type::PING, self.next_sequence(), vec![]);
+        endpoint.send_message(&msg, &host, port, false)?;
+
+        Ok(())
+    }
+
+    // ========================================================================
+    // Lifecycle
+    // ========================================================================
+
+    pub fn start(&self) -> Result<()> {
+        if let Some(endpoint) = &self.udp_endpoint {
+            endpoint.start();
+        }
+        self.running.store(true, Ordering::SeqCst);
+        log::info!("DCF Node started: {} on UDP port {}", self.node_id, self.config.udp_port);
+        Ok(())
+    }
+
+    pub fn stop(&self) -> Result<()> {
+        if let Some(endpoint) = &self.udp_endpoint {
+            endpoint.stop();
+        }
+        self.running.store(false, Ordering::SeqCst);
+        log::info!("DCF Node stopped: {}", self.node_id);
+        Ok(())
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running.load(Ordering::SeqCst)
+    }
+
+    // ========================================================================
+    // Metrics
+    // ========================================================================
+
+    pub fn get_metrics(&self) -> GamingMetrics {
+        self.metrics.read().clone()
+    }
+
+    pub fn get_network_stats(&self) -> NetworkStats {
+        if let Some(endpoint) = &self.udp_endpoint {
+            endpoint.get_stats()
         } else {
-            Ok(buffer)
+            self.network_stats.read().clone()
         }
     }
 
-    fn deserialize_document(&self, data: &[u8]) -> Result<Document, StreamDbError> {
-        let decompressed = if self.config.use_compression {
-            snappy::decompress(data)?
-        } else {
-            data.to_vec()
+    pub fn get_full_metrics(&self) -> FullMetrics {
+        let gaming = self.get_metrics();
+        let network = self.get_network_stats();
+        FullMetrics { gaming, network }
+    }
+
+    // ========================================================================
+    // Transactions - Matching Lisp API
+    // ========================================================================
+
+    pub fn begin_transaction(&self, tx_id: &str) -> Result<()> {
+        let context = TxContext {
+            tx_id: tx_id.to_string(),
+            start_time: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
         };
-        let mut reader = Cursor::new(decompressed);
-        let mut id_bytes = [0u8; 16];
-        reader.read_exact(&mut id_bytes)?;
-        let id = Uuid::from_bytes(id_bytes);
-        let first_page_id = reader.read_i64::<LittleEndian>()?;
-        let current_version = reader.read_i32::<LittleEndian>()?;
-        let path_count = read_varint(&mut reader)? as usize;
-        let mut paths = Vec::with_capacity(path_count);
-        for _ in 0..path_count {
-            let path_len = read_varint(&mut reader)? as usize;
-            let mut path_bytes = vec![0u8; path_len];
-            reader.read_exact(&mut path_bytes)?;
-            let path = String::from_utf8(path_bytes).map_err(|e| StreamDbError::InvalidData(e.to_string()))?;
-            paths.push(path);
-        }
-        Ok(Document {
-            id,
-            first_page_id,
-            current_version,
-            paths,
-        })
-    }
-
-    fn serialize_trie_node(&self, node: &ReverseTrieNode) -> Result<Vec<u8>, StreamDbError> {
-        let mut buffer = Vec::new();
-        let edge_bytes = node.edge.as_bytes();
-        write_varint(&mut buffer, edge_bytes.len() as u64)?;
-        buffer.write_all(edge_bytes)?;
-        write_varint(&mut buffer, zigzag_encode(node.parent_index))?;
-        write_varint(&mut buffer, zigzag_encode(node.self_index))?;
-        if let Some(id) = node.document_id {
-            buffer.write_u8(1)?;
-            buffer.write_all(id.as_bytes())?;
-        } else {
-            buffer.write_u8(0)?;
-        }
-        write_varint(&mut buffer, node.children.len() as u64)?;
-        for (&c, &index) in &node.children {
-            write_varint(&mut buffer, c as u64)?;
-            write_varint(&mut buffer, zigzag_encode(index))?;
-        }
-        if self.config.use_compression {
-            Ok(snappy::compress(&buffer)?)
-        } else {
-            Ok(buffer)
-        }
-    }
-
-    fn deserialize_trie_node(&self, data: &[u8]) -> Result<ReverseTrieNode, StreamDbError> {
-        let decompressed = if self.config.use_compression {
-            snappy::decompress(data)?
-        } else {
-            data.to_vec()
-        };
-        let mut reader = Cursor::new(decompressed);
-        let edge_len = read_varint(&mut reader)? as usize;
-        let mut edge_bytes = vec![0u8; edge_len];
-        reader.read_exact(&mut edge_bytes)?;
-        let edge = String::from_utf8(edge_bytes).map_err(|e| StreamDbError::InvalidData(e.to_string()))?;
-        let parent_index = zigzag_decode(read_varint(&mut reader)?);
-        let self_index = zigzag_decode(read_varint(&mut reader)?);
-        let has_id = reader.read_u8()?;
-        let document_id = if has_id == 1 {
-            let mut bytes = [0u8; 16];
-            reader.read_exact(&mut bytes)?;
-            Some(Uuid::from_bytes(bytes))
-        } else {
-            None
-        };
-        let children_count = read_varint(&mut reader)? as usize;
-        let mut children = HashMap::with_capacity(children_count);
-        for _ in 0..children_count {
-            let c = read_varint(&mut reader)? as u32;
-            let c_char = char::try_from(c).map_err(|_| StreamDbError::InvalidData("Invalid child char".to_string()))?;
-            let index = zigzag_decode(read_varint(&mut reader)?);
-            children.insert(c_char, index);
-        }
-        Ok(ReverseTrieNode {
-            edge,
-            parent_index,
-            self_index,
-            document_id,
-            children,
-        })
-    }
-
-    fn trie_insert(&mut self, path: &str, id: Uuid) -> Result<(), StreamDbError> {
-        let reversed: String = path.chars().rev().collect();
-        let mut current_page_id = self.trie_root.lock().page_id;
-        if current_page_id == -1 {
-            current_page_id = self.allocate_page()?;
-            self.trie_root.lock().page_id = current_page_id;
-            let root_node = ReverseTrieNode {
-                edge: String::new(),
-                parent_index: -1,
-                self_index: current_page_id,
-                document_id: None,
-                children: HashMap::new(),
-            };
-            let data = self.serialize_trie_node(&root_node)?;
-            self.write_raw_page(current_page_id, &data, 1)?;
-        }
-        let mut current = self.deserialize_trie_node(&self.read_raw_page(current_page_id)?)?;
-        let mut remaining = reversed.as_str();
-        while !remaining.is_empty() {
-            let first_char = remaining.chars().next().unwrap();
-            if let Some(&child_id) = current.children.get(&first_char) {
-                let child = self.deserialize_trie_node(&self.read_raw_page(child_id)?)?;
-                let edge = child.edge.as_str();
-                let common_len = edge.chars().zip(remaining.chars()).take_while(|(a, b)| a == b).count();
-                if common_len < edge.len() {
-                    // Split node
-                    let new_child_page_id = self.allocate_page()?;
-                    let new_child = ReverseTrieNode {
-                        edge: edge[common_len..].to_string(),
-                        parent_index: child.self_index,
-                        self_index: new_child_page_id,
-                        document_id: child.document_id,
-                        children: child.children.clone(),
-                    };
-                    current.children.remove(&first_char);
-                    current.children.insert(first_char, new_child_page_id);
-                    current.document_id = None;
-                    let new_edge = edge[0..common_len].to_string();
-                    let new_node = ReverseTrieNode {
-                        edge: new_edge.clone(),
-                        parent_index: current.self_index,
-                        self_index: child_id,
-                        document_id: None,
-                        children: HashMap::new(),
-                    };
-                    new_node.children.insert(edge.chars().nth(common_len).unwrap(), new_child_page_id);
-                    self.write_raw_page(child_id, &self.serialize_trie_node(&new_node)?, child.version + 1)?;
-                    self.write_raw_page(new_child_page_id, &self.serialize_trie_node(&new_child)?, 1)?;
-                    remaining = &remaining[common_len..];
-                    current = new_node;
-                } else {
-                    remaining = &remaining[edge.len()..];
-                    current_page_id = child_id;
-                    current = child;
-                }
-            } else {
-                let new_page_id = self.allocate_page()?;
-                let new_node = ReverseTrieNode {
-                    edge: remaining.to_string(),
-                    parent_index: current.self_index,
-                    self_index: new_page_id,
-                    document_id: Some(id),
-                    children: HashMap::new(),
-                };
-                current.children.insert(first_char, new_page_id);
-                self.write_raw_page(new_page_id, &self.serialize_trie_node(&new_node)?, 1)?;
-                self.write_raw_page(current_page_id, &self.serialize_trie_node(&current)?, current.version + 1)?;
-                return Ok(());
-            }
-        }
-        current.document_id = Some(id);
-        self.write_raw_page(current_page_id, &self.serialize_trie_node(&current)?, current.version + 1)?;
-        Ok(())
-    }
-}
-
-impl DatabaseBackend for FileBackend {
-    fn write_document(&mut self, data: &mut dyn Read) -> Result<Uuid, StreamDbError> {
-        let id = Uuid::new_v4();
-        let mut first_page_id = -1;
-        let mut prev_page_id = -1;
-        let mut current_page_id = -1;
-        let mut total_size = 0;
-        let mut version = 1;
-        loop {
-            let mut buffer = vec![0u8; (self.config.page_size - self.config.page_header_size) as usize];
-            let bytes_read = data.read(&mut buffer)?;
-            if bytes_read == 0 {
-                break;
-            }
-            total_size += bytes_read as u64;
-            if total_size > self.config.max_document_size {
-                return Err(StreamDbError::InvalidData("Document size exceeds limit".to_string()));
-            }
-            buffer.truncate(bytes_read);
-            current_page_id = self.allocate_page()?;
-            if first_page_id == -1 {
-                first_page_id = current_page_id;
-            }
-            let header = PageHeader {
-                crc: Crc::<u32>::new(&CRC_32_ISO_HDLC).checksum(&buffer),
-                version,
-                prev_page_id,
-                next_page_id: -1,
-                flags: FLAG_DATA_PAGE,
-                data_length: bytes_read as i32,
-                padding: [0u8; 3],
-            };
-            let mut page_buffer = vec![0u8; self.config.page_size as usize];
-            let mut writer = Cursor::new(&mut page_buffer);
-            writer.write_u32::<LittleEndian>(header.crc)?;
-            writer.write_i32::<LittleEndian>(header.version)?;
-            writer.write_i64::<LittleEndian>(header.prev_page_id)?;
-            writer.write_i64::<LittleEndian>(header.next_page_id)?;
-            writer.write_u8(header.flags)?;
-            writer.write_i32::<LittleEndian>(header.data_length)?;
-            writer.write_all(&header.padding)?;
-            writer.write_all(&buffer)?;
-            self.write_raw_page(current_page_id, &buffer, version)?;
-            if prev_page_id != -1 {
-                let mut prev_header = self.read_page_header(prev_page_id)?;
-                prev_header.next_page_id = current_page_id;
-                let prev_data = self.read_raw_page(prev_page_id)?;
-                let mut prev_buffer = vec![0u8; self.config.page_size as usize];
-                let mut prev_writer = Cursor::new(&mut prev_buffer);
-                prev_writer.write_u32::<LittleEndian>(prev_header.crc)?;
-                prev_writer.write_i32::<LittleEndian>(prev_header.version)?;
-                prev_writer.write_i64::<LittleEndian>(prev_header.prev_page_id)?;
-                prev_writer.write_i64::<LittleEndian>(prev_header.next_page_id)?;
-                prev_writer.write_u8(prev_header.flags)?;
-                prev_writer.write_i32::<LittleEndian>(prev_header.data_length)?;
-                prev_writer.write_all(&prev_header.padding)?;
-                prev_writer.write_all(&prev_data)?;
-                self.write_raw_page(prev_page_id, &prev_data, prev_header.version)?;
-            }
-            prev_page_id = current_page_id;
-        }
-        let index_root = self.document_index_root.lock();
-        let document = Document {
-            id,
-            first_page_id,
-            current_version: version,
-            paths: vec![],
-        };
-        let data = self.serialize_document(&document)?;
-        if index_root.page_id == -1 {
-            let new_page_id = self.allocate_page()?;
-            self.document_index_root.lock().page_id = new_page_id;
-            self.document_index_root.lock().version = 1;
-        }
-        self.write_raw_page(index_root.page_id, &data, index_root.version)?;
-        if let Some(old_version) = self.old_versions.lock().get(&id).cloned() {
-            self.old_versions.lock().get_mut(&id).unwrap().push((version - 1, old_version[0].1));
-        } else {
-            self.old_versions.lock().insert(id, vec![(version - 1, first_page_id)]);
-        }
-        Ok(id)
-    }
-
-    fn read_document(&self, id: Uuid) -> Result<Vec<u8>, StreamDbError> {
-        self.read_document_quick(id, self.quick_mode.load(Ordering::Relaxed))
-    }
-
-    fn read_document_quick(&self, id: Uuid, quick: bool) -> Result<Vec<u8>, StreamDbError> {
-        let index_root = self.document_index_root.lock();
-        let data = self.read_raw_page(index_root.page_id)?;
-        let document = self.deserialize_document(&data)?;
-        if document.id != id {
-            return Err(StreamDbError::NotFound("Document not found".to_string()));
-        }
-        let mut result = Vec::new();
-        let mut current_page_id = document.first_page_id;
-        while current_page_id != -1 {
-            let quick_mode = self.quick_mode.load(Ordering::Relaxed);
-            self.quick_mode.store(quick, Ordering::Relaxed);
-            let data = self.read_raw_page(current_page_id)?;
-            self.quick_mode.store(quick_mode, Ordering::Relaxed);
-            result.extend_from_slice(&data);
-            let header = self.read_page_header(current_page_id)?;
-            current_page_id = header.next_page_id;
-        }
-        Ok(result)
-    }
-
-    fn delete_document(&mut self, id: Uuid) -> Result<(), StreamDbError> {
-        let index_root = self.document_index_root.lock();
-        let data = self.read_raw_page(index_root.page_id)?;
-        let document = self.deserialize_document(&data)?;
-        if document.id != id {
-            return Err(StreamDbError::NotFound("Document not found".to_string()));
-        }
-        let mut current_page_id = document.first_page_id;
-        while current_page_id != -1 {
-            let header = self.read_page_header(current_page_id)?;
-            // Free page logic would go here
-            current_page_id = header.next_page_id;
-        }
-        self.remove_from_index(id)?;
+        self.tx_cache.lock().insert(tx_id.to_string(), context);
+        log::debug!("Transaction started: {}", tx_id);
         Ok(())
     }
 
-    fn bind_path_to_document(&mut self, path: &str, id: Uuid) -> Result<Uuid, StreamDbError> {
-        if path.is_empty() || path.contains('\0') || path.contains("//") {
-            return Err(StreamDbError::InvalidData("Invalid path".to_string()));
+    pub fn commit_transaction(&self, tx_id: &str) -> Result<()> {
+        if self.tx_cache.lock().remove(tx_id).is_none() {
+            return Err(DcfError::Transaction(format!("Transaction not found: {}", tx_id)));
         }
-        let index_root = self.document_index_root.lock();
-        let data = self.read_raw_page(index_root.page_id)?;
-        let mut document = self.deserialize_document(&data)?;
-        if document.id != id {
-            return Err(StreamDbError::NotFound("ID not found".to_string()));
-        }
-        if self.get_document_id_by_path(path).is_ok() {
-            return Err(StreamDbError::InvalidData("Path already bound".to_string()));
-        }
-        document.paths.push(path.to_string());
-        let data = self.serialize_document(&document)?;
-        self.write_raw_page(index_root.page_id, &data, index_root.version)?;
-        self.trie_insert(path, id)?;
-        Ok(id)
-    }
-
-    fn get_document_id_by_path(&self, path: &str) -> Result<Uuid, StreamDbError> {
-        if path.is_empty() || path.contains('\0') || path.contains("//") {
-            return Err(StreamDbError::InvalidData("Invalid path".to_string()));
-        }
-        let trie_root = self.trie_root.lock();
-        if trie_root.page_id == -1 {
-            return Err(StreamDbError::NotFound("Path not found".to_string()));
-        }
-        let reversed: String = path.chars().rev().collect();
-        let mut current_page_id = trie_root.page_id;
-        let mut remaining = reversed.as_str();
-        while !remaining.is_empty() {
-            let node = self.deserialize_trie_node(&self.read_raw_page(current_page_id)?)?;
-            let edge = node.edge.as_str();
-            if remaining.starts_with(edge) {
-                remaining = &remaining[edge.len()..];
-                if remaining.is_empty() {
-                    return node.document_id.ok_or_else(|| StreamDbError::NotFound("Path not found".to_string()));
-                }
-                let first_char = remaining.chars().next().unwrap();
-                if let Some(&child_id) = node.children.get(&first_char) {
-                    current_page_id = child_id;
-                } else {
-                    return Err(StreamDbError::NotFound("Path not found".to_string()));
-                }
-            } else {
-                return Err(StreamDbError::NotFound("Path not found".to_string()));
-            }
-        }
-        let node = self.deserialize_trie_node(&self.read_raw_page(current_page_id)?)?;
-        node.document_id.ok_or_else(|| StreamDbError::NotFound("Path not found".to_string()))
-    }
-
-    fn search_paths(&self, prefix: &str) -> Result<Vec<String>, StreamDbError> {
-        if prefix.is_empty() || prefix.contains('\0') || prefix.contains("//") {
-            return Err(StreamDbError::InvalidData("Invalid prefix".to_string()));
-        }
-        let trie_root = self.trie_root.lock();
-        if trie_root.page_id == -1 {
-            return Ok(vec![]);
-        }
-        let reversed_prefix: String = prefix.chars().rev().collect();
-        let mut current_page_id = trie_root.page_id;
-        let mut remaining = reversed_prefix.as_str();
-        while !remaining.is_empty() {
-            let node = self.deserialize_trie_node(&self.read_raw_page(current_page_id)?)?;
-            let edge = node.edge.as_str();
-            if remaining.starts_with(edge) {
-                remaining = &remaining[edge.len()..];
-                if remaining.is_empty() {
-                    let mut results = vec![];
-                    self.trie_collect_paths(&node, String::new(), &mut results)?;
-                    return Ok(results.into_iter().filter(|p| p.starts_with(prefix)).map(|p| p.chars().rev().collect()).collect());
-                }
-                let first_char = remaining.chars().next().unwrap();
-                if let Some(&child_id) = node.children.get(&first_char) {
-                    current_page_id = child_id;
-                } else {
-                    return Ok(vec![]);
-                }
-            } else {
-                return Ok(vec![]);
-            }
-        }
-        let node = self.deserialize_trie_node(&self.read_raw_page(current_page_id)?)?;
-        let mut results = vec![];
-        self.trie_collect_paths(&node, String::new(), &mut results)?;
-        Ok(results.into_iter().filter(|p| p.starts_with(prefix)).map(|p| p.chars().rev().collect()).collect())
-    }
-
-    fn trie_collect_paths(&self, node: &ReverseTrieNode, prefix: String, results: &mut Vec<String>) -> Result<(), StreamDbError> {
-        let new_prefix = format!("{}{}", node.edge, prefix);
-        if let Some(id) = node.document_id {
-            results.push(new_prefix.clone());
-        }
-        for &child_id in node.children.values() {
-            let child = self.deserialize_trie_node(&self.read_raw_page(child_id)?)?;
-            self.trie_collect_paths(&child, new_prefix.clone(), results)?;
-        }
+        log::debug!("Transaction committed: {}", tx_id);
         Ok(())
     }
 
-    fn list_paths_for_document(&self, id: Uuid) -> Result<Vec<String>, StreamDbError> {
-        let index_root = self.document_index_root.lock();
-        let data = self.read_raw_page(index_root.page_id)?;
-        let document = self.deserialize_document(&data)?;
-        if document.id != id {
-            return Err(StreamDbError::NotFound("ID not found".to_string()));
-        }
-        Ok(document.paths)
-    }
-
-    fn count_free_pages(&self) -> Result<i64, StreamDbError> {
-        let mut count = 0;
-        let mut current = self.free_list_root.lock().page_id;
-        while current != -1 {
-            let offset = current as u64 * self.config.page_size + self.config.page_header_size;
-            let mut buffer = vec![0u8; FREE_LIST_HEADER_SIZE as usize];
-            {
-                let mmap = self.mmap.read();
-                if let Some(mmap) = mmap.as_ref() {
-                    let start = offset as usize;
-                    buffer.copy_from_slice(&mmap[start..start + FREE_LIST_HEADER_SIZE as usize]);
-                } else {
-                    let mut file = self.file.lock();
-                    file.seek(SeekFrom::Start(offset))?;
-                    file.read_exact(&mut buffer)?;
-                }
-            }
-            let mut reader = Cursor::new(buffer);
-            current = reader.read_i64::<LittleEndian>()?;
-            let used_entries = reader.read_i32::<LittleEndian>()?;
-            count += used_entries as i64;
-        }
-        Ok(count)
-    }
-
-    fn get_info(&self, id: Uuid) -> Result<String, StreamDbError> {
-        let index_root = self.document_index_root.lock();
-        let data = self.read_raw_page(index_root.page_id)?;
-        let document = self.deserialize_document(&data)?;
-        if document.id != id {
-            return Err(StreamDbError::NotFound("ID not found".to_string()));
-        }
-        let mut size = 0;
-        let mut current_page_id = document.first_page_id;
-        while current_page_id != -1 {
-            let header = self.read_page_header(current_page_id)?;
-            size += header.data_length as u64;
-            current_page_id = header.next_page_id;
-        }
-        Ok(format!(
-            "ID: {}, Version: {}, Size: {} bytes, Paths: {:?}",
-            id, document.current_version, size, document.paths
-        ))
-    }
-
-    fn delete_paths_for_document(&mut self, id: Uuid) -> Result<(), StreamDbError> {
-        let index_root = self.document_index_root.lock();
-        let data = self.read_raw_page(index_root.page_id)?;
-        let mut document = self.deserialize_document(&data)?;
-        if document.id != id {
-            return Err(StreamDbError::NotFound("ID not found".to_string()));
-        }
-        for path in document.paths.iter() {
-            // Implement trie_delete
-        }
-        document.paths.clear();
-        let data = self.serialize_document(&document)?;
-        self.write_raw_page(index_root.page_id, &data, index_root.version)?;
+    pub fn rollback_transaction(&self, tx_id: &str) -> Result<()> {
+        self.tx_cache.lock().remove(tx_id);
+        log::debug!("Transaction rolled back: {}", tx_id);
         Ok(())
     }
 
-    fn remove_from_index(&mut self, id: Uuid) -> Result<(), StreamDbError> {
-        self.delete_paths_for_document(id)?;
+    // ========================================================================
+    // Status and Version - Matching Lisp API
+    // ========================================================================
+
+    pub fn status(&self) -> Status {
+        Status {
+            running: self.is_running(),
+            mode: self.role.read().clone(),
+            udp_port: self.config.udp_port,
+            peer_count: self.peers.read().len(),
+            udp_active: self.udp_endpoint.as_ref().map(|e| e.is_running()).unwrap_or(false),
+        }
+    }
+
+    pub fn version() -> Version {
+        Version {
+            sdk_version: "2.2.0".to_string(),
+            dcf_version: "5.0.0".to_string(),
+            transport: "UDP".to_string(),
+            protocol: "binary-protobuf".to_string(),
+        }
+    }
+
+    // ========================================================================
+    // Role Assignment
+    // ========================================================================
+
+    pub fn assign_role(&self, role: &str, master_address: &str) -> Result<()> {
+        *self.role.write() = role.to_string();
+        *self.master_address.write() = master_address.to_string();
+        log::info!("Role assigned: {} (master: {})", role, master_address);
         Ok(())
     }
 
-    fn get_cache_stats(&self) -> Result<CacheStats, StreamDbError> {
-        Ok(self.cache_stats.lock().clone())
+    pub fn get_role(&self) -> String {
+        self.role.read().clone()
     }
 
-    fn get_stream(&self, id: Uuid) -> Result<impl Iterator<Item = Result<Vec<u8>, StreamDbError>>, StreamDbError> {
-        let index_root = self.document_index_root.lock();
-        let data = self.read_raw_page(index_root.page_id)?;
-        let document = self.deserialize_document(&data)?;
-        if document.id != id {
-            return Err(StreamDbError::NotFound("Document not found".to_string()));
+    // ========================================================================
+    // Benchmark - Matching Lisp API
+    // ========================================================================
+
+    pub async fn benchmark(&self, peer_id: &str, count: usize) -> Result<BenchmarkResult> {
+        let mut rtts = Vec::with_capacity(count);
+        
+        for _ in 0..count {
+            let start = Instant::now();
+            self.send_ping(peer_id)?;
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            let rtt = start.elapsed().as_secs_f64() * 1000.0;
+            rtts.push(rtt);
         }
-        let mut current = Some(document.first_page_id);
-        Ok(std::iter::from_fn(move || {
-            if let Some(page_id) = current {
-                let data = self.read_raw_page(page_id);
-                if let Ok(ref d) = data {
-                    let header = self.read_page_header(page_id).ok()?;
-                    current = if header.next_page_id != -1 { Some(header.next_page_id) } else { None };
-                }
-                data.map(Ok)
-            } else {
-                None
-            }
-        }))
-    }
-}
 
-pub struct StreamDb {
-    backend: Box<dyn DatabaseBackend + Send + Sync>,
-    path_cache: Mutex<LruCache<String, Uuid>>,
-    quick_mode: AtomicBool,
-}
+        let avg_rtt = if rtts.is_empty() { 0.0 } else { rtts.iter().sum::<f64>() / rtts.len() as f64 };
+        let min_rtt = rtts.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max_rtt = rtts.iter().cloned().fold(0.0, f64::max);
 
-impl StreamDb {
-    pub fn open_with_config<P: AsRef<Path>>(path: P, config: Config) -> Result<Self, StreamDbError> {
-        let backend = Box::new(FileBackend::new(path, config)?);
-        Ok(Self {
-            backend,
-            path_cache: Mutex::new(LruCache::new(config.page_cache_size)),
-            quick_mode: AtomicBool::new(false),
+        Ok(BenchmarkResult {
+            peer_id: peer_id.to_string(),
+            count,
+            avg_rtt,
+            min_rtt: if min_rtt.is_infinite() { 0.0 } else { min_rtt },
+            max_rtt,
         })
     }
 }
 
-impl Database for StreamDb {
-    fn write_document(&mut self, path: &str, data: &mut dyn Read) -> Result<Uuid, StreamDbError> {
-        let id = self.backend.write_document(data)?;
-        self.backend.bind_path_to_document(path, id)?;
-        self.path_cache.lock().put(path.to_string(), id);
-        Ok(id)
-    }
+// ============================================================================
+// Response Types
+// ============================================================================
 
-    fn get(&self, path: &str) -> Result<Vec<u8>, StreamDbError> {
-        self.get_quick(path, self.quick_mode.load(Ordering::Relaxed))
-    }
-
-    fn get_quick(&self, path: &str, quick: bool) -> Result<Vec<u8>, StreamDbError> {
-        let id = self.get_id_by_path(path)?;
-        if let Some(id) = id {
-            self.backend.read_document_quick(id, quick)
-        } else {
-            Err(StreamDbError::NotFound("Path not found".to_string()))
-        }
-    }
-
-    fn get_id_by_path(&self, path: &str) -> Result<Option<Uuid>, StreamDbError> {
-        if let Some(id) = self.path_cache.lock().get(path) {
-            return Ok(Some(*id));
-        }
-        let id = self.backend.get_document_id_by_path(path);
-        if let Ok(id) = id {
-            self.path_cache.lock().put(path.to_string(), id);
-            Ok(Some(id))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn delete(&mut self, path: &str) -> Result<(), StreamDbError> {
-        if let Some(id) = self.get_id_by_path(path)? {
-            self.backend.delete_document(id)?;
-            self.path_cache.lock().pop(path);
-        }
-        Ok(())
-    }
-
-    fn delete_by_id(&mut self, id: Uuid) -> Result<(), StreamDbError> {
-        self.backend.delete_document(id)?;
-        self.path_cache.lock().retain(|_, v| *v != id);
-        Ok(())
-    }
-
-    fn bind_to_path(&mut self, id: Uuid, path: &str) -> Result<(), StreamDbError> {
-        self.backend.bind_path_to_document(path, id)?;
-        self.path_cache.lock().put(path.to_string(), id);
-        Ok(())
-    }
-
-    fn unbind_path(&mut self, id: Uuid, path: &str) -> Result<(), StreamDbError> {
-        self.backend.delete_paths_for_document(id)?;
-        self.path_cache.lock().pop(path);
-        Ok(())
-    }
-
-    fn search(&self, prefix: &str) -> Result<Vec<String>, StreamDbError> {
-        self.backend.search_paths(prefix)
-    }
-
-    fn list_paths(&self, id: Uuid) -> Result<Vec<String>, StreamDbError> {
-        self.backend.list_paths_for_document(id)
-    }
-
-    fn flush(&self) -> Result<(), StreamDbError> {
-        // Implement flush for FileBackend
-        Ok(())
-    }
-
-    fn calculate_statistics(&self) -> Result<(i64, i64), StreamDbError> {
-        let free_pages = self.backend.count_free_pages()?;
-        Ok((free_pages, 0)) // Total pages not implemented
-    }
-
-    fn set_quick_mode(&mut self, enabled: bool) {
-        self.quick_mode.store(enabled, Ordering::Relaxed);
-    }
-
-    fn snapshot(&self) -> Result<Self, StreamDbError> {
-        // Implement snapshot
-        Err(StreamDbError::NotFound("Snapshot not implemented".to_string()))
-    }
-
-    fn get_cache_stats(&self) -> Result<CacheStats, StreamDbError> {
-        self.backend.get_cache_stats()
-    }
-
-    fn get_stream(&self, path: &str) -> Result<impl Iterator<Item = Result<Vec<u8>, StreamDbError>>, StreamDbError> {
-        let id = self.get_id_by_path(path)?;
-        if let Some(id) = id {
-            self.backend.get_stream(id)
-        } else {
-            Err(StreamDbError::NotFound("Path not found".to_string()))
-        }
-    }
-
-    fn get_async(&self, path: &str) -> impl Future<Output = Result<Vec<u8>, StreamDbError>> {
-        async move { self.get(path) }
-    }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FullMetrics {
+    pub gaming: GamingMetrics,
+    pub network: NetworkStats,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-enum DCFEvent {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Status {
+    pub running: bool,
+    pub mode: String,
+    pub udp_port: u16,
+    pub peer_count: usize,
+    pub udp_active: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Version {
+    pub sdk_version: String,
+    pub dcf_version: String,
+    pub transport: String,
+    pub protocol: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BenchmarkResult {
+    pub peer_id: String,
+    pub count: usize,
+    pub avg_rtt: f64,
+    pub min_rtt: f64,
+    pub max_rtt: f64,
+}
+
+// ============================================================================
+// DCF Events - For Logging
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum DcfEvent {
     Send { msg_id: String, timestamp: i64, content_summary: String },
     Receive { msg_id: String, timestamp: i64, content_summary: String },
     Failure { error: String, timestamp: i64, context: String },
 }
 
-#[derive(Debug, Deserialize, Clone)]
-pub struct DcfConfig {
-    pub streamdb: Config,
-    pub grpc_port: u16,
-    pub p2p_discovery: bool,
-}
+// ============================================================================
+// gRPC Service Implementation
+// ============================================================================
 
-impl Default for DcfConfig {
-    fn default() -> Self {
-        Self {
-            streamdb: Config::default(),
-            grpc_port: 50051,
-            p2p_discovery: true,
-        }
-    }
-}
+use crate::proto::dcf_service_server::DcfService;
+use tonic::{Request, Response, Status as TonicStatus};
 
 pub struct MyDcfService {
-    db: Arc<StreamDb>,
-    role: Mutex<String>,
-    peers: Mutex<HashMap<String, i64>>,
-    metrics: Mutex<Metrics>,
-    master_address: Mutex<String>,
+    node: Arc<DcfNode>,
 }
 
 impl MyDcfService {
-    pub fn new(db: Arc<StreamDb>) -> Self {
-        Self {
-            db,
-            role: Mutex::new("p2p".to_string()),
-            peers: Mutex::new(HashMap::new()),
-            metrics: Mutex::new(Metrics { sends: 0, receives: 0, failures: 0 }),
-            master_address: Mutex::new("".to_string()),
-        }
-    }
-
-    async fn log_event(&self, event: DCFEvent) -> Result<(), StreamDbError> {
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
-        let event_id = Uuid::new_v4();
-        let path = format!("/logs/{}-{}.json", timestamp, event_id);
-        let json = serde_json::to_vec(&event)?;
-        let mut data = Cursor::new(json);
-        self.db.write_document(&path, &mut data)?;
-        self.db.flush()?;
-        Ok(())
-    }
-
-    async fn discover_peers(&self, config: &DcfConfig) -> Result<(), StreamDbError> {
-        if !config.p2p_discovery {
-            return Ok(());
-        }
-        let mdns = ServiceDaemon::new()?;
-        let service_type = "_dcf._tcp.local.";
-        let receiver = mdns.browse(service_type)?;
-        while let Ok(event) = receiver.recv_async().await {
-            if let mdns_sd::ServiceEvent::ServiceResolved(info) = event {
-                let addr = info.get_addresses().iter().next().map(|a| a.to_string()).unwrap_or_default();
-                let rtt = measure_rtt(&addr).await.unwrap_or(100);
-                if rtt < 50 {
-                    self.peers.lock().insert(addr.clone(), rtt);
-                    let path = format!("/peers/{}", Uuid::new_v4());
-                    let peer_info = PeerInfo { address: addr.clone(), rtt };
-                    let mut data = Cursor::new(serde_json::to_vec(&peer_info)?);
-                    self.db.write_document(&path, &mut data)?;
-                    self.db.flush()?;
-                    let event = DCFEvent::Receive {
-                        msg_id: addr,
-                        timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64,
-                        content_summary: format!("RTT: {}", rtt),
-                    };
-                    self.log_event(event).await?;
-                }
-            }
-        }
-        Ok(())
+    pub fn new(node: Arc<DcfNode>) -> Self {
+        Self { node }
     }
 }
 
-async fn measure_rtt(address: &str) -> Result<i64, StreamDbError> {
-    // Placeholder: Real implementation would use TCP or ICMP ping
-    Ok(rand::random::<i64>() % 100)
+#[tonic::async_trait]
+impl DcfService for MyDcfService {
+    async fn send_message(
+        &self,
+        request: Request<DcfMessage>,
+    ) -> std::result::Result<Response<DcfResponse>, TonicStatus> {
+        let msg = request.into_inner();
+        
+        // Log the message
+        log::info!("Received message: {} at {}", msg.id, msg.timestamp);
+        
+        // Update metrics
+        {
+            let mut metrics = self.node.metrics.write();
+            metrics.events_received += 1;
+        }
+
+        Ok(Response::new(DcfResponse {
+            success: true,
+            message: "Message received".to_string(),
+        }))
+    }
+
+    async fn get_metrics(
+        &self,
+        _request: Request<Empty>,
+    ) -> std::result::Result<Response<Metrics>, TonicStatus> {
+        let gaming = self.node.get_metrics();
+        let network = self.node.get_network_stats();
+        
+        Ok(Response::new(Metrics {
+            sends: gaming.positions_sent as i64 + gaming.audio_packets_sent as i64 + gaming.events_sent as i64,
+            receives: gaming.positions_received as i64 + gaming.audio_packets_received as i64 + gaming.events_received as i64,
+            failures: network.packets_lost as i64,
+        }))
+    }
+
+    async fn assign_role(
+        &self,
+        request: Request<RoleAssignment>,
+    ) -> std::result::Result<Response<DcfResponse>, TonicStatus> {
+        let assign = request.into_inner();
+        
+        self.node.assign_role(&assign.role, &assign.master_address)
+            .map_err(|e| TonicStatus::internal(e.to_string()))?;
+
+        Ok(Response::new(DcfResponse {
+            success: true,
+            message: "Role assigned".to_string(),
+        }))
+    }
+
+    async fn report_peer(
+        &self,
+        request: Request<PeerInfo>,
+    ) -> std::result::Result<Response<DcfResponse>, TonicStatus> {
+        let peer = request.into_inner();
+        
+        // Parse address and add peer
+        let parts: Vec<&str> = peer.address.split(':').collect();
+        if parts.len() == 2 {
+            let host = parts[0];
+            let port: u16 = parts[1].parse().unwrap_or(DEFAULT_UDP_PORT);
+            let peer_id = format!("peer-{}", Uuid::new_v4());
+            
+            self.node.add_peer(&peer_id, host, port)
+                .map_err(|e| TonicStatus::internal(e.to_string()))?;
+        }
+
+        Ok(Response::new(DcfResponse {
+            success: true,
+            message: "Peer reported".to_string(),
+        }))
+    }
+}
+
+// ============================================================================
+// Message Handler Trait
+// ============================================================================
+
+pub trait MessageHandler: Send + Sync {
+    fn handle_position(&self, position: Position, from: SocketAddr);
+    fn handle_audio(&self, data: &[u8], from: SocketAddr);
+    fn handle_game_event(&self, event: GameEvent, from: SocketAddr);
+}
+
+/// Default handler that just logs messages
+pub struct DefaultMessageHandler;
+
+impl MessageHandler for DefaultMessageHandler {
+    fn handle_position(&self, position: Position, from: SocketAddr) {
+        log::debug!("Position from {}: {:?}", from, position);
+    }
+
+    fn handle_audio(&self, data: &[u8], from: SocketAddr) {
+        log::debug!("Audio from {} ({} bytes)", from, data.len());
+    }
+
+    fn handle_game_event(&self, event: GameEvent, from: SocketAddr) {
+        log::info!("Game event from {}: {:?}", from, event);
+    }
+}
+
+// ============================================================================
+// UDP Receiver Task
+// ============================================================================
+
+pub async fn run_udp_receiver(
+    node: Arc<DcfNode>,
+    handler: Arc<dyn MessageHandler>,
+) -> Result<()> {
+    let endpoint = node.udp_endpoint.as_ref()
+        .ok_or_else(|| DcfError::NotInitialized("UDP endpoint not initialized".to_string()))?;
+    
+    let socket = endpoint.socket.clone();
+    let mut buf = vec![0u8; 65536];
+
+    while node.is_running() {
+        match socket.recv_from(&mut buf) {
+            Ok((size, from)) => {
+                if size > 0 {
+                    let data = &buf[..size];
+                    match ProtoMessage::deserialize(data) {
+                        Ok(msg) => {
+                            handle_incoming_message(&node, &endpoint, &handler, msg, from).await;
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to deserialize message from {}: {}", from, e);
+                        }
+                    }
+                }
+            }
+            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+            Err(e) => {
+                log::error!("UDP receive error: {}", e);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_incoming_message(
+    node: &DcfNode,
+    endpoint: &UdpEndpoint,
+    handler: &Arc<dyn MessageHandler>,
+    msg: ProtoMessage,
+    from: SocketAddr,
+) {
+    // Update receive stats
+    {
+        let mut stats = endpoint.stats.write();
+        stats.packets_received += 1;
+        stats.bytes_received += (17 + msg.payload.len()) as u64;
+    }
+
+    match msg.msg_type {
+        msg_type::ACK => {
+            if msg.payload.len() >= 4 {
+                let seq = u32::from_be_bytes([
+                    msg.payload[0], msg.payload[1], msg.payload[2], msg.payload[3]
+                ]);
+                endpoint.ack_received.lock().insert(seq, true);
+                endpoint.reliable_packets.lock().remove(&seq);
+            }
+        }
+        msg_type::PING => {
+            let _ = endpoint.send_pong(msg.sequence, msg.timestamp, &from);
+        }
+        msg_type::PONG => {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_micros() as u64)
+                .unwrap_or(0);
+            let rtt = (now.saturating_sub(msg.timestamp)) as f64 / 1000.0;
+            endpoint.stats.write().update_rtt(rtt);
+        }
+        msg_type::RELIABLE => {
+            let _ = endpoint.send_ack(msg.sequence, &from);
+            // Process payload based on embedded type if needed
+        }
+        msg_type::POSITION => {
+            if let Ok(pos) = Position::decode(&msg.payload) {
+                node.metrics.write().positions_received += 1;
+                handler.handle_position(pos, from);
+            }
+        }
+        msg_type::AUDIO => {
+            node.metrics.write().audio_packets_received += 1;
+            handler.handle_audio(&msg.payload, from);
+        }
+        msg_type::GAME_EVENT => {
+            if let Ok(event) = GameEvent::decode(&msg.payload) {
+                node.metrics.write().events_received += 1;
+                let _ = endpoint.send_ack(msg.sequence, &from);
+                handler.handle_game_event(event, from);
+            }
+        }
+        _ => {
+            log::debug!("Unknown message type {} from {}", msg.msg_type, from);
+        }
+    }
+}
+
+// ============================================================================
+// Reliable Message Retransmission Task
+// ============================================================================
+
+pub async fn run_reliable_handler(node: Arc<DcfNode>) -> Result<()> {
+    let endpoint = node.udp_endpoint.as_ref()
+        .ok_or_else(|| DcfError::NotInitialized("UDP endpoint not initialized".to_string()))?;
+
+    let timeout = Duration::from_millis(node.config.udp_reliable_timeout);
+    let max_retries = node.config.retry_max;
+
+    while node.is_running() {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let mut packets_to_retry = vec![];
+        let mut packets_to_remove = vec![];
+
+        {
+            let mut reliable = endpoint.reliable_packets.lock();
+            let acks = endpoint.ack_received.lock();
+
+            for (seq, packet) in reliable.iter_mut() {
+                if acks.contains_key(seq) {
+                    packets_to_remove.push(*seq);
+                    continue;
+                }
+
+                if packet.sent_time.elapsed() > timeout {
+                    if packet.attempts < max_retries {
+                        packet.attempts += 1;
+                        packet.sent_time = Instant::now();
+                        packets_to_retry.push(packet.clone());
+                    } else {
+                        packets_to_remove.push(*seq);
+                        endpoint.stats.write().packets_lost += 1;
+                    }
+                }
+            }
+
+            for seq in packets_to_remove {
+                reliable.remove(&seq);
+            }
+        }
+
+        for packet in packets_to_retry {
+            let addr: std::result::Result<SocketAddr, _> = 
+                format!("{}:{}", packet.host, packet.port).parse();
+            if let Ok(addr) = addr {
+                let _ = endpoint.send_raw(&packet.msg.serialize(), &addr);
+                endpoint.stats.write().retransmits += 1;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// Initialization Helper
+// ============================================================================
+
+pub fn init_from_config_file(path: &str) -> Result<DcfNode> {
+    let config_str = std::fs::read_to_string(path)
+        .map_err(|e| DcfError::Config(format!("Failed to read config: {}", e)))?;
+    
+    let config: DcfConfig = if path.ends_with(".json") {
+        serde_json::from_str(&config_str)
+            .map_err(|e| DcfError::Config(format!("JSON parse error: {}", e)))?
+    } else if path.ends_with(".toml") {
+        toml::from_str(&config_str)
+            .map_err(|e| DcfError::Config(format!("TOML parse error: {}", e)))?
+    } else {
+        return Err(DcfError::Config("Unknown config format".to_string()));
+    };
+    
+    DcfNode::new(config)
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_position_encode_decode() {
+        let pos = Position::new(1.0, 2.0, 3.0);
+        let encoded = pos.encode();
+        let decoded = Position::decode(&encoded).unwrap();
+        
+        assert!((decoded.x - 1.0).abs() < 0.001);
+        assert!((decoded.y - 2.0).abs() < 0.001);
+        assert!((decoded.z - 3.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_proto_message_serialize() {
+        let payload = vec![1, 2, 3];
+        let msg = ProtoMessage::new(msg_type::POSITION, 42, payload.clone());
+        let serialized = msg.serialize();
+        let deserialized = ProtoMessage::deserialize(&serialized).unwrap();
+        
+        assert_eq!(msg.msg_type, deserialized.msg_type);
+        assert_eq!(msg.sequence, deserialized.sequence);
+        assert_eq!(payload.len(), deserialized.payload.len());
+    }
+
+    #[test]
+    fn test_game_event_encode_decode() {
+        let event = GameEvent::new(5, "test-data");
+        let encoded = event.encode();
+        let decoded = GameEvent::decode(&encoded).unwrap();
+        
+        assert_eq!(decoded.event_type, 5);
+        assert_eq!(decoded.data, "test-data");
+    }
+
+    #[test]
+    fn test_network_stats_rtt_update() {
+        let mut stats = NetworkStats::default();
+        stats.update_rtt(10.0);
+        stats.update_rtt(20.0);
+        
+        assert!(stats.avg_rtt > 0.0);
+        assert!(stats.jitter >= 0.0);
+    }
+
+    #[test]
+    fn test_config_default() {
+        let config = DcfConfig::default();
+        assert_eq!(config.udp_port, DEFAULT_UDP_PORT);
+        assert_eq!(config.grpc_port, DEFAULT_GRPC_PORT);
+        assert_eq!(config.transport, "UDP");
+    }
 }
