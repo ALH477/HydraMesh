@@ -1,9 +1,19 @@
-use std::io::Result;
+//! Build script for compiling Protocol Buffer definitions
 
-fn main() -> Result<()> {
-    std::fs::create_dir_all("src/proto")?;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Tell cargo to recompile if the proto files change
+    println!("cargo:rerun-if-changed=proto/messages.proto");
+    println!("cargo:rerun-if-changed=proto/services.proto");
+
+    // Configure tonic-build
     tonic_build::configure()
-        .out_dir("src/proto")
-        .compile(&["proto/messages.proto", "proto/services.proto"], &["proto"])?;
+        .build_server(true)
+        .build_client(true)
+        .out_dir("src/generated")
+        .compile(
+            &["proto/services.proto"],
+            &["proto"],
+        )?;
+
     Ok(())
 }

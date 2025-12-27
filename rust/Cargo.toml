@@ -1,0 +1,99 @@
+[package]
+name = "dcf-rust-sdk"
+version = "2.2.0"
+edition = "2021"
+authors = ["DeMoD LLC <info@demodllc.example>"]
+description = "DeMoD Communications Framework - Rust SDK compatible with HydraMesh"
+license = "LGPL-3.0"
+repository = "https://github.com/ALH477/DeMoD-Communication-Framework"
+keywords = ["networking", "gaming", "udp", "grpc", "p2p"]
+categories = ["network-programming", "game-development"]
+
+[lib]
+name = "dcf_rust_sdk"
+path = "src/lib.rs"
+
+[[bin]]
+name = "dcf"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+
+# gRPC and Protocol Buffers
+tonic = "0.10"
+prost = "0.12"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Binary encoding (big-endian for Lisp compatibility)
+byteorder = "1.5"
+
+# UUID generation
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# Synchronization primitives
+parking_lot = "0.12"
+
+# Error handling
+thiserror = "1.0"
+
+# Logging
+log = "0.4"
+env_logger = "0.10"
+
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+
+# mDNS for peer discovery
+mdns-sd = "0.10"
+
+# Random number generation
+rand = "0.8"
+
+# Hex encoding for CLI
+hex = "0.4"
+
+# Memory-mapped files (for StreamDB compatibility)
+memmap2 = "0.9"
+
+# LRU Cache
+lru = "0.12"
+
+# CRC checksums
+crc = "3.0"
+
+# Compression
+snap = "1.1"
+
+# Configuration
+config = "0.13"
+
+[build-dependencies]
+tonic-build = "0.10"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[features]
+default = ["full"]
+full = ["grpc", "udp", "streamdb"]
+grpc = []
+udp = []
+streamdb = []
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 1
+debug = true

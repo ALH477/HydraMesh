@@ -1,13 +1,55 @@
+# DCF Configuration - HydraMesh Compatible
+# This configuration is compatible with both Rust and Lisp implementations
+
+# Transport protocol: UDP (for gaming), gRPC (for reliable ops)
+transport = "UDP"
+
+# Network settings
+host = "0.0.0.0"
+grpc_port = 50051
+udp_port = 7777
+
+# Operating mode: "client", "server", "p2p", "auto", "master"
+mode = "p2p"
+
+# Unique node identifier (auto-generated if not specified)
+# node_id = "my-node"
+
+# Initial peer list
+peers = []
+
+# RTT threshold for peer grouping (ms)
+group_rtt_threshold = 50
+
+# Storage backend: "streamdb" or "in-memory"
+storage = "in-memory"
+
+# StreamDB path (if using streamdb storage)
+# streamdb_path = "dcf.db"
+
+# Optimization level: 0-3 (higher = more aggressive)
+optimization_level = 2
+
+# Maximum retry attempts for reliable messages
+retry_max = 3
+
+# UDP Maximum Transmission Unit
+udp_mtu = 1400
+
+# Reliable message timeout (ms)
+udp_reliable_timeout = 500
+
+# Audio packet prioritization
+audio_priority = true
+
+# Enable P2P peer discovery via mDNS
+p2p_discovery = true
+
+# StreamDB configuration (if using streamdb storage)
 [streamdb]
-page_size = 4096
-page_header_size = 32
-max_db_size = 8000000000000
-max_pages = 9223372036854775807
-max_document_size = 268435456
+page_size = 8192
+max_db_size = 8589934592000  # 8TB
 page_cache_size = 2048
 versions_to_keep = 2
 use_mmap = true
 use_compression = true
-
-grpc_port = 50051
-p2p_discovery = true

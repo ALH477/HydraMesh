@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "transport": "UDP",
+  "host": "0.0.0.0",
+  "port": 50051,
+  "udp-port": 7777,
+  "mode": "p2p",
+  "node-id": "rust-node",
+  "peers": [],
+  "group-rtt-threshold": 50,
+  "storage": "in-memory",
+  "streamdb-path": null,
+  "optimization-level": 2,
+  "retry-max": 3,
+  "udp-mtu": 1400,
+  "udp-reliable-timeout": 500,
+  "audio-priority": true,
+  "plugins": {
+    "transport": null,
+    "serializer": null,
+    "redundancy": null,
+    "interface": null
+  }
+}
