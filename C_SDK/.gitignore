@@ -1,0 +1,100 @@
+# =============================================================================
+# DCF Git Ignore
+# =============================================================================
+
+# Build directories
+build/
+_build/
+cmake-build-*/
+out/
+dist/
+
+# Generated binaries
+*.o
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.lib
+*.exe
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.*.sw?
+.project
+.cproject
+.settings/
+*.sublime-*
+.atom/
+.vs/
+*.user
+
+# CMake generated
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# ccache
+.ccache/
+
+# Coverage and profiling
+*.gcno
+*.gcda
+*.gcov
+coverage/
+coverage-report/
+*.info
+htmlcov/
+
+# Documentation
+docs/html/
+docs/latex/
+Doxyfile.bak
+
+# Distribution packages
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.zip
+*.deb
+*.rpm
+
+# Nix
+result
+result-*
+.direnv/
+
+# Testing artifacts
+Testing/
+reports/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.lnk
+
+# Logs and temp files
+*.log
+*.bak
+*.tmp
+*.temp
+
+# Valgrind
+vgcore.*
+massif.out.*
+callgrind.out.*
+
+# Core dumps
+core
+core.*
+
+# Docker volumes
+.docker/

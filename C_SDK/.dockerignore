@@ -1,0 +1,99 @@
+# =============================================================================
+# DCF Docker Ignore
+# =============================================================================
+
+# Build directories
+build/
+_build/
+cmake-build-*/
+out/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.*.sw?
+.project
+.cproject
+.settings/
+*.sublime-*
+.atom/
+
+# Generated files
+*.o
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.lib
+*.exe
+compile_commands.json
+.ccache/
+
+# Coverage and profiling
+*.gcno
+*.gcda
+*.gcov
+coverage/
+coverage-report/
+*.info
+htmlcov/
+
+# Documentation
+docs/html/
+docs/latex/
+Doxyfile.bak
+
+# Distribution
+dist/
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.zip
+*.deb
+*.rpm
+
+# Nix
+result
+result-*
+.direnv/
+
+# Testing artifacts
+Testing/
+reports/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker (avoid recursive inclusion)
+Dockerfile*
+docker-compose*.yml
+.docker/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+Jenkinsfile
+azure-pipelines.yml
+
+# Misc
+*.log
+*.bak
+*.tmp
+*.temp
+README.md
+LICENSE
+CHANGELOG.md
+CONTRIBUTING.md

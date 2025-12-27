@@ -1,0 +1,209 @@
+# =============================================================================
+# DCF Docker Compose Configuration
+# =============================================================================
+#
+# Usage:
+#   # Run tests
+#   docker compose run --rm test
+#
+#   # Development shell
+#   docker compose run --rm dev
+#
+#   # Build and run example
+#   docker compose up example
+#
+#   # Generate coverage report
+#   docker compose run --rm coverage
+#
+#   # Run static analysis
+#   docker compose run --rm analysis
+#
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Production runtime
+  # ---------------------------------------------------------------------------
+  runtime:
+    build:
+      context: .
+      target: runtime
+    image: dcf:latest
+
+  # ---------------------------------------------------------------------------
+  # Run example application
+  # ---------------------------------------------------------------------------
+  example:
+    build:
+      context: .
+      target: runtime
+    image: dcf:latest
+    command: ["/app/bin/example_basic"]
+
+  # ---------------------------------------------------------------------------
+  # Run tests
+  # ---------------------------------------------------------------------------
+  test:
+    build:
+      context: .
+      target: test-runner
+      args:
+        BUILD_TYPE: Debug
+        ENABLE_TESTS: "ON"
+    image: dcf:test
+    command: ["ctest", "--output-on-failure", "-V"]
+
+  # ---------------------------------------------------------------------------
+  # Run tests with sanitizers
+  # ---------------------------------------------------------------------------
+  test-asan:
+    build:
+      context: .
+      target: test-runner
+      args:
+        BUILD_TYPE: Debug
+        ENABLE_TESTS: "ON"
+        SANITIZERS: "ON"
+        ENABLE_LTO: "OFF"
+    image: dcf:test-asan
+    environment:
+      - ASAN_OPTIONS=detect_leaks=1:abort_on_error=1
+      - UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+    command: ["ctest", "--output-on-failure"]
+
+  # ---------------------------------------------------------------------------
+  # Development environment
+  # ---------------------------------------------------------------------------
+  dev:
+    build:
+      context: .
+      target: dev
+    image: dcf:dev
+    volumes:
+      - .:/workspace:cached
+      - dcf-build-cache:/workspace/build
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    environment:
+      - TERM=xterm-256color
+    command: ["bash"]
+
+  # ---------------------------------------------------------------------------
+  # Generate coverage report
+  # ---------------------------------------------------------------------------
+  coverage:
+    build:
+      context: .
+      target: coverage-builder
+      args:
+        COVERAGE: "ON"
+    image: dcf:coverage
+    volumes:
+      - ./coverage-report:/output
+    command: >
+      bash -c "cp -r /coverage-report/* /output/ && 
+               echo 'Coverage report generated in ./coverage-report/'"
+
+  # ---------------------------------------------------------------------------
+  # Static analysis
+  # ---------------------------------------------------------------------------
+  analysis:
+    build:
+      context: .
+      target: static-analysis
+    image: dcf:analysis
+    volumes:
+      - ./reports:/output
+    command: >
+      bash -c "cp /cppcheck-report.xml /clang-tidy-report.txt /output/ && 
+               echo 'Analysis reports generated in ./reports/'"
+
+  # ---------------------------------------------------------------------------
+  # Build release artifacts
+  # ---------------------------------------------------------------------------
+  release:
+    build:
+      context: .
+      target: builder
+      args:
+        BUILD_TYPE: Release
+        ENABLE_LTO: "ON"
+    image: dcf:builder
+    volumes:
+      - ./dist:/output
+    command: >
+      bash -c "
+        cd /src/build && 
+        cpack -G TGZ && 
+        cp *.tar.gz /output/ && 
+        echo 'Release package created in ./dist/'
+      "
+
+  # ---------------------------------------------------------------------------
+  # Documentation generator
+  # ---------------------------------------------------------------------------
+  docs:
+    build:
+      context: .
+      target: dev
+    image: dcf:dev
+    volumes:
+      - .:/workspace
+      - ./docs/html:/output
+    working_dir: /workspace
+    command: >
+      bash -c "
+        doxygen Doxyfile 2>/dev/null || 
+        (echo 'Generating default Doxyfile...' && 
+         doxygen -g && 
+         sed -i 's/INPUT *=/INPUT = include src/' Doxyfile &&
+         sed -i 's/RECURSIVE *= NO/RECURSIVE = YES/' Doxyfile &&
+         sed -i 's/GENERATE_HTML *= YES/GENERATE_HTML = YES/' Doxyfile &&
+         sed -i 's/OUTPUT_DIRECTORY *=/OUTPUT_DIRECTORY = \/output/' Doxyfile &&
+         doxygen)
+      "
+
+  # ---------------------------------------------------------------------------
+  # Memory check with Valgrind
+  # ---------------------------------------------------------------------------
+  memcheck:
+    build:
+      context: .
+      target: dev
+    image: dcf:dev
+    volumes:
+      - .:/workspace:cached
+    working_dir: /workspace
+    command: >
+      bash -c "
+        dcf-build Debug &&
+        valgrind --leak-check=full --show-leak-kinds=all \
+                 --track-origins=yes --error-exitcode=1 \
+                 /workspace/build/dcf_tests
+      "
+
+  # ---------------------------------------------------------------------------
+  # Benchmark runner
+  # ---------------------------------------------------------------------------
+  benchmark:
+    build:
+      context: .
+      target: builder
+      args:
+        BUILD_TYPE: Release
+        ENABLE_LTO: "ON"
+    image: dcf:benchmark
+    command: >
+      bash -c "
+        echo '=== DCF Benchmarks ===' &&
+        /app/bin/dcf_tests
+      "
+
+volumes:
+  dcf-build-cache:
+    name: dcf-build-cache
+
+networks:
+  default:
+    name: dcf-network
