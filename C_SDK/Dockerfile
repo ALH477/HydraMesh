@@ -64,8 +64,8 @@ ARG COVERAGE=OFF
 # Set working directory
 WORKDIR /src
 
-# Copy source files
-COPY CMakeLists.txt ./
+# Copy source files (including LICENSE for CPack)
+COPY CMakeLists.txt LICENSE* ./
 COPY cmake/ ./cmake/
 COPY include/ ./include/
 COPY src/ ./src/
@@ -78,6 +78,7 @@ RUN mkdir -p build && cd build && \
         -GNinja \
         -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
         -DCMAKE_INSTALL_PREFIX=/app \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
         -DDCF_BUILD_SHARED=ON \
         -DDCF_BUILD_STATIC=ON \
         -DDCF_BUILD_TESTS=${ENABLE_TESTS} \

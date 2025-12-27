@@ -91,14 +91,20 @@ endif()
 
 # Hardening flags
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-    set(DCF_HARDENING
+    # Base hardening (for all targets)
+    set(DCF_HARDENING_BASE
         -fstack-protector-strong
         -D_FORTIFY_SOURCE=2
-        -fPIE
     )
     if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-        list(APPEND DCF_HARDENING -fstack-clash-protection)
+        list(APPEND DCF_HARDENING_BASE -fstack-clash-protection)
     endif()
+    
+    # For executables and static libs: add -fPIE
+    set(DCF_HARDENING ${DCF_HARDENING_BASE} -fPIE)
+    
+    # For shared libraries: use -fPIC (not -fPIE) and global-dynamic TLS
+    set(DCF_HARDENING_SHARED ${DCF_HARDENING_BASE} -fPIC -ftls-model=global-dynamic)
 endif()
 
 # Sanitizers
@@ -111,13 +117,20 @@ if(DCF_ENABLE_COVERAGE)
     set(DCF_COVERAGE_FLAGS --coverage -fprofile-arcs -ftest-coverage)
 endif()
 
-# LTO
+# LTO - Note: We only apply LTO to static library, not shared.
+# Shared libraries with TLS cannot use LTO (breaks TLS model).
 if(DCF_ENABLE_LTO)
     include(CheckIPOSupported)
-    check_ipo_supported(RESULT ipo_supported)
+    check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
     if(ipo_supported)
-        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+        set(DCF_LTO_SUPPORTED TRUE)
+        message(STATUS "LTO supported - will be enabled for static library only")
+    else()
+        set(DCF_LTO_SUPPORTED FALSE)
+        message(STATUS "LTO not supported: ${ipo_error}")
     endif()
+else()
+    set(DCF_LTO_SUPPORTED FALSE)
 endif()
 
 # ============================================================================
@@ -193,6 +206,13 @@ if(DCF_BUILD_STATIC)
         C_VISIBILITY_PRESET hidden
     )
     
+    # Apply LTO only to static library (safe for static libs)
+    if(DCF_LTO_SUPPORTED)
+        set_target_properties(dcf_static PROPERTIES
+            INTERPROCEDURAL_OPTIMIZATION ON
+        )
+    endif()
+    
     if(DCF_ENABLE_SANITIZERS)
         target_link_options(dcf_static PUBLIC ${DCF_SANITIZER_FLAGS})
     endif()
@@ -209,9 +229,20 @@ if(DCF_BUILD_SHARED)
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
             $<INSTALL_INTERFACE:include>
     )
+    
+    # For shared libraries:
+    # - Use global-dynamic TLS model (avoid R_X86_64_TPOFF32 relocation errors)
+    # - Use -fPIC not -fPIE
+    # - Disable LTO (LTO recompiles and loses TLS model setting)
+    # DCF_HARDENING_SHARED already includes: -fPIC -ftls-model=global-dynamic
+    set(DCF_SHARED_COMPILE_FLAGS ${DCF_WARNINGS} ${DCF_HARDENING_SHARED})
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        # Belt and suspenders: explicitly disable LTO
+        list(APPEND DCF_SHARED_COMPILE_FLAGS -fno-lto)
+    endif()
+    
     target_compile_options(dcf_shared PRIVATE 
-        ${DCF_WARNINGS} 
-        ${DCF_HARDENING}
+        ${DCF_SHARED_COMPILE_FLAGS}
         ${DCF_SANITIZER_FLAGS}
         ${DCF_COVERAGE_FLAGS}
     )
@@ -224,6 +255,7 @@ if(DCF_BUILD_SHARED)
         target_link_libraries(dcf_shared PUBLIC dl)
     endif()
     
+    # Explicitly disable LTO for shared library - LTO breaks TLS model
     set_target_properties(dcf_shared PROPERTIES
         OUTPUT_NAME dcf
         VERSION ${PROJECT_VERSION}
@@ -231,7 +263,13 @@ if(DCF_BUILD_SHARED)
         POSITION_INDEPENDENT_CODE ON
         C_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN ON
+        INTERPROCEDURAL_OPTIMIZATION OFF
     )
+    
+    # Also disable LTO at link time and ensure PIC
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_link_options(dcf_shared PRIVATE -fno-lto -fPIC)
+    endif()
     
     if(DCF_ENABLE_SANITIZERS)
         target_link_options(dcf_shared PUBLIC ${DCF_SANITIZER_FLAGS})
@@ -282,6 +320,19 @@ if(DCF_BUILD_TESTS)
         TIMEOUT 60
         ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1"
     )
+    
+    # Latency test for audio benchmarking
+    add_executable(latency_test tests/latency/latency_test.c)
+    target_link_libraries(latency_test PRIVATE dcf::dcf m)
+    target_compile_options(latency_test PRIVATE 
+        ${DCF_WARNINGS}
+        -O3 -march=native
+    )
+    
+    if(DCF_ENABLE_SANITIZERS)
+        target_compile_options(latency_test PRIVATE ${DCF_SANITIZER_FLAGS})
+        target_link_options(latency_test PRIVATE ${DCF_SANITIZER_FLAGS})
+    endif()
 endif()
 
 # ============================================================================
@@ -361,7 +412,31 @@ set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY ${PROJECT_DESCRIPTION})
 set(CPACK_PACKAGE_VENDOR "DCF Project")
 set(CPACK_PACKAGE_CONTACT "dcf@example.com")
-set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+
+# Handle LICENSE file for CPack - create placeholder if missing
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.txt")
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.txt")
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md")
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md")
+else()
+    # Create a minimal license file in build dir if none exists
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt"
+        "MIT License\n\nCopyright (c) 2025 DCF Project\n\n"
+        "Permission is hereby granted, free of charge, to any person obtaining a copy\n"
+        "of this software and associated documentation files (the \"Software\"), to deal\n"
+        "in the Software without restriction, including without limitation the rights\n"
+        "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n"
+        "copies of the Software, and to permit persons to whom the Software is\n"
+        "furnished to do so, subject to the following conditions:\n\n"
+        "The above copyright notice and this permission notice shall be included in all\n"
+        "copies or substantial portions of the Software.\n\n"
+        "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND.\n"
+    )
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt")
+    message(STATUS "Note: No LICENSE file found, using generated placeholder for CPack")
+endif()
 
 if(UNIX AND NOT APPLE)
     set(CPACK_GENERATOR "TGZ;DEB;RPM")
@@ -393,5 +468,8 @@ message(STATUS "  Build tests:      ${DCF_BUILD_TESTS}")
 message(STATUS "  Build examples:   ${DCF_BUILD_EXAMPLES}")
 message(STATUS "  Sanitizers:       ${DCF_ENABLE_SANITIZERS}")
 message(STATUS "  Coverage:         ${DCF_ENABLE_COVERAGE}")
-message(STATUS "  LTO:              ${DCF_ENABLE_LTO}")
+message(STATUS "  LTO (static):     ${DCF_LTO_SUPPORTED}")
+if(DCF_BUILD_SHARED)
+    message(STATUS "  Note: Shared library built without LTO (TLS compatibility)")
+endif()
 message(STATUS "")

@@ -32,6 +32,10 @@
         ];
         
         # The main DCF package
+        # NOTE: Shared library disabled due to TLS relocation issues with NixOS toolchain.
+        # The GCC in nixpkgs generates initial-exec TLS relocations even with
+        # -ftls-model=global-dynamic, which are incompatible with shared objects.
+        # Use dcf-shared if you need the .so (requires manual LD_PRELOAD workarounds).
         dcf = pkgs.stdenv.mkDerivation rec {
           pname = "dcf";
           version = "5.2.0";
@@ -42,7 +46,8 @@
           
           cmakeFlags = [
             "-DCMAKE_BUILD_TYPE=Release"
-            "-DDCF_BUILD_SHARED=ON"
+            "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
+            "-DDCF_BUILD_SHARED=OFF"
             "-DDCF_BUILD_STATIC=ON"
             "-DDCF_BUILD_TESTS=ON"
             "-DDCF_BUILD_EXAMPLES=ON"
@@ -52,6 +57,11 @@
           doCheck = true;
           checkPhase = ''
             ctest --output-on-failure
+          '';
+          
+          # Skip ldconfig on NixOS (read-only /nix/store)
+          postInstall = ''
+            rm -f $out/lib/*.la 2>/dev/null || true
           '';
           
           meta = with pkgs.lib; {
@@ -68,13 +78,54 @@
           pname = "dcf-debug";
           cmakeFlags = [
             "-DCMAKE_BUILD_TYPE=Debug"
+            "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
+            "-DDCF_BUILD_SHARED=OFF"
+            "-DDCF_BUILD_STATIC=ON"
+            "-DDCF_BUILD_TESTS=ON"
+            "-DDCF_BUILD_EXAMPLES=ON"
+            "-DDCF_ENABLE_LTO=OFF"
+          ];
+          dontStrip = true;
+        });
+        
+        # Shared library build - requires clang which handles TLS better
+        dcf-shared = pkgs.stdenv.mkDerivation {
+          pname = "dcf-shared";
+          version = "5.2.0";
+          
+          src = ./.;
+          
+          nativeBuildInputs = buildInputs ++ [ pkgs.llvmPackages.clang ];
+          
+          cmakeFlags = [
+            "-DCMAKE_BUILD_TYPE=Release"
+            "-DCMAKE_C_COMPILER=clang"
+            "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
             "-DDCF_BUILD_SHARED=ON"
             "-DDCF_BUILD_STATIC=ON"
             "-DDCF_BUILD_TESTS=ON"
             "-DDCF_BUILD_EXAMPLES=ON"
+            "-DDCF_ENABLE_LTO=OFF"
           ];
-          dontStrip = true;
-        });
+          
+          # Clang respects TLS model flags properly
+          NIX_CFLAGS_COMPILE = "-ftls-model=global-dynamic";
+          
+          doCheck = true;
+          checkPhase = ''
+            ctest --output-on-failure
+          '';
+          
+          postInstall = ''
+            rm -f $out/lib/*.la 2>/dev/null || true
+          '';
+          
+          meta = with pkgs.lib; {
+            description = "DCF with shared library (built with clang)";
+            license = licenses.mit;
+            platforms = platforms.unix;
+          };
+        };
         
         # Sanitizer build (for testing)
         dcf-sanitized = dcf.overrideAttrs (oldAttrs: {
@@ -128,7 +179,7 @@
         # Packages
         packages = {
           default = dcf;
-          inherit dcf dcf-debug dcf-sanitized dcf-coverage;
+          inherit dcf dcf-debug dcf-shared dcf-sanitized dcf-coverage;
         };
         
         # Development shells
@@ -153,11 +204,12 @@
               echo "  ninja"
               echo "  ctest --output-on-failure"
               echo ""
-              echo "Or use nix build:"
-              echo "  nix build .#dcf          # Release build"
-              echo "  nix build .#dcf-debug    # Debug build"
-              echo "  nix build .#dcf-sanitized # With sanitizers"
-              echo "  nix build .#dcf-coverage  # With coverage"
+              echo "Nix build variants:"
+              echo "  nix build              # Static lib + LTO (default)"
+              echo "  nix build .#dcf-shared # Shared lib (uses clang)"
+              echo "  nix build .#dcf-debug  # Debug build"
+              echo "  nix build .#dcf-sanitized # ASan/UBSan"
+              echo "  nix build .#dcf-coverage  # Code coverage"
               echo ""
               
               # Setup ccache
