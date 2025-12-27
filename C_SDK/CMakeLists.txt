@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 
 project(DCF 
     VERSION 5.2.0
-    DESCRIPTION "Distributed Communication Framework - Battle Tested"
+    DESCRIPTION "DeMoD Communications Framework"
     LANGUAGES C
 )
 

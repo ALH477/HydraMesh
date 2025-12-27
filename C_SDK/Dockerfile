@@ -1,5 +1,5 @@
 # =============================================================================
-# DCF - Distributed Communication Framework
+# DCF - DeMoD Communications Framework
 # Multi-stage Dockerfile for building and packaging
 # =============================================================================
 #

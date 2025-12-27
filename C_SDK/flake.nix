@@ -1,5 +1,5 @@
 {
-  description = "DCF - DeMoD Communication Framework";
+  description = "DCF - DeMoD Communications Framework";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
@@ -65,7 +65,7 @@
           '';
           
           meta = with pkgs.lib; {
-            description = "Distributed Communication Framework - Battle Tested";
+            description = "DeMoD Communications Framework";
             homepage = "https://github.com/example/dcf";
             license = licenses.mit;
             platforms = platforms.unix;
@@ -195,8 +195,8 @@
             ]);
             
             shellHook = ''
-              echo "DCF Development Environment v5.2.0"
-              echo "===================================="
+              echo "DCF - DeMoD Communications Framework v5.2.0"
+              echo "==========================================="
               echo ""
               echo "Build commands:"
               echo "  mkdir build && cd build"
