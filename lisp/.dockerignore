@@ -1,0 +1,49 @@
+# Build artifacts
+*.fasl
+*.fas
+*.lib
+*.o
+*.so
+*.dylib
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+\#*\#
+
+# Documentation
+*.md
+!README.md
+docs/
+LICENSE
+
+# SBCL
+*.core
+!src/*.core
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.docker/
+
+# Local development
+.env
+.env.*
+*.local
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+test-results/
+coverage/

@@ -1,17 +1,23 @@
-(asdf:defsystem #:HydraMesh
-  :description "Lisp SDK for DeMoD Communications Framework (DCF)"
-  :author "ALH477"
-  :license "LGPL-3.0"
-  :version "2.1.0"
-  :depends-on (:cl-protobufs :cl-grpc :cffi :uuid :cl-json :jsonschema
-               :cl-ppcre :cl-csv :usocket :bordeaux-threads :curses
-               :log4cl :trivial-backtrace :cl-store :mgl :hunchensocket
-               :fiveam :cl-dot)
-  :components ((:file "src/d-lisp")
-               (:file "tests/main" :depends-on ("src/d-lisp")))
-  :in-order-to ((test-op (test-op :d-lisp/tests))))
+;;;; HydraMesh ASDF System Definition
+;;;; DeMoD-LISP (D-LISP) / HydraMesh v2.2.0
 
-(asdf:defsystem #:d-lisp/tests
-  :depends-on (:d-lisp :fiveam)
-  :components ((:file "tests/main"))
-  :perform (test-op (o c) (symbol-call :d-lisp :run-tests)))
+(defsystem "hydramesh"
+  :version "2.2.0"
+  :author "DeMoD Framework"
+  :license "LGPL-3.0"
+  :description "DeMoD Communications Framework - Lisp Implementation"
+  :long-description "HydraMesh provides UDP gaming, real-time audio, 
+and binary Protocol Buffers for low-latency networked applications."
+  :depends-on (:cffi
+               :uuid
+               :usocket
+               :bordeaux-threads
+               :log4cl
+               :trivial-backtrace
+               :flexi-streams
+               :fiveam
+               :ieee-floats
+               :cl-json)
+  :serial t
+  :components ((:file "src/hydramesh")
+               (:file "src/hydramesh.core")))
