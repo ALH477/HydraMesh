@@ -1,0 +1,50 @@
+# Build artifacts
+target/
+debug/
+release/
+*.rlib
+*.rmeta
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Documentation
+*.md
+!README.md
+docs/
+LICENSE
+
+# Tests
+tests/
+benches/
+examples/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.docker/
+
+# Local development
+.env
+.env.*
+*.local
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
