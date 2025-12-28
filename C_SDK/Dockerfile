@@ -34,12 +34,9 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Builder base
 # -----------------------------------------------------------------------------
-FROM ubuntu:24.04 AS builder-base
+FROM debian:bookworm-slim AS builder-base
 
-# Avoid prompts during package installation
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install build dependencies
+# Install build dependencies (Debian style)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
