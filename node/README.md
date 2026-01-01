@@ -32,14 +32,6 @@ This is the **official open-source community node** — lightweight, secure, and
 
 ## Quick Start (Recommended)
 
-Run this one-liner in your terminal:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/yourusername/demod-community-node/main/setup-demod-node.sh | bash
-```
-
-Or manually:
-
 1. Clone or download this repository
 2. Make the setup script executable:
 
@@ -56,7 +48,7 @@ Or manually:
    ```
 
 4. Follow the on-screen instructions:
-   - Register your node at https://dcf.demod.ltd/register
+   - Register your node at https://dcf.demod.ltd/register (Not running yet)
    - Add your assigned node ID to `./config/dcf_config.toml`
    - Restart: `docker compose restart`
 
