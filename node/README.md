@@ -145,7 +145,6 @@ Pull requests are welcome!
 
 ## Community & Support
 
-- Discord: https://discord.gg/demod
 - Website: https://dcf.demod.ltd
 - Register your node: https://dcf.demod.ltd/register
 
