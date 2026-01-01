@@ -1,0 +1,85 @@
+# ============================================================================
+# DeMoD Community Node - Production-Hardened DCF-SDK
+# ============================================================================
+# Enhanced for robust 24/7 production use in decentralized mesh
+# Security-focused, resource-isolated, reliable
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  dcf-sdk:
+    image: alh477/dcf-rs:latest
+    container_name: demod-community-node
+    hostname: dcf-sdk
+    restart: unless-stopped
+
+    # CPU pinning: Use a dedicated core for low-jitter 125Hz timing
+    cpuset: "0"  # Change to your preferred core (e.g., "1" on multi-core)
+
+    cap_add:
+      - SYS_NICE      # For real-time scheduling
+      - NET_RAW       # Required for raw UDP handling
+      - IPC_LOCK      # Memory locking for performance
+
+    ulimits:
+      rtprio:
+        soft: 99
+        hard: 99
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+
+    ports:
+      - "7777:7777/udp"      # Essential for mesh traffic
+      - "50051:50051/tcp"    # Optional gRPC (disable if not needed)
+
+    environment:
+      - DCF_CONFIG=/etc/dcf/dcf_config.toml
+      - RUST_LOG=info
+      - RUST_BACKTRACE=1
+
+    volumes:
+      - ./config:/etc/dcf:ro   # Config read-only
+
+    networks:
+      - dcf-external
+
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/dcf", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+    logging: *default-logging
+
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
+        reservations:
+          cpus: "0.5"
+          memory: "256M"
+
+    security_opt:
+      - no-new-privileges:true
+
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+      - /run:size=16M
+
+networks:
+  dcf-external:
+    driver: bridge
+    name: dcf-external
+    driver_opts:
+      com.docker.network.bridge.name: br-dcf-ext
