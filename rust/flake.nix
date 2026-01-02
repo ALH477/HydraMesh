@@ -1,26 +1,39 @@
 {
-  description = "DCF Remote Node - Professional Grade Systems Flake";
+  description = "DCF Remote Node - Static Production Build";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    
+    # Use rust-overlay to pin exact versions (matches your Dockerfile's 1.83)
     rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
   outputs = { self, nixpkgs, flake-utils, rust-overlay, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
+        # 1. Overlay specific Rust version
         overlays = [ (import rust-overlay) ];
-        pkgs = import nixpkgs {
-          inherit system overlays;
+        pkgs = import nixpkgs { inherit system overlays; };
+
+        # 2. Define the exact toolchain we want (1.83.0)
+        # We explicitly add the 'musl' target for static linking
+        rustToolchain = pkgs.rust-bin.stable."1.83.0".default.override {
+          targets = [ "x86_64-unknown-linux-musl" ]; 
         };
 
-        # 1. Clean Source Filter (Prevents unnecessary rebuilds)
+        # 3. Create a static platform using the pinned toolchain
+        # This forces the entire build to be static (Musl instead of Glibc)
+        staticPlatform = pkgs.makeRustPlatform {
+          cargo = rustToolchain;
+          rustc = rustToolchain;
+        };
+
+        # 4. Source Filtering (Clean builds)
         src = pkgs.lib.cleanSourceWith {
           src = ./.;
           filter = path: type:
             let base = baseNameOf path; in
-            # Ignore target, git, and build artifacts
             !(type == "directory" && base == "target") &&
             !(type == "directory" && base == ".git") &&
             base != "flake.lock";
@@ -30,41 +43,49 @@
         version = cargoToml.package.version;
         pname = "dcf-node";
 
-        # 2. The Fixed Rust Build
-        dcf-node = pkgs.rustPlatform.buildRustPackage {
+        # ---------------------------------------------------------------------
+        # BUILD DEFINITION (Static)
+        # ---------------------------------------------------------------------
+        dcf-node-static = staticPlatform.buildRustPackage {
           inherit pname version src;
           cargoLock.lockFile = ./Cargo.lock;
 
-          # CRITICAL FIX: Add protobuf so tonic-build can run
+          # Dependencies for Static Build
           nativeBuildInputs = with pkgs; [ 
             pkg-config 
-            protobuf  # Provides 'protoc'
+            protobuf
+            pkgsBuildHost.rustPlatform.bindgenHook # Sometimes needed for static sys-crates
           ];
           
-          buildInputs = [ pkgs.openssl ];
+          # We use pkgs.pkgsStatic to get static versions of C libraries (openssl, etc)
+          buildInputs = with pkgs.pkgsStatic; [ 
+            openssl 
+          ];
 
-          # CRITICAL FIX: Trick build.rs into writing to the Nix build temp dir
-          # instead of trying to write to the read-only 'src/generated'.
-          # We delete the hardcoded out_dir line before compiling.
+          # Force static linking env vars
+          RUSTFLAGS = "-C target-feature=+crt-static";
+
+          # PATCH: Fix the build.rs read-only FS issue
           preConfigure = ''
             sed -i '/.out_dir("src\/generated")/d' build.rs
           '';
 
-          # Disable tests that might require network access (sandbox violation)
+          # Skip tests in static builds (often require networking/runners)
           doCheck = false;
         };
 
-        # 3. Layered Docker Image (Automatic dependency resolution)
+        # ---------------------------------------------------------------------
+        # CONTAINER DEFINITION (Distroless Static)
+        # ---------------------------------------------------------------------
         dockerImage = pkgs.dockerTools.streamLayeredImage {
           name = "alh477/${pname}";
           tag = version;
           
-          # Nix automatically detects libraries (glibc, openssl) referenced 
-          # by the binary and adds them to the image closure.
+          # Since the binary is static, we need ZERO runtime libraries.
+          # We only need SSL certs and Timezone data.
           contents = [ 
             pkgs.cacert 
-            pkgs.tzdata
-            dcf-node 
+            pkgs.tzdata 
           ];
           
           config = {
@@ -77,18 +98,22 @@
               "DCF_CONFIG=/etc/dcf/config.toml"
               "RUST_LOG=info"
             ];
-            Entrypoint = [ "${dcf-node}/bin/dcf" ]; # Dockerfile uses "dcf" not "dcf-node"
+            # ENTRYPOINT is the executable
+            Entrypoint = [ "${dcf-node-static}/bin/dcf" ];
+            # CMD is the default argument (matches your Dockerfile)
+            Cmd = [ "start" ];
           };
         };
 
-        # 4. UX Scripts (Unchanged)
+        # ---------------------------------------------------------------------
+        # SCRIPTS
+        # ---------------------------------------------------------------------
         mkConfigScript = pkgs.writeShellScriptBin "dcf-init-config" ''
-          CONFIG_PATH="./config.toml"
-          if [ -f "$CONFIG_PATH" ]; then
-            echo "ℹ️  Config file already exists."
+          if [ -f "./config.toml" ]; then
+             echo "ℹ️  config.toml exists."
           else
-            echo "🚀 Generating production config..."
-            cat > "$CONFIG_PATH" <<EOF
+             echo "Creating default config.toml..."
+             cat > config.toml <<EOF
 [node]
 id = "node-$(hostname)-01"
 hub_url = "https://dcf.demod.ltd"
@@ -96,57 +121,37 @@ hub_url = "https://dcf.demod.ltd"
 bind_addr = "0.0.0.0"
 bind_port = 7777
 EOF
-            echo "✅ Created $CONFIG_PATH"
           fi
-          $EDITOR "$CONFIG_PATH"
-        '';
-
-        mkDeployScript = pkgs.writeShellScriptBin "dcf-gen-deploy" ''
-          cat > docker-compose.yml <<EOF
-services:
-  dcf-node:
-    image: alh477/${pname}:${version}
-    restart: unless-stopped
-    cap_drop: [ALL]
-    cap_add: [SYS_NICE, NET_RAW, IPC_LOCK]
-    read_only: true
-    security_opt: [no-new-privileges:true]
-    ulimits:
-      rtprio: { soft: 99, hard: 99 }
-      memlock: { soft: -1, hard: -1 }
-    ports:
-      - "7777:7777/udp"
-      - "50051:50051/tcp"
-    volumes:
-      - ./config.toml:/etc/dcf/config.toml:ro
-EOF
-          echo "✅ Generated hardened docker-compose.yml"
+          ''${EDITOR:-vim} config.toml
         '';
 
       in
       {
-        packages.default = dcf-node;
+        # Default package is the STATIC binary
+        packages.default = dcf-node-static;
+        
+        # Container target
         packages.container = dockerImage;
 
+        # Development Shell
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            (rust-bin.stable.latest.default.override {
-              extensions = [ "rust-src" "rust-analyzer" ];
-            })
-            pkg-config
-            openssl
-            protobuf # Available in shell for local 'cargo build'
+          buildInputs = [
+            # Dev tools
+            rustToolchain
+            pkgs.pkg-config
+            pkgs.openssl
+            pkgs.protobuf
+            pkgs.docker-compose
+            
+            # Helper scripts
             mkConfigScript
-            mkDeployScript
-            docker-compose
           ];
-          
-          # Fix for local cargo builds to find protoc
+
+          # Set up env so 'cargo run' works locally
           shellHook = ''
             export PROTOC="${pkgs.protobuf}/bin/protoc"
-            export PROTOC_INCLUDE="${pkgs.protobuf}/include"
-            
-            echo "🛡️  DeMoD DCF-Node Environment Active"
+            echo "🛡️  DCF-Node DevShell (Rust 1.83)"
+            echo "   dcf-init-config  -> Setup Config"
           '';
         };
       }
