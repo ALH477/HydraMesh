@@ -5,21 +5,29 @@
 //! - UDP transport for low-latency gaming/audio
 //! - P2P peer discovery
 //! - Backward compatible with Lisp HydraMesh
+//! - Universal Shim integration for 120Hz interpolation
 
-use std::sync::Arc;
-use std::io::Cursor;
+use std::sync::{Arc, Mutex};
+use std::net::SocketAddr;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use clap::{Parser, Subcommand};
 use tonic::transport::Server;
 use uuid::Uuid;
+use tokio::net::UdpSocket; 
 
 use dcf_rust_sdk::{
     DcfConfig, DcfNode, DcfError, Result,
     MyDcfService, DefaultMessageHandler,
     run_udp_receiver, run_reliable_handler,
-    Position, GameEvent, Version,
+    Position, GameEvent, MessageHandler,
 };
 use dcf_rust_sdk::proto::dcf_service_server::DcfServiceServer;
+
+// Include the Universal Shim module
+// Ensure universal_shim.rs is in the same directory and methods are 'pub'
+mod universal_shim;
+use universal_shim::AdaptiveBuffer;
 
 // ============================================================================
 // CLI Definition
@@ -34,6 +42,16 @@ struct Cli {
     /// Configuration file path
     #[arg(short, long, default_value = "dcf_config.toml")]
     config: String,
+
+    /// Target address for the shim playback loop (Output target)
+    /// Defaults to 127.0.0.1:7777 to feed the local binary port internally
+    #[arg(long, default_value = "127.0.0.1:7777")]
+    shim_target: String,
+
+    /// Port to listen for incoming legacy game packets (Shim Ingress)
+    /// This is the bridge port (e.g., 8888) that Zandronum connects to
+    #[arg(long, default_value = "8888")]
+    shim_port: u16,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -124,8 +142,55 @@ enum Commands {
         tx_id: String,
     },
     
-    /// Show help
-    Help,
+    /// Show detailed help information
+    Info,
+}
+
+// ============================================================================
+// Shim Message Handler
+// ============================================================================
+
+/// Custom handler that feeds incoming positions into the AdaptiveBuffer
+struct ShimMessageHandler {
+    buffer: Arc<Mutex<AdaptiveBuffer>>,
+    default_handler: DefaultMessageHandler,
+}
+
+impl ShimMessageHandler {
+    fn new(buffer: Arc<Mutex<AdaptiveBuffer>>) -> Self {
+        Self {
+            buffer,
+            default_handler: DefaultMessageHandler,
+        }
+    }
+}
+
+impl MessageHandler for ShimMessageHandler {
+    fn handle_position(&self, position: Position, from: SocketAddr) {
+        // 1. Log debug info (optional)
+        // log::debug!("Shim received pos from {}: {:?}", from, position);
+
+        // 2. Capture precise receive time
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_micros() as u64;
+
+        // 3. Push to the Adaptive Buffer for Dead Reckoning
+        if let Ok(mut buf) = self.buffer.lock() {
+            buf.push(position, now);
+        }
+    }
+
+    fn handle_audio(&self, data: &[u8], from: SocketAddr) {
+        // Delegate audio to default handler (or implement custom audio mixer)
+        self.default_handler.handle_audio(data, from);
+    }
+
+    fn handle_game_event(&self, event: GameEvent, from: SocketAddr) {
+        // Delegate events to default handler
+        self.default_handler.handle_game_event(event, from);
+    }
 }
 
 // ============================================================================
@@ -141,22 +206,55 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     let cli = Cli::parse();
 
+    // Commands that don't need any node initialization
+    match &cli.command {
+        Some(Commands::Version) => {
+            let version = DcfNode::version();
+            println!("{}", serde_json::to_string_pretty(&version)?);
+            return Ok(());
+        }
+        Some(Commands::Info) => {
+            print_info();
+            return Ok(());
+        }
+        _ => {}
+    }
+
     // Load configuration
     let config = load_config(&cli.config)?;
-    let node = Arc::new(DcfNode::new(config.clone())?);
+    
+    // Determine if we need UDP socket binding
+    let needs_network = matches!(
+        &cli.command,
+        None 
+        | Some(Commands::Start)
+        | Some(Commands::SendPosition { .. })
+        | Some(Commands::SendAudio { .. })
+        | Some(Commands::SendEvent { .. })
+        | Some(Commands::Benchmark { .. })
+    );
+
+    // Create node with appropriate config
+    let node_config = if needs_network {
+        config.clone()
+    } else {
+        // For non-network commands, disable UDP to avoid port binding
+        let mut cfg = config.clone();
+        cfg.transport = "none".to_string();
+        cfg
+    };
+    
+    let node = Arc::new(DcfNode::new(node_config)?);
 
     match cli.command {
         Some(Commands::Start) | None => {
-            run_server(node, config).await?;
+            run_server(node, config, cli.shim_target, cli.shim_port).await?;
         }
         Some(Commands::Status) => {
             let status = node.status();
             println!("{}", serde_json::to_string_pretty(&status)?);
         }
-        Some(Commands::Version) => {
-            let version = DcfNode::version();
-            println!("{}", serde_json::to_string_pretty(&version)?);
-        }
+        Some(Commands::Version) => unreachable!(),
         Some(Commands::AddPeer { peer_id, host, port }) => {
             node.add_peer(&peer_id, &host, port)?;
             println!("{{\"status\": \"peer-added\", \"peer_id\": \"{}\"}}", peer_id);
@@ -206,9 +304,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             node.rollback_transaction(&tx_id)?;
             println!("{{\"status\": \"transaction-rolled-back\", \"tx_id\": \"{}\"}}", tx_id);
         }
-        Some(Commands::Help) => {
-            print_help();
-        }
+        Some(Commands::Info) => unreachable!(),
     }
 
     Ok(())
@@ -218,7 +314,12 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 // Server Runner
 // ============================================================================
 
-async fn run_server(node: Arc<DcfNode>, config: DcfConfig) -> std::result::Result<(), Box<dyn std::error::Error>> {
+async fn run_server(
+    node: Arc<DcfNode>, 
+    config: DcfConfig,
+    shim_target: String,
+    shim_port: u16
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
     // Start the node
     node.start()?;
 
@@ -226,9 +327,65 @@ async fn run_server(node: Arc<DcfNode>, config: DcfConfig) -> std::result::Resul
     let grpc_service = MyDcfService::new(node.clone());
     let grpc_addr = format!("[::1]:{}", config.grpc_port).parse()?;
 
-    // Start UDP receiver in background
+    // --- INTEGRATION: Initialize Universal Shim ---
+    log::info!("Initializing Universal Shim buffer...");
+    let buffer = Arc::new(Mutex::new(AdaptiveBuffer::new()));
+
+    // --- INTEGRATION: Spawn Shim Playback Loop (OUTPUT) ---
+    // This runs at ~125Hz to smooth out jitter
+    let playback_node = node.clone();
+    let playback_buffer = buffer.clone();
+    let playback_target = shim_target.clone();
+    
+    let playback_task = tokio::spawn(async move {
+        log::info!("Starting Shim Playback Loop targeting {}", playback_target);
+        universal_shim::run_playback_loop(playback_buffer, playback_node, playback_target).await;
+    });
+
+    // --- INTEGRATION: Spawn Shim Ingress Listener (INPUT) ---
+    // This binds to the Shim Port (8888) to accept Zandronum packets
+    let shim_listener_buffer = buffer.clone();
+    let shim_listener_task = tokio::spawn(async move {
+        let addr = format!("0.0.0.0:{}", shim_port);
+        match UdpSocket::bind(&addr).await {
+            Ok(socket) => {
+                log::info!("[Shim Ingress] Listening for game packets on {}", addr);
+                let mut buf = vec![0u8; 2048];
+                loop {
+                    match socket.recv_from(&mut buf).await {
+                        Ok((size, _src)) => {
+                            if size > 0 {
+                                // For debugging, log activity
+                                log::debug!("[Shim Ingress] Received {} bytes from {}", size, _src);
+                                
+                                // Here we would parse legacy packets.
+                                // For now, we update buffer to keep connection alive.
+                                // In a full implementation, you'd decode Zandronum packets here.
+                                let now = SystemTime::now()
+                                    .duration_since(UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_micros() as u64;
+                                    
+                                if let Ok(mut b) = shim_listener_buffer.lock() {
+                                    // Inject dummy position for keepalive or parsed data
+                                    b.push(Position { x: 0.0, y: 0.0, z: 0.0 }, now);
+                                }
+                            }
+                        }
+                        Err(e) => log::error!("[Shim Ingress] Receive error: {}", e),
+                    }
+                }
+            }
+            Err(e) => {
+                log::error!("[Shim Ingress] FAILED TO BIND: {}", e);
+            }
+        }
+    });
+
+    // --- INTEGRATION: Use Custom Handler for HydraMesh ---
+    // Instead of DefaultMessageHandler, use ShimMessageHandler to feed the buffer
     let udp_node = node.clone();
-    let handler = Arc::new(DefaultMessageHandler) as Arc<dyn dcf_rust_sdk::MessageHandler>;
+    let handler = Arc::new(ShimMessageHandler::new(buffer.clone())) as Arc<dyn dcf_rust_sdk::MessageHandler>;
     let udp_handler = handler.clone();
     
     let udp_task = tokio::spawn(async move {
@@ -260,6 +417,8 @@ async fn run_server(node: Arc<DcfNode>, config: DcfConfig) -> std::result::Resul
     log::info!("╚══════════════════════════════════════════════════════════════════════════╝");
     log::info!("gRPC server listening on {}", grpc_addr);
     log::info!("UDP server listening on port {}", config.udp_port);
+    log::info!("Shim Ingress listening on port {}", shim_port);
+    log::info!("Shim Playback Active: {}", shim_target);
     log::info!("Node ID: {}", node.node_id());
     log::info!("Mode: {}", config.mode);
 
@@ -273,6 +432,8 @@ async fn run_server(node: Arc<DcfNode>, config: DcfConfig) -> std::result::Resul
     node.stop()?;
     udp_task.abort();
     reliable_task.abort();
+    playback_task.abort();
+    shim_listener_task.abort();
 
     Ok(())
 }
@@ -372,10 +533,10 @@ fn load_config(path: &str) -> std::result::Result<DcfConfig, Box<dyn std::error:
 }
 
 // ============================================================================
-// Help Text
+// Info Text (renamed from Help to avoid conflict)
 // ============================================================================
 
-fn print_help() {
+fn print_info() {
     println!(r#"
 ╔══════════════════════════════════════════════════════════════════════════╗
 ║         DCF Rust Server v2.2.0 - HydraMesh Compatible                   ║
@@ -387,8 +548,13 @@ fn print_help() {
 3. dcf send-position --player-id player1 --x 100.0 --y 50.0 --z 25.0
 4. dcf metrics
 
+**Shim Integration:**
+  --shim-target <addr>  Target address for smoothed 120Hz output (default: 127.0.0.1:7777)
+  --shim-port <port>    Listener port for legacy game packets (default: 8888)
+
 **Key Features:**
 - UDP with unreliable (<5ms) / reliable channels
+- Universal Shim for Dead Reckoning & Jitter Compensation
 - Binary Protobuf: 10-100x faster than JSON
 - Position (12B), Audio (raw), Events (reliable)
 - RTT/Jitter stats, auto-retry
@@ -409,6 +575,8 @@ fn print_help() {
   begin-tx           Begin transaction
   commit-tx          Commit transaction
   rollback-tx        Rollback transaction
+  info               Show this detailed help
+  help               Show command help (built-in)
 
 **Configuration:**
   --config <file>    Config file (JSON or TOML)

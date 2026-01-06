@@ -1,5 +1,5 @@
 //! DCF Rust SDK - HydraMesh Compatible
-//! Version 2.2.0 | Compatible with D-LISP HydraMesh
+//! Version 2.2.1 | Production Grade with Enhanced Shim Visibility
 //! 
 //! This SDK provides a production-ready Rust implementation for DCF,
 //! optimized for gaming and real-time audio with UDP transport, binary Protobuf,
@@ -41,7 +41,7 @@ pub use proto::{
 /// Message types matching Lisp implementation
 pub mod msg_type {
     pub const POSITION: u8 = 1;
-    pub const AUDIO: u8 = 2;
+    pub const AUDIO: u8 = 2; // Used by Shim for raw game data
     pub const GAME_EVENT: u8 = 3;
     pub const STATE_SYNC: u8 = 4;
     pub const RELIABLE: u8 = 5;
@@ -1075,6 +1075,8 @@ async fn handle_incoming_message(
             }
         }
         msg_type::AUDIO => {
+            // PRODUCTION FIX: Promoted to INFO level to ensure Shim traffic is visible in Docker logs
+            log::info!("[Shim Ingress] Raw payload received: {} bytes from {}", msg.payload.len(), from);
             node.metrics.write().audio_packets_received += 1;
             handler.handle_audio(&msg.payload, from);
         }
