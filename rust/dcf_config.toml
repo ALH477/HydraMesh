@@ -15,6 +15,9 @@ mode = "p2p"
 # Unique node identifier (auto-generated if not specified)
 # node_id = "my-node"
 
+# The hash obtained from http://your-vps-ip:3000
+access_hash = "ABC123XYZ_PASTE_HASH_HERE"
+
 # Initial peer list
 peers = []
 
