@@ -232,15 +232,6 @@ Buffered End ─── Split ─── Comp14 (245,5,245) ─── R ─── 
 - **Power**: Solar torches.
 - **Obfuscate**: Deepslate cover; Armor stand CBs.
 
-## Export & Virality
-1. **Structure Block**: `/give structure_block` → Corner `( -10,90,-10)` → Pos2 `(20,110,290)` → Save `demod_full`.
-2. **Litematica**: Mod → Export schematic.
-3. **Video**: OBS F5 timelapse (10x) + Live demo + Tamper.
-   - 0:00 Intro/Philosophy
-   - 1:00 Build Timelapse
-   - 5:00 Full Run
-   - 6:00 Tamper/Lag Tests
-   - 7:00 Command Ext
 4. **Share**: World ZIP GitHub | X Post w/ world download | PlanetMC.
 
 **DeMoD Conquered Minecraft: 17 Bytes → Redstone Reality.**
