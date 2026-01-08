@@ -1,322 +1,419 @@
 # DeMoD 17-Byte Communication Framework (DCF)
 
-**Reference Implementation — Minecraft Redstone**
+**Minecraft Redstone Reference Implementation**
 
-**Version**: 3.0
-**License**: LGPL-3.0 (see LICENSE)
-**Implementation Medium**: Minecraft Java Edition Redstone
-**Tested On**: Java 1.21.4 (Singleplayer Creative, Superflat)
+Version 3.1.0 | License: LGPL-3.0 | Minecraft 1.21.x
 
 ---
 
-## 1. Purpose & Scope
+## Overview
 
-The **DeMoD 17-Byte Communication Framework (DCF)** is a **deterministic, time-framed analog communication protocol** with a **physical reference implementation** built entirely from Minecraft redstone mechanics.
+The DCF is a deterministic, time-framed analog communication protocol with physical validation. This repository contains a Python datapack generator that creates a complete Minecraft redstone implementation demonstrating:
 
-This repository provides:
+- **Analog signal encoding** via comparator signal strength
+- **Physical authentication** using subtract-mode comparison
+- **Hardware fault injection** where mismatches destroy the circuit
+- **Jitter buffering** for timing normalization
 
-* A **formal protocol description**
-* A **complete step-by-step build guide**
-* A **reference implementation** enforcing protocol correctness via world physics
-
-The build intentionally favors **clarity, determinism, and fault enforcement** over compactness.
-
----
-
-## 2. What This Is (and Is Not)
-
-### This *is*
-
-* A serialized analog protocol
-* A fixed-length framed transmission
-* Physically enforced validation
-* Jitter-tolerant replay buffering
-* A hardware-style reference build
-
-### This is *not*
-
-* Cryptography
-* Compression
-* Asynchronous signaling
-* Computational universality
-
-All terminology (e.g. *authentication*, *demodulation*) is used **by analogy** to real-world systems.
+This is a reference implementation—intentionally explicit to be readable as a real protocol specification.
 
 ---
 
-## 3. Protocol Specification
+## Quick Start
 
-### 3.1 Payload
+```bash
+# Generate the datapack
+python generate_dcf_datapack.py
 
-* **Length**: 17 bytes (fixed)
-* **Encoding**: High nibble first, then low nibble
-* **Total symbols**: 34 nibbles
+# Copy to your Minecraft world
+cp -r dcf_protocol_v3 ~/.minecraft/saves/YOUR_WORLD/datapacks/
 
-### 3.2 Header Value (Hex)
-
-```
-0x5254444346010000000000000000000001
-```
-
-### 3.3 Nibble Sequence
-
-```
-[5,2, 5,4, 4,4, 4,3, 4,6, 0,1,
- 0,0, 0,0, 0,0, 0,0, 0,0,
- 0,0, 0,0, 0,0, 0,0,
- 0,1]
+# In Minecraft:
+/reload
+/tp @s 0 100 0
+/fill -50 90 -50 50 200 300 air
+/function dcf:install
 ```
 
 ---
 
-## 4. Analog Encoding Model
+## Protocol Specification
 
-Each nibble is encoded as a **redstone signal strength** using a **barrel + comparator** pair.
+### Frame Structure
 
-### 4.1 Comparator Formula (Java Edition)
+| Field | Bytes | Description |
+|-------|-------|-------------|
+| Magic | 4 | `0x52544443` ("RDCF") |
+| Version | 2 | `0x4601` (v1.70) |
+| Reserved | 10 | Padding (zeros) |
+| Checksum | 1 | `0x01` |
 
-```
-signal = 0                          if empty
-signal = min(14, floor(14 × items / 576))
-```
+**Total: 17 bytes (fixed)**
 
-* Barrels: 9 slots × 64 items = 576 max
-* Signal strength **15 is never used**
-* Protocol values ≤ 6 for safety margin
+### Encoding
 
-### 4.2 Exact Item Counts (Stone)
-
-| Signal | Items |
-| -----: | ----: |
-|      0 |     0 |
-|      1 |    42 |
-|      2 |    83 |
-|      3 |   124 |
-|      4 |   165 |
-|      5 |   206 |
-|      6 |   247 |
-
-> **Important**:
-> Use *exactly* these minimums. Overfilling can cause rounding drift.
-
----
-
-## 5. World Setup (Required)
-
-1. **Create World**
-
-   * Superflat → Default
-   * Preset:
-
-     ```
-     minecraft:bedrock,2*dirt,grass_block;1;village
-     ```
-
-2. **Game Rules**
-
-   ```
-   /gamemode creative
-   /gamerule randomTickSpeed 1
-   /gamerule doDaylightCycle false
-   /gamerule doMobSpawning false
-   /gamerule mobGriefing false
-   /gamerule keepInventory true
-   ```
-
-3. **Prepare Build Area**
-
-   ```
-   /tp @s 0 100 0
-   /fill -50 90 -50 50 110 300 air
-   ```
-
----
-
-## 6. Bill of Materials
+Each byte is split into two nibbles (high first), yielding 34 symbols per frame.
 
 ```
-barrel ×68
-comparator ×170
-repeater ×320
-observer ×90
-redstone_dust ×64
-redstone_torch ×16
-sticky_piston ×35
-gravel ×35
-hopper ×8
-dropper ×4
-lever ×3
-target ×10
-glowstone ×3
-tnt ×1
-stone ×1000+
+Byte 0x52 → Nibble 5, Nibble 2
+Byte 0x54 → Nibble 5, Nibble 4
+...
+```
+
+### Protocol Header (Hex)
+
+```
+5254444346010000000000000000000001
+```
+
+### Nibble Sequence
+
+```
+[5, 2, 5, 4, 4, 4, 4, 3, 4, 6, 0, 1,
+ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+ 0, 0, 0, 0, 0, 0, 0, 0,
+ 0, 1]
 ```
 
 ---
 
-## 7. System Architecture
+## Analog Signal Model
+
+### Comparator Mechanics
+
+Minecraft comparators output signal strength 0-15 based on container fill level:
 
 ```
-Clock → TX (34) → Auth (34) → Buffer → Decoder → Payload
+signal = 0                              (if empty)
+signal = floor(14 × items / capacity)   (if items > 0)
 ```
 
-Each section is physically isolated and unidirectional.
+For barrels: `capacity = 9 slots × 64 items = 576`
+
+### Signal-to-Items Table
+
+| Signal | Items Required | Formula |
+|--------|----------------|---------|
+| 0 | 0 | Empty barrel |
+| 1 | 1 | Any item triggers |
+| 2 | 42 | ceil((2-1) × 576 / 14) |
+| 3 | 83 | ceil((3-1) × 576 / 14) |
+| 4 | 124 | ceil((4-1) × 576 / 14) |
+| 5 | 165 | ceil((5-1) × 576 / 14) |
+| 6 | 206 | ceil((6-1) × 576 / 14) |
+| 7 | 247 | ceil((7-1) × 576 / 14) |
+| 8 | 288 | ceil((8-1) × 576 / 14) |
+| 9 | 330 | ceil((9-1) × 576 / 14) |
+| 10 | 371 | ceil((10-1) × 576 / 14) |
+| 11 | 412 | ceil((11-1) × 576 / 14) |
+| 12 | 453 | ceil((12-1) × 576 / 14) |
+| 13 | 494 | ceil((13-1) × 576 / 14) |
+| 14 | 535 | ceil((14-1) × 576 / 14) |
+
+**Signal 15 is not achievable** with comparator output—maximum is 14 (full container).
+
+### Formula Derivation
+
+Forward: `signal = floor(1 + (items / capacity) × 14)` for items > 0
+
+Inverse: `items = ceil((signal - 1) × capacity / 14)` for signal >= 2
+
+Special case: Signal 1 only requires 1 item (any non-empty container outputs 1).
 
 ---
 
-## 8. Phase 1 — Master Clock (BORE Scheduler)
-
-**Location**: Z = 0 → 10
-**Purpose**: Provide a stable 3-tick global clock
-
-### Build Steps
-
-1. Place a repeater at `(0,4,0)` set to **3 ticks**
-2. Dust at `(1,4,0)`
-3. Redstone torch at `(1,3,-1)`
-4. Observer at `(2,4,0)` facing **-Z**
-5. Repeater at `(3,4,0)` set to **1 tick**
-6. Dust at `(4,4,0)` and `(5,4,0)`
-7. Loop dust back to repeater input
-8. Lever at `(0,4,-1)`
-
-**Output line**: Dust at `(5,5,0)`
-
-Expected: steady pulse train, 2 ticks high / 1 tick low.
-
----
-
-## 9. Phase 2 — Transmitter (TX)
-
-**Location**: Z = 10 → 110
-**Stages**: 34 (one per nibble)
-
-### Stage Layout
-
-For stage `i`:
+## System Architecture
 
 ```
-Zb = 10 + 3*i
+┌─────────┐    ┌─────────────┐    ┌─────────────┐    ┌────────┐    ┌─────────┐
+│  Clock  │───▶│  TX Layer   │───▶│ Auth Layer  │───▶│ Buffer │───▶│ Decoder │
+│ (BORE)  │    │ (34 stages) │    │ (subtract)  │    │ (FIFO) │    │         │
+└─────────┘    └─────────────┘    └─────────────┘    └────────┘    └─────────┘
 ```
 
-#### Per-Stage Build
+### Layer Descriptions
 
-1. Barrel at `(1,4,Zb)` → fill per table
-2. Comparator at `(2,4,Zb)` facing +Z
-3. Torch at `(2,3,Zb)` (locks output)
-4. Repeater at `(3,4,Zb)` set to **2 ticks**
-5. Observer at `(0,4,Zb)` facing +Z
-6. Repeater at `(1,4,Zb+1)` set to **1 tick**
-7. Dust at `(3,4,Zb+1)`
-8. Dust up to `(3,5,Zb+1)` → SSS bus
-9. Advance dust to next stage
-
-Stage 0 is triggered by a button instead of advance input.
+| Layer | Function | Z Range |
+|-------|----------|---------|
+| Clock | 4-tick oscillator | 0-10 |
+| TX | Barrel→comparator signal generation | 10-112 |
+| Auth | Subtract comparison + fault injection | 130-232 |
+| Buffer | Hopper FIFO timing normalization | 230-245 |
+| Decoder | Threshold detection + payload | 245-260 |
 
 ---
 
-## 10. Phase 3 — Authentication Gate
+## Layer Details
 
-**Location**: Z = 125 → 225
-**Purpose**: Reject any incorrect symbol physically
+### 1. BORE Clock
 
-### Per-Stage Layout
+The Basic Oscillator for Redstone Events generates a stable pulse train:
 
 ```
-SSS → subtract comparator → torch → piston → gravel
+Lever → Repeater (2t) → Wire → Repeater (2t) → Observer → Output
+                ↑                                    │
+                └────────────── Feedback ────────────┘
 ```
 
-#### Steps
+**Period:** 4 game ticks (200ms at 20 TPS)
 
-1. Reference barrel `(2,4,Zb)` filled identically to TX
-2. Comparator `(3,4,Zb)` facing +Z
-3. Tap repeater `(1,5,Zb)`
-4. Subtractor comparator `(2,5,Zb)`
-5. Torch `(3,5,Zb+1)`
-6. Sticky piston `(4,5,Zb+1)`
-7. Gravel `(5,5,Zb+1)` under bus
+### 2. TX Layer
 
-Any mismatch breaks the line permanently until reset.
+Each of 34 stages encodes one nibble:
 
----
+```
+┌────────┐
+│ Barrel │──▶ Comparator ──▶ Repeater ──▶ Target (bus)
+└────────┘    (compare)       (2 ticks)
+     ↑
+   Items = signal_to_items(nibble)
+```
 
-## 11. Phase 4 — Adaptive Jitter Buffer
+The barrel fill determines comparator output. Repeaters isolate stages and maintain signal integrity.
 
-**Location**: Z = 230 → 245
-**Purpose**: Absorb lag and replay clean timing
+### 3. Auth Layer
 
-### Components
+Physical validation using subtraction:
 
-* Observer edge detector
-* Dropper + hopper FIFO
-* Independent 6-tick release clock
+```
+TX Signal ──▶ Comparator ──▶ Torch ──▶ Piston ──▶ Output
+              (subtract)     (invert)   │
+Reference ───────┘                      ▼
+Barrel                              [Gravel]
+```
 
-Output is a regenerated, stable SSS bus.
+**How it works:**
 
----
+1. Subtract comparator: `output = max(0, TX_signal - reference_signal)`
+2. If TX matches reference: output = 0 → torch ON → piston retracted
+3. If mismatch: output > 0 → torch OFF → piston extends → gravel breaks bus
 
-## 12. Phase 5 — Decoder & Payload
+**This is hardware enforcement**—wrong signals physically destroy the circuit.
 
-**Location**: Z = 245 → 260
+### 4. Jitter Buffer
 
-### Thresholds
+Absorbs timing variations using hopper FIFO:
 
-* **Signal 14** → Reset
-* **Signal 10** → TNT (demo payload)
-* **Signal 6** → Heartbeat indicator
+```
+Observer ──▶ Dropper ──▶ [Hopper Chain] ──▶ Comparator ──▶ Dropper
+ (edge)      (input)      (8 hoppers)       (detect)      (output)
+                               │                              ↑
+                               └──────── Items Flow ──────────┘
+```
 
-All payloads are downstream of authentication and buffering.
+Items are inserted on signal edges and released at a fixed rate, decoupling TX timing from decoder timing.
 
----
+### 5. Decoder
 
-## 13. Testing & Verification
+Threshold detection extracts protocol signals:
 
-1. Start clock
-2. Observe 34 pulses over ~10 seconds
-3. Confirm:
+| Signal | Meaning | Action |
+|--------|---------|--------|
+| ≥14 | RESET | Clear state |
+| 10 | PAYLOAD | Deliver reward |
+| ≥1 | HEARTBEAT | Light indicator |
 
-   * Auth passes
-   * Buffer replays
-   * Payload triggers
-
-### Tamper Test
-
-* Remove **1 stone** from any barrel
-* Result: auth breaks, no payload
-
----
-
-## 14. Known Limitations
-
-* Fixed frame length
-* Fixed buffer depth
-* Requires careful barrel filling
-* Chunk borders require `/forceload` in SMP
+Wire decay is used for threshold filtering—4 blocks of wire reduces signal by 4.
 
 ---
 
-## 15. License Notes (LGPL)
+## World Setup
 
-This implementation is licensed under **LGPL-3.0**.
+### Prerequisites
 
-You may:
+- Minecraft Java Edition 1.21.x
+- Creative mode
+- Superflat world recommended
 
-* Study
-* Modify
-* Redistribute
+### Recommended Superflat Preset
 
-Provided:
+```
+minecraft:bedrock,2*minecraft:dirt,minecraft:grass_block;minecraft:plains;village
+```
 
-* Changes are documented
-* The license remains intact
-* Attribution is preserved
+### Game Rules
+
+```
+/gamemode creative
+/gamerule randomTickSpeed 0
+/gamerule doDaylightCycle false
+/gamerule doMobSpawning false
+/gamerule commandBlockOutput false
+```
+
+### Build Area
+
+```
+/tp @s 0 100 0
+/fill -50 90 -50 50 200 300 air
+```
 
 ---
 
-## 16. Final Notes
+## Installation
 
-This project demonstrates that **Minecraft redstone can enforce protocol rules physically**, not just logically.
+### Automated (Datapack)
 
-It is a **reference implementation**, intentionally explicit and verbose, designed to be read like a real systems framework—not a trick build.
+```bash
+python generate_dcf_datapack.py
+```
+
+Copy the generated `dcf_protocol_v3` folder to your world's datapacks directory:
+
+```
+.minecraft/saves/YOUR_WORLD/datapacks/dcf_protocol_v3/
+```
+
+In-game:
+
+```
+/reload
+/function dcf:install
+```
+
+### Manual (Reference)
+
+See the generated `.mcfunction` files for exact block placements.
+
+---
+
+## Testing
+
+### Normal Operation
+
+1. Flip the lever at the clock
+2. Observe pulses propagating through TX layer
+3. Watch auth layer pass all 34 stages
+4. Receive diamond at decoder (payload confirmation)
+5. "SIGNAL ACTIVE" lamp illuminates
+
+### Tamper Detection
+
+```
+/function dcf:test_tamper
+```
+
+This removes 1 item from TX stage 0. The next transmission will:
+
+1. Output wrong signal strength at stage 0
+2. Auth layer detects mismatch
+3. Piston extends, gravel falls
+4. Signal bus physically breaks
+5. Payload never delivered
+
+### Reset After Tamper
+
+```
+/function dcf:test_reset
+```
+
+Restores the tampered barrel to correct fill level.
+
+---
+
+## Datapack Functions
+
+| Function | Description |
+|----------|-------------|
+| `dcf:load` | Initialization (runs on load) |
+| `dcf:install` | Full installation |
+| `dcf:install_clock` | Clock only |
+| `dcf:install_tx` | TX layer only |
+| `dcf:install_auth` | Auth layer only |
+| `dcf:install_buffer` | Jitter buffer only |
+| `dcf:install_decoder` | Decoder only |
+| `dcf:install_panel` | Control panel only |
+| `dcf:install_forceload` | Chunk loading |
+| `dcf:test_tamper` | Inject fault |
+| `dcf:test_reset` | Restore barrel |
+| `dcf:test_signals` | Verify signal table |
+
+---
+
+## Known Limitations
+
+1. **Fixed frame length:** 17 bytes only
+2. **No error correction:** Single bit errors cause rejection
+3. **Chunk dependencies:** Requires forceload for SMP
+4. **Timing constraints:** Must complete within chunk tick budget
+5. **No bidirectional:** TX→RX only, no acknowledgment
+
+---
+
+## Troubleshooting
+
+### "Auth layer immediately breaks"
+
+- Check barrel fill counts match exactly
+- Verify comparators are in subtract mode (right-click to toggle)
+- Ensure repeater delays are correct
+
+### "No signal propagation"
+
+- Verify clock is running (lamp should blink)
+- Check for broken redstone wire
+- Ensure chunks are forceloaded
+
+### "Payload not delivered"
+
+- Confirm all 34 auth stages pass
+- Check decoder comparator orientations
+- Verify wire decay path length
+
+### "Inconsistent behavior"
+
+- Set `randomTickSpeed 0`
+- Avoid building across chunk boundaries without forceload
+- Check for observer timing issues
+
+---
+
+## Design Philosophy
+
+This implementation prioritizes **clarity over compactness**:
+
+- Each concept maps to distinct blocks
+- No compressed/obfuscated redstone
+- Comments explain every stage
+- Failure modes are visible
+
+It demonstrates that Minecraft redstone can enforce protocol rules **physically**, not just logically. A wrong signal doesn't trigger an error message—it destroys the hardware.
+
+---
+
+## Extending the Protocol
+
+### Custom Payloads
+
+Modify `generate_decoder()` to add threshold detectors:
+
+```python
+# Add detector for signal 8
+f"setblock ~X ~Y ~Z minecraft:comparator[facing=east,mode=compare]",
+f"setblock ~X ~Y ~Z-1 minecraft:barrel[facing=north]{barrel_nbt(8)}",
+```
+
+### Variable Frame Length
+
+Adjust `NIBBLE_SEQUENCE` and regenerate. The auth layer automatically scales.
+
+### Multi-Channel
+
+Duplicate TX/Auth layers at different X offsets. Each channel operates independently.
+
+---
+
+## License
+
+LGPL-3.0
+
+You may study, modify, and redistribute this implementation provided changes are documented and the license preserved.
+
+---
+
+## Credits
+
+DeMoD Communications Framework  
+DeMoD LLC
 
 **17 bytes. One clock. No forgiveness.**
