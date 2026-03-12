@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DCF - Mathematical Formalization of Handshakeless Communication</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --turquoise: #00F0FF;
+    --violet: #8B5CF6;
+    --violet-dim: #6D3FD9;
+    --bg-void: #0A0A0F;
+    --bg-panel: #111118;
+    --bg-card: #1A1A24;
+    --bg-highlight: #222233;
+    --text-primary: #E0E0EC;
+    --text-secondary: #8888AA;
+    --text-dim: #555570;
+    --border: #2A2A3A;
+    --glow-turquoise: 0 0 20px rgba(0, 240, 255, 0.15);
+    --glow-violet: 0 0 20px rgba(139, 92, 246, 0.15);
+    --coral: #D85A30;
+    --amber: #EF9F27;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    background: var(--bg-void);
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 3rem 2rem 6rem;
+  }
+
+  /* ── Header ── */
+  .doc-header {
+    border-bottom: 2px solid var(--turquoise);
+    padding-bottom: 2rem;
+    margin-bottom: 3rem;
+    position: relative;
+  }
+  .doc-header::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, var(--turquoise), var(--violet), transparent);
+  }
+  .brand {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--turquoise);
+    margin-bottom: 0.5rem;
+  }
+  .doc-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.25;
+    margin-bottom: 0.5rem;
+  }
+  .doc-subtitle {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    font-weight: 300;
+  }
+  .doc-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 1rem;
+    letter-spacing: 0.05em;
+  }
+  .doc-meta .license-tag {
+    color: var(--turquoise);
+    font-weight: 700;
+  }
+  .doc-meta .patent-tag {
+    color: var(--coral);
+    font-weight: 700;
+  }
+
+  /* ── Sections ── */
+  .section {
+    margin-bottom: 3rem;
+  }
+  .section-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--violet);
+    margin-bottom: 0.25rem;
+  }
+  h2 {
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--turquoise);
+    margin: 1.5rem 0 0.75rem;
+  }
+
+  p {
+    margin-bottom: 1rem;
+    color: var(--text-secondary);
+  }
+  p strong, p b {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+  em { color: var(--text-primary); font-style: italic; }
+
+  /* ── Math blocks ── */
+  .math-block {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--turquoise);
+    border-radius: 4px;
+    padding: 1.25rem 1.5rem;
+    margin: 1.25rem 0;
+    overflow-x: auto;
+    box-shadow: var(--glow-turquoise);
+  }
+  .math-block.violet {
+    border-left-color: var(--violet);
+    box-shadow: var(--glow-violet);
+  }
+  .math-block.core {
+    border-left-color: var(--turquoise);
+    border-right: 3px solid var(--violet);
+    background: linear-gradient(135deg, var(--bg-panel), var(--bg-card));
+  }
+  .math-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 0.75rem;
+  }
+
+  /* ── Definition list ── */
+  .def-list {
+    margin: 0.75rem 0 1rem 0;
+    padding: 0;
+    list-style: none;
+  }
+  .def-list li {
+    position: relative;
+    padding-left: 1.25rem;
+    margin-bottom: 0.4rem;
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+  }
+  .def-list li::before {
+    content: '▸';
+    position: absolute;
+    left: 0;
+    color: var(--violet);
+    font-size: 0.8rem;
+  }
+
+  /* ── Callout ── */
+  .callout {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1.25rem 1.5rem;
+    margin: 1.5rem 0;
+  }
+  .callout-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--turquoise);
+    margin-bottom: 0.5rem;
+  }
+  .callout.provenance {
+    border-left: 3px solid var(--coral);
+  }
+  .callout.provenance .callout-title {
+    color: var(--coral);
+  }
+
+  /* ── Wire format diagram ── */
+  .wire-frame {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin: 1.25rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+  }
+  .wire-field {
+    padding: 0.6rem 0.5rem;
+    border-radius: 3px;
+    text-align: center;
+    line-height: 1.3;
+  }
+  .wire-field .field-name {
+    font-weight: 700;
+    display: block;
+    margin-bottom: 2px;
+  }
+  .wire-field .field-size {
+    opacity: 0.7;
+    font-size: 0.6rem;
+  }
+  .wf-type { background: #2D1F5E; color: #AFA9EC; flex: 0 0 6%; }
+  .wf-seq  { background: #085041; color: #5DCAA5; flex: 0 0 22%; }
+  .wf-ts   { background: #0C447C; color: #85B7EB; flex: 0 0 44%; }
+  .wf-plen { background: #633806; color: #FAC775; flex: 0 0 22%; }
+  .wf-pay  { background: #712B13; color: #F0997B; flex: 0 0 100%; margin-top: 4px; }
+
+  .byte-ruler {
+    display: flex;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    margin-top: 4px;
+    padding: 0 2px;
+  }
+  .byte-ruler span { display: block; }
+
+  /* ── Table ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+  th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--turquoise);
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--turquoise);
+    font-weight: 500;
+  }
+  td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+    vertical-align: top;
+  }
+  td:first-child {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  /* ── Separator ── */
+  hr {
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 2.5rem 0;
+  }
+
+  /* ── Code spans ── */
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85em;
+    background: var(--bg-highlight);
+    padding: 0.15em 0.4em;
+    border-radius: 3px;
+    color: var(--turquoise);
+  }
+
+  /* ── KaTeX overrides ── */
+  .katex { color: var(--text-primary); font-size: 1.05em; }
+  .katex .mord.text { color: var(--text-secondary); }
+
+  /* ── Print ── */
+  @media print {
+    html { background: #fff; color: #111; }
+    .math-block { border-color: #333; box-shadow: none; background: #f8f8f8; }
+    .katex { color: #111; }
+    .brand, .section-number { color: #333; }
+    h2 { color: #111; }
+    h3 { color: #222; }
+    p, .def-list li, td { color: #333; }
+    .wire-field { border: 1px solid #999; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════ HEADER -->
+<header class="doc-header">
+  <div class="brand">DeMoD LLC - Communications Framework</div>
+  <h1 class="doc-title">Mathematical Formalization of<br>Handshakeless Communication</h1>
+  <div class="doc-subtitle">Operator Theory &amp; Category Theory Foundations for the DCF Protocol</div>
+  <div class="doc-meta">
+    DCF v5.0.0 &nbsp;|&nbsp; DeMoD LLC &nbsp;|&nbsp; 2025
+    <br>
+    <span class="license-tag">LGPL-3.0</span> &nbsp;|&nbsp;
+    <span class="patent-tag">PATENT PENDING</span> &nbsp;|&nbsp;
+    Based on a secure protocol validated by the United States Air Force
+    <br>
+    Created by Asher &nbsp;|&nbsp; info@demod.ltd
+  </div>
+</header>
+
+
+<!-- ════════════════════════════════════════════ §0 PROVENANCE -->
+<section class="section">
+  <div class="section-number">§0 - Provenance &amp; Origin</div>
+  <h2>From Guitars to General-Purpose Communication</h2>
+
+  <div class="callout provenance">
+    <div class="callout-title">Origin</div>
+    <p>
+      The DeMoD Communications Framework began as a protocol for
+      <strong>DeMoD Guitars</strong> - instruments with embedded computers designed
+      and built by Asher, founder of DeMoD LLC. The original problem was deceptively
+      specific: how do you move real-time audio, MIDI control data, and DSP parameters
+      between an embedded processor inside a guitar body and external effects chains,
+      amplifiers, and recording interfaces - with no handshake negotiation, no clock
+      synchronization preamble, and no tolerance for latency?
+    </p>
+    <p style="margin-bottom:0">
+      That constraint - <em>the receiver must extract meaning from a signal without
+      prior coordination</em> - turned out to be universal. The same mathematics that
+      let a guitar's onboard processor identify an incoming effects-chain command
+      without a USB enumeration handshake also lets an IoT sensor mesh, a game server
+      network, or a distributed computing cluster identify and route packets without
+      session negotiation. The protocol that emerged from DeMoD Guitars was formalized,
+      validated by the United States Air Force as a secure communications framework,
+      and generalized into the DeMoD Communications Framework (DCF) described in this
+      document.
+    </p>
+  </div>
+
+  <div class="callout provenance">
+    <div class="callout-title">Licensing &amp; Intellectual Property</div>
+    <p>
+      DCF is released under the <strong>GNU Lesser General Public License v3.0
+      (LGPL-3.0)</strong>, permitting use in both open-source and proprietary
+      applications provided that modifications to the DCF library itself remain
+      open-source. The underlying handshakeless protocol design is
+      <strong>patent pending</strong>. This document describes the mathematical
+      foundations of that protocol for purposes of public reference, academic study,
+      and interoperable implementation.
+    </p>
+    <p style="margin-bottom:0">
+      DCF adheres to U.S. Export Administration Regulations (EAR) and International
+      Traffic in Arms Regulations (ITAR) by excluding cryptographic primitives from
+      the core framework, ensuring export-control-free distribution. Users implementing
+      encryption via plugins (e.g., TLS over gRPC) bear responsibility for compliance
+      with applicable export regulations.
+    </p>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════ §1 MOTIVATION -->
+<section class="section">
+  <div class="section-number">§1 - Motivation</div>
+  <h2>What "Handshakeless" Means and Why It Matters</h2>
+
+  <p>
+    Most communication protocols begin with a negotiation phase. TCP performs a
+    three-way handshake (SYN, SYN-ACK, ACK). TLS adds several more round-trips
+    to agree on cipher suites and exchange certificates. USB devices enumerate.
+    Bluetooth pairs. In every case, the sender and receiver must agree on timing,
+    encoding, and identity <em>before</em> any useful data can flow.
+  </p>
+  <p>
+    DCF eliminates this phase entirely. A DCF receiver extracts the identity and
+    content of a transmission from the signal itself, using the mathematical
+    structure of the frame as the sole basis for detection. There is no SYN packet,
+    no preamble sequence, no negotiated session state. The receiver simply listens,
+    computes, and recognizes.
+  </p>
+  <p>
+    This is not magic - it is a direct consequence of a well-known result in
+    harmonic analysis: the Fourier transform converts an unknown time delay into a
+    phase rotation that can be discarded by taking the magnitude spectrum. The
+    contribution of this document is to formalize that result in the specific context
+    of DCF's 17-byte transport frame, to show how the 4-byte data payload is
+    algebraically decoupled from the header during detection, and to prove that the
+    framework is medium-agnostic by construction via category theory.
+  </p>
+  <p>
+    The intended audience is engineers, mathematicians, and protocol designers.
+    Familiarity with linear algebra and basic signal processing is assumed; the
+    category-theoretic sections (§5) are included for completeness and can be
+    skipped without loss of practical understanding.
+  </p>
+</section>
+
+
+<!-- ════════════════════════════════════════════ §2 WIRE FORMAT -->
+<section class="section">
+  <div class="section-number">§2 - Wire Format</div>
+  <h2>The 17-Byte Transport Frame and 4-Byte Payload</h2>
+
+  <p>
+    Before introducing the mathematics, it is essential to understand the concrete
+    object being analyzed. Every DCF transmission begins with a fixed 17-byte header
+    followed by a variable-length payload. The header is serialized in network byte
+    order (big-endian) and contains four fields:
+  </p>
+
+  <div class="wire-frame">
+    <div class="wire-field wf-type">
+      <span class="field-name">type</span>
+      <span class="field-size">1 byte &middot; u8</span>
+    </div>
+    <div class="wire-field wf-seq">
+      <span class="field-name">sequence</span>
+      <span class="field-size">4 bytes &middot; u32</span>
+    </div>
+    <div class="wire-field wf-ts">
+      <span class="field-name">timestamp</span>
+      <span class="field-size">8 bytes &middot; u64 (microseconds since epoch)</span>
+    </div>
+    <div class="wire-field wf-plen">
+      <span class="field-name">payload_len</span>
+      <span class="field-size">4 bytes &middot; u32</span>
+    </div>
+    <div class="wire-field wf-pay">
+      <span class="field-name">payload (data)</span>
+      <span class="field-size">N bytes (specified by payload_len &middot; minimum 4 bytes for a command &middot; maximum 1,454 bytes for UDP MTU safety)</span>
+    </div>
+  </div>
+
+  <div class="byte-ruler">
+    <span style="flex:0 0 6%">0</span>
+    <span style="flex:0 0 22%">1</span>
+    <span style="flex:0 0 44%">5</span>
+    <span style="flex:0 0 22%">13</span>
+    <span style="flex:0 0 6%; text-align:right">17</span>
+  </div>
+
+  <table>
+    <tr><th>Field</th><th>Offset</th><th>Size</th><th>Role in Spectral Analysis</th></tr>
+    <tr>
+      <td><code>type</code></td><td>0</td><td>1 byte</td>
+      <td>Message class identifier (0x01 HEARTBEAT, 0x02 TASK, 0x03 RESULT, etc.). Drawn from a small, fixed enum - contributes a <strong>deterministic spectral peak</strong> to the header's DFT. This is the primary detection feature.</td>
+    </tr>
+    <tr>
+      <td><code>sequence</code></td><td>1</td><td>4 bytes</td>
+      <td>Monotonically increasing counter. Contributes <strong>structured, slowly-varying spectral energy</strong> - the low-order bits cycle predictably, reinforcing header identification over multiple frames.</td>
+    </tr>
+    <tr>
+      <td><code>timestamp</code></td><td>5</td><td>8 bytes</td>
+      <td>Microsecond-precision epoch time. The high-order bytes change slowly (epoch scale); the low-order bytes exhibit <strong>quasi-periodic microstructure</strong>. Together they create a wideband spectral signature that is statistically distinct from random payload data.</td>
+    </tr>
+    <tr>
+      <td><code>payload_len</code></td><td>13</td><td>4 bytes</td>
+      <td>Declares the payload size. For fixed-size command payloads (e.g., 4 bytes), this field is constant - contributing another <strong>deterministic peak</strong> to the header spectrum.</td>
+    </tr>
+    <tr>
+      <td><code>payload</code></td><td>17</td><td>N bytes</td>
+      <td>Application data. Content varies per message - contributes <strong>flat spectral noise floor</strong> under ensemble averaging. Invisible to frame detection; decoded independently after identification.</td>
+    </tr>
+  </table>
+
+  <h3>2.1 &nbsp; The 4-Byte Minimal Payload</h3>
+  <p>
+    The smallest meaningful DCF payload is 4 bytes (32 bits). This is the size of a
+    single hardware plugin command (<code>PluginRequest</code>), a position coordinate
+    component (<code>f32</code>), or a game event type with data byte. In the original
+    DeMoD Guitar context, 4 bytes carried an effects-chain command: one byte for the
+    target effect slot, one for the parameter index, and two for the 16-bit parameter
+    value.
+  </p>
+  <p>
+    A frame with a 4-byte payload totals <strong>21 bytes = 168 bits</strong> on the
+    wire. This is the concrete object whose mathematical structure is formalized in
+    the sections that follow.
+  </p>
+
+  <h3>2.2 &nbsp; Cross-Language Wire Compatibility</h3>
+  <p>
+    The same 17-byte header serialized by the C SDK via
+    <code>struct.pack("&gt;B B I Q I", ...)</code> is bit-identical to the output of
+    the Rust <code>ProtoMessage::serialize()</code>, the Common Lisp HydraMesh
+    encoder, and the Haskell SoapySDR pipeline. This is not an implementation
+    accident - it is a mathematical consequence of the natural isomorphism proved in
+    §5 below. The spectral fingerprint of a DCF frame is the same regardless of which
+    language produced it.
+  </p>
+</section>
+
+
+<!-- ════════════════════════════════════════════ §3 SIGNAL SPACE -->
+<section class="section">
+  <div class="section-number">§3 - The Signal Space</div>
+  <h2>Unitary Fourier Operator on Locally Compact Abelian Groups</h2>
+
+  <p>
+    With the wire format established, we now construct the mathematical abstraction
+    that makes handshakeless detection possible. The key insight is that a DCF frame
+    is not merely a sequence of bytes - it is a <strong>signal</strong>, and signals
+    live in Hilbert spaces where powerful structure-preserving transforms are available.
+  </p>
+  <p>
+    Specifically, we model the frame as an element of $L^2(\mathbb{G})$, the space
+    of square-integrable functions over a locally compact abelian group $\mathbb{G}$.
+    The choice of $\mathbb{G}$ depends on the physical medium:
+  </p>
+  <ul class="def-list">
+    <li>For a continuous RF carrier (as in the DCF SDR pipeline): $\mathbb{G} = \mathbb{R}$.</li>
+    <li>For an acoustic channel (as in the original DeMoD Guitar application): $\mathbb{G} = \mathbb{R}$, with bandwidth constraints imposed by the instrument's transducer.</li>
+    <li>For digital packet transport over UDP, TCP, or gRPC: $\mathbb{G} = \mathbb{Z}/N\mathbb{Z}$, a finite cyclic group where $N$ is the frame length in bits.</li>
+  </ul>
+  <p>
+    The abstraction that unifies all of these is the <strong>unitary Fourier
+    operator</strong> $\mathcal{F}$, defined over the Pontryagin duality between
+    $\mathbb{G}$ and its dual group $\hat{\mathbb{G}}$:
+  </p>
+
+  <div class="math-block">
+    <div class="math-label">Definition 3.1 - The Fourier Operator</div>
+    $$\mathcal{F} : L^2(\mathbb{G}) \;\longrightarrow\; L^2(\hat{\mathbb{G}})$$
+  </div>
+
+  <ul class="def-list">
+    <li>$\mathbb{G}$ is a <strong>locally compact abelian group</strong> - the domain in which the signal physically exists (time, space, or bit-position).</li>
+    <li>$\hat{\mathbb{G}}$ is the <strong>Pontryagin dual group</strong> - the space of continuous homomorphisms $\chi : \mathbb{G} \to \mathbb{T}$, where $\mathbb{T} = \{z \in \mathbb{C} : |z| = 1\}$ is the circle group. Informally, $\hat{\mathbb{G}}$ is the "frequency domain."</li>
+    <li><strong>Unitarity</strong> means $\langle \mathcal{F}f,\, \mathcal{F}g \rangle_{L^2(\hat{\mathbb{G}})} = \langle f,\, g \rangle_{L^2(\mathbb{G})}$ - the inner product (and therefore all information content) is perfectly preserved. Nothing is lost in the transform; nothing is added. This is the mathematical guarantee that a handshakeless receiver can reconstruct the full frame without any side-channel information.</li>
+  </ul>
+
+  <p>
+    The explicit action of $\mathcal{F}$ on a signal $f \in L^2(\mathbb{G})$ is:
+  </p>
+
+  <div class="math-block violet">
+    <div class="math-label">Definition 3.2 - Explicit Transform</div>
+    $$\hat{f}(\chi) \;=\; \int_{\mathbb{G}} f(x)\, \overline{\chi(x)}\; d\mu(x), \qquad \chi \in \hat{\mathbb{G}}$$
+  </div>
+
+  <p>
+    The symbol $\mu$ denotes the <strong>Haar measure</strong> on $\mathbb{G}$ - the
+    unique (up to scalar) translation-invariant measure. This is not a technicality.
+    Translation-invariance of the measure is the formal reason why the Fourier
+    transform's behavior does not depend on <em>when</em> or <em>where</em> the
+    receiver begins sampling. The Haar measure is, in a precise sense, the
+    mathematical embodiment of the word "handshakeless": it guarantees that
+    $\hat{f}(\chi)$ is the same whether you start listening at time $t = 0$ or
+    $t = \tau$ for any $\tau$.
+  </p>
+
+  <div class="callout">
+    <div class="callout-title">In plain language</div>
+    <p style="margin-bottom:0">
+      The Fourier transform takes a signal - a sequence of voltages on a wire, pressure
+      waves in air, or bits in a buffer - and decomposes it into its constituent
+      frequencies. The result is a "spectral fingerprint" of the signal. Two key
+      properties make this useful for DCF: (1) the fingerprint is unique - different
+      signals produce different spectra, so frame identification is unambiguous;
+      (2) the fingerprint is computed using an integration measure that is indifferent
+      to time-shifts, so the receiver does not need to know when the signal was sent.
+    </p>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════ §4 MODULATION -->
+<section class="section">
+  <div class="section-number">§4 - Modulation Abstraction</div>
+  <h2>Shift Invariance and Blind Synchronization</h2>
+
+  <p>
+    In any communication system, the signal arrives at the receiver with some unknown
+    delay. In a handshake-based protocol, this delay is resolved during the
+    negotiation phase - the parties agree on a time reference before data flows. In
+    DCF, no such negotiation occurs. Instead, the receiver exploits an algebraic
+    identity that converts the unknown delay into a form that can be either measured
+    or discarded, depending on the application.
+  </p>
+
+  <h3>4.1 &nbsp; Translation Operator</h3>
+  <p>
+    The unknown arrival delay $a \in \mathbb{G}$ is modeled as the action of the
+    <strong>translation operator</strong>, which shifts the signal in time without
+    altering its content:
+  </p>
+  <div class="math-block">
+    <div class="math-label">Definition 4.1 - Translation</div>
+    $$\mathcal{T}_a f(x) \;=\; f(x - a), \qquad a \in \mathbb{G}$$
+  </div>
+  <p>
+    In the DeMoD Guitar context, $a$ is the propagation delay between the guitar's
+    onboard processor and the external effects unit. In a game server network, $a$
+    is the one-way network latency. In an SDR pipeline, $a$ is the time-of-flight
+    for the RF signal. In all cases, $a$ is unknown to the receiver at the moment of
+    detection.
+  </p>
+
+  <h3>4.2 &nbsp; Modulation Operator</h3>
+  <p>
+    The corresponding effect in the frequency domain is the <strong>modulation
+    operator</strong>, which encodes timing information as a phase shift without
+    requiring a shared clock:
+  </p>
+  <div class="math-block violet">
+    <div class="math-label">Definition 4.2 - Modulation</div>
+    $$\mathcal{M}_\xi f(x) \;=\; e^{2\pi i \langle x,\, \xi \rangle}\, f(x), \qquad \xi \in \hat{\mathbb{G}}$$
+  </div>
+
+  <h3>4.3 &nbsp; The Commutation Relation</h3>
+  <p>
+    The fundamental identity of handshakeless communication is the
+    <strong>commutation relation</strong> between the Fourier operator, the
+    translation operator, and the modulation operator. It states that a time delay
+    in $\mathbb{G}$ becomes a pure phase rotation in $\hat{\mathbb{G}}$:
+  </p>
+  <div class="math-block core">
+    <div class="math-label">Theorem 4.3 - DCF Commutation Relation</div>
+    $$\boxed{\;\mathcal{F} \circ \mathcal{T}_a \;=\; \mathcal{M}_{-a} \circ \mathcal{F}\;}$$
+  </div>
+
+  <ul class="def-list">
+    <li>$\mathcal{T}_a$ represents the <strong>unknown delay</strong> - the signal was sent at some time the receiver doesn't know.</li>
+    <li>$\mathcal{M}_{-a}$ represents the <strong>resulting phase rotation</strong> - a multiplicative factor of $e^{-2\pi i a \omega}$ at each frequency $\omega$.</li>
+    <li>This is an <strong>operator identity</strong>: it holds for every signal $f \in L^2(\mathbb{G})$, every delay $a \in \mathbb{G}$, and every group $\mathbb{G}$ in the LCA category. It is not an approximation.</li>
+  </ul>
+
+  <div class="callout">
+    <div class="callout-title">In plain language</div>
+    <p>
+      If someone sends you a message and you don't know exactly when they sent it,
+      the only effect on the frequency-domain representation is that each frequency
+      component gets "rotated" by an angle proportional to the delay. Critically, the
+      <em>strength</em> of each frequency component is unchanged - only the
+      <em>angle</em> changes. This means you can identify <em>what</em> was sent (by
+      looking at the strengths) without knowing <em>when</em> it was sent (which only
+      affects the angles).
+    </p>
+    <p style="margin-bottom:0">
+      This is the entire mathematical basis for handshakeless detection. Everything
+      that follows is a consequence of this one identity.
+    </p>
+  </div>
+
+  <h3>4.4 &nbsp; Application to the 17-Byte Header</h3>
+  <p>
+    Consider a DCF frame arriving at the receiver with unknown delay $a$. The
+    received signal is $\mathcal{T}_a f$, where $f$ is the transmitted frame. By the
+    commutation relation, the Fourier transform of the received signal is:
+  </p>
+  <div class="math-block violet">
+    <div class="math-label">Received Spectrum</div>
+    $$\mathcal{F}\{\mathcal{T}_a f\}(\omega) \;=\; e^{-2\pi i a \omega}\; \hat{f}(\omega)$$
+  </div>
+  <p>
+    The magnitude spectrum is therefore:
+  </p>
+  <div class="math-block">
+    <div class="math-label">Magnitude Invariance</div>
+    $$\left|\mathcal{F}\{\mathcal{T}_a f\}(\omega)\right|^2 \;=\; \left|e^{-2\pi i a \omega}\right|^2 \cdot \left|\hat{f}(\omega)\right|^2 \;=\; 1 \cdot \left|\hat{f}(\omega)\right|^2 \;=\; \left|\hat{f}(\omega)\right|^2$$
+  </div>
+  <p>
+    The factor $|e^{-2\pi i a \omega}|^2 = 1$ for all $a$ and $\omega$, because
+    complex exponentials live on the unit circle. The magnitude spectrum of the
+    received frame is <strong>identical</strong> to the magnitude spectrum of the
+    transmitted frame, regardless of the delay. The receiver computes
+    $|\hat{f}(\omega)|^2$ from the incoming bitstream and compares it against the
+    known spectral templates for each DCF message type - and the match succeeds
+    regardless of when the frame was sent.
+  </p>
+</section>
+
+
+<!-- ════════════════════════════════════════════ §5 CATEGORY -->
+<section class="section">
+  <div class="section-number">§5 - Category-Theoretic Structure</div>
+  <h2>The Fourier Transform as a Natural Isomorphism</h2>
+
+  <p>
+    This section is addressed to readers with background in category theory and may
+    be skipped without loss of practical understanding. Its purpose is to prove that
+    DCF's handshakeless property is not merely a feature of a particular group
+    ($\mathbb{R}$ or $\mathbb{Z}/N\mathbb{Z}$) but is an inherent structural
+    property of the Fourier transform itself - guaranteeing that DCF works identically
+    across every medium and encoding.
+  </p>
+
+  <h3>5.1 &nbsp; The Functors</h3>
+  <p>
+    We define two covariant functors from the category $\mathbf{LCA}$ of locally
+    compact abelian groups (with continuous homomorphisms) to the category
+    $\mathbf{Hilb}$ of Hilbert spaces (with bounded linear maps):
+  </p>
+  <div class="math-block">
+    <div class="math-label">Definition 5.1 - Signal and Spectral Functors</div>
+    $$\text{Sig} : \mathbf{LCA} \to \mathbf{Hilb}, \qquad \mathbb{G} \mapsto L^2(\mathbb{G})$$
+    $$\text{Spec} : \mathbf{LCA} \to \mathbf{Hilb}, \qquad \mathbb{G} \mapsto L^2(\hat{\mathbb{G}})$$
+  </div>
+
+  <p>
+    $\text{Sig}$ assigns to each group the Hilbert space of signals over that group.
+    $\text{Spec}$ assigns to each group the Hilbert space of spectra over its dual.
+    Both functors are well-defined because the Pontryagin duality functor
+    $(-)^\wedge : \mathbf{LCA} \to \mathbf{LCA}^{op}$ is exact.
+  </p>
+
+  <h3>5.2 &nbsp; The Natural Isomorphism</h3>
+  <p>
+    The Fourier transform provides a natural isomorphism between these functors:
+  </p>
+  <div class="math-block core">
+    <div class="math-label">Theorem 5.2 - Naturality of the Fourier Transform</div>
+    $$\boxed{\;\Phi : \text{Sig} \;\xRightarrow{\;\sim\;}\; \text{Spec}\;}$$
+  </div>
+  <p>
+    Concretely, for every continuous homomorphism $\varphi : \mathbb{G}_1 \to \mathbb{G}_2$, the following diagram commutes:
+  </p>
+  <div class="math-block violet">
+    <div class="math-label">Naturality Square</div>
+    $$\begin{array}{ccc}
+    L^2(\mathbb{G}_1) & \xrightarrow{\;\mathcal{F}_{\mathbb{G}_1}\;} & L^2(\hat{\mathbb{G}}_1) \\[6pt]
+    \Big\downarrow\scriptstyle{\varphi^*} & & \Big\downarrow\scriptstyle{\hat{\varphi}^*} \\[6pt]
+    L^2(\mathbb{G}_2) & \xrightarrow{\;\mathcal{F}_{\mathbb{G}_2}\;} & L^2(\hat{\mathbb{G}}_2)
+    \end{array}$$
+  </div>
+
+  <p>
+    The maps $\varphi^*$ and $\hat{\varphi}^*$ are the pullbacks induced by $\varphi$
+    and its Pontryagin dual $\hat{\varphi}$ respectively. Commutativity means:
+    $\mathcal{F}_{\mathbb{G}_2} \circ \varphi^* = \hat{\varphi}^* \circ \mathcal{F}_{\mathbb{G}_1}$.
+  </p>
+
+  <div class="callout">
+    <div class="callout-title">Why this matters for DCF</div>
+    <p>
+      This naturality is the formal proof that DCF is <strong>medium-agnostic by
+      construction</strong>. The homomorphism $\varphi$ might be:
+    </p>
+    <ul class="def-list" style="margin-top:0.5rem">
+      <li>An analog-to-digital converter mapping $\mathbb{R} \to \mathbb{Z}/N\mathbb{Z}$ (RF carrier to digital samples).</li>
+      <li>A resampling operation mapping $\mathbb{Z}/N\mathbb{Z} \to \mathbb{Z}/M\mathbb{Z}$ (changing the sample rate).</li>
+      <li>The embedding of a Minecraft redstone comparator's signal range $\mathbb{Z}/15\mathbb{Z}$ into the general nibble group $\mathbb{Z}/16\mathbb{Z}$.</li>
+    </ul>
+    <p style="margin-top:0.5rem; margin-bottom:0">
+      In every case, the naturality square guarantees that the spectral identity of
+      the DCF frame is preserved across the mapping. A frame detected over RF has the
+      same spectral fingerprint as the same frame detected over UDP, over acoustic,
+      or over redstone. This is not an engineering convenience - it is a theorem.
+    </p>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════ §6 HANDSHAKELESS IDENTITY -->
+<section class="section">
+  <div class="section-number">§6 - The Handshakeless Identity</div>
+  <h2>Spectral Density as the Phase-Free Invariant</h2>
+
+  <p>
+    The commutation relation (§4.3) tells us that an unknown delay produces a phase
+    rotation in the spectral domain. The receiver eliminates this unknown phase by
+    computing the <strong>power spectral density</strong> - a quantity that depends
+    only on the <em>magnitude</em> of the spectrum, discarding all phase information:
+  </p>
+
+  <div class="math-block core">
+    <div class="math-label">Definition 6.1 - The Handshakeless Identity (Wiener-Khinchin)</div>
+    $$\boxed{\;\mathcal{S}_{xx}(\omega) \;=\; \lim_{T \to \infty}\; \frac{1}{2T}\; \mathbb{E}\!\left[\,\left|\, \mathcal{F}\{x_T(t)\}\,\right|^2\,\right]\;}$$
+  </div>
+
+  <ul class="def-list">
+    <li>$x_T(t) = x(t) \cdot \mathbf{1}_{[-T,T]}(t)$ is the signal windowed over the observation interval $[-T, T]$. As $T \to \infty$, the window captures arbitrarily many frames.</li>
+    <li>$\mathbb{E}[\cdot]$ denotes the expectation (statistical average) over the ensemble of received signals, accounting for noise, multipath, and other channel impairments.</li>
+    <li>$|\cdot|^2$ takes the squared magnitude, collapsing all phase information: $|e^{-2\pi i a \omega} \hat{f}(\omega)|^2 = |\hat{f}(\omega)|^2$ for any delay $a$. This is the step that eliminates the need for a handshake.</li>
+    <li>$\mathcal{S}_{xx}(\omega)$ is a function of frequency alone - <strong>no phase, no clock reference, no handshake</strong>.</li>
+  </ul>
+
+  <p>
+    Equivalently, via the <strong>Wiener-Khinchin theorem</strong>,
+    $\mathcal{S}_{xx}$ is the Fourier transform of the autocorrelation function
+    $R_{xx}(\tau) = \mathbb{E}[x(t)\overline{x(t+\tau)}]$:
+  </p>
+  <div class="math-block violet">
+    <div class="math-label">Wiener-Khinchin Duality</div>
+    $$\mathcal{S}_{xx}(\omega) \;=\; \mathcal{F}\{R_{xx}\}(\omega) \;=\; \int_{-\infty}^{\infty} R_{xx}(\tau)\, e^{-2\pi i \omega \tau}\, d\tau$$
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">In plain language</div>
+    <p>
+      The power spectral density answers the question: "how much energy is present at
+      each frequency?" It deliberately throws away the timing information (the phase)
+      and keeps only the structural information (the energy distribution). For DCF,
+      this is the ideal representation: it preserves everything the receiver needs to
+      identify the frame type while discarding the one thing the receiver doesn't
+      know - when the frame was transmitted.
+    </p>
+    <p style="margin-bottom:0">
+      The Wiener-Khinchin duality adds a second perspective: $\mathcal{S}_{xx}$ can
+      also be obtained by asking "how similar is the signal to a time-shifted copy of
+      itself?" (the autocorrelation), and then Fourier-transforming the answer. This
+      is the mathematical basis for DCF's RTT-based peer grouping: peers within the
+      &lt;50ms RTT threshold exhibit strong autocorrelation at lags corresponding to
+      the frame period, which is how Dijkstra's RTT-weighted grouping algorithm
+      clusters nodes without a handshake.
+    </p>
+  </div>
+</section>
+
+
+<hr>
+
+
+<!-- ════════════════════════════════════════════ §7 SPECTRAL SEPARATION -->
+<section class="section">
+  <div class="section-number">§7 - Spectral Separation of Header and Payload</div>
+  <h2>Why the 4-Byte Payload Is Invisible to Frame Detection</h2>
+
+  <p>
+    The 17-byte header and the 4-byte payload play fundamentally different roles in
+    the spectral analysis of a DCF frame. Understanding this separation is essential
+    to understanding how DCF achieves both handshakeless detection <em>and</em>
+    reliable data transport in the same frame.
+  </p>
+
+  <h3>7.1 &nbsp; Header: Structured Spectral Peaks</h3>
+  <p>
+    The header fields exhibit strong statistical regularity across multiple frames.
+    The <code>type</code> byte is a constant drawn from a small enum. The
+    <code>sequence</code> number increments monotonically, meaning its low-order bits
+    cycle with a predictable period. The <code>timestamp</code> field has
+    microsecond-epoch structure - its high-order bytes change slowly (on the scale of
+    seconds), while its low-order bytes exhibit quasi-periodic microstructure. The
+    <code>payload_len</code> field is often constant for a given message class (e.g.,
+    always 4 for hardware plugin commands).
+  </p>
+  <p>
+    When the spectral density $\mathcal{S}_{xx}$ is computed over an ensemble of
+    received frames, these regularities produce <strong>persistent spectral
+    peaks</strong> - frequency components that are consistently present from frame to
+    frame. These peaks form the DCF header's spectral fingerprint.
+  </p>
+
+  <h3>7.2 &nbsp; Payload: Flat Noise Floor</h3>
+  <p>
+    The payload bytes, by contrast, carry application data that varies freely from
+    message to message. An I2C command, a position coordinate, a game event - the
+    content is determined by the application, not by the protocol. From the
+    receiver's perspective (before decoding), the payload is effectively random.
+  </p>
+  <p>
+    Under the expectation operator $\mathbb{E}[\cdot]$, random data contributes a
+    <strong>flat spectral noise floor</strong> - energy distributed uniformly across
+    all frequencies with no persistent peaks. This is a standard result from the
+    theory of wide-sense stationary processes: if the payload bytes are independent
+    and identically distributed, their power spectral density is constant.
+  </p>
+
+  <h3>7.3 &nbsp; Detection by Threshold</h3>
+  <p>
+    The receiver performs frame detection by computing the magnitude spectrum of the
+    incoming bitstream and looking for spectral peaks that rise above the noise floor.
+    Because the header contributes persistent peaks and the payload contributes only
+    noise, the detection process depends <em>entirely</em> on the header. The payload
+    content is irrelevant to detection - it is invisible in the spectral domain.
+  </p>
+  <p>
+    This separation is what allows DCF to carry arbitrary data payloads without
+    compromising the handshakeless property. The receiver identifies the frame by its
+    header spectrum, then reads the payload from the known bit positions within the
+    detected frame. Detection and decoding are two independent operations.
+  </p>
+
+  <h3>7.4 &nbsp; Algebraic Decomposition: The Tensor Product</h3>
+  <p>
+    The spectral separation of header and payload has a precise algebraic
+    formulation. A complete DCF frame with a 4-byte payload occupies
+    $17 + 4 = 21$ bytes $= 168$ bits. The bit-level group is
+    $\mathbb{Z}/168\mathbb{Z}$, but the header and payload occupy disjoint
+    subranges, so the frame is more naturally modeled as the direct product:
+  </p>
+
+  <div class="math-block">
+    <div class="math-label">Frame Group Decomposition</div>
+    $$\mathbb{G}_{\text{frame}} \;=\; \underbrace{\mathbb{Z}/136\mathbb{Z}}_{\text{header (17 bytes)}} \;\times\; \underbrace{\mathbb{Z}/32\mathbb{Z}}_{\text{payload (4 bytes)}}$$
+  </div>
+
+  <p>
+    The Discrete Fourier Transform over a direct product of finite groups decomposes
+    as a <strong>tensor product</strong> of the individual transforms:
+  </p>
+
+  <div class="math-block core">
+    <div class="math-label">Theorem 7.4 - DFT Tensor Product Decomposition</div>
+    $$\boxed{\;\mathcal{F}_{\mathbb{Z}/136\mathbb{Z} \,\times\, \mathbb{Z}/32\mathbb{Z}} \;\cong\; \mathcal{F}_{\mathbb{Z}/136\mathbb{Z}} \;\otimes\; \mathcal{F}_{\mathbb{Z}/32\mathbb{Z}}\;}$$
+  </div>
+
+  <ul class="def-list">
+    <li>The left-hand side is a single 168-point DFT over the full frame.</li>
+    <li>The right-hand side decomposes it into a 136-point DFT over the header <strong>tensored with</strong> a 32-point DFT over the payload.</li>
+    <li>The tensor product $\otimes$ means these two transforms are <strong>algebraically independent</strong>: the spectral coefficients of the header do not depend on the payload content, and vice versa.</li>
+  </ul>
+
+  <p>
+    This decomposition has direct engineering consequences:
+  </p>
+  <ul class="def-list">
+    <li>The receiver can run a 136-point DFT on just the header bits to perform frame detection, without computing the payload's spectrum at all.</li>
+    <li>Once the frame is detected, the receiver runs a separate 32-point DFT on the payload bits to extract data content.</li>
+    <li>These two operations can execute in parallel - and in DCF's plugin architecture, they do: the transport layer validates the header while the hardware or application plugin independently processes the payload.</li>
+  </ul>
+
+  <h3>7.5 &nbsp; Further Factorization via the Chinese Remainder Theorem</h3>
+  <p>
+    The number 168 factors as $168 = 8 \times 3 \times 7$. By the Chinese Remainder
+    Theorem for finite abelian groups:
+  </p>
+  <div class="math-block violet">
+    <div class="math-label">CRT Factorization</div>
+    $$\mathbb{Z}/168\mathbb{Z} \;\cong\; \mathbb{Z}/8\mathbb{Z} \;\times\; \mathbb{Z}/3\mathbb{Z} \;\times\; \mathbb{Z}/7\mathbb{Z}$$
+  </div>
+  <p>
+    This factorization enables a multi-dimensional DFT decomposition that can be
+    exploited for computational efficiency (reducing a single 168-point DFT to three
+    smaller transforms of sizes 8, 3, and 7) and for structural analysis (each prime
+    factor corresponds to a distinct spectral "axis" that can be examined
+    independently). The Cooley-Tukey FFT algorithm is a direct application of this
+    decomposition.
+  </p>
+</section>
+
+
+<!-- ════════════════════════════════════════════ §8 DISCRETE -->
+<section class="section">
+  <div class="section-number">§8 - Discrete Specialization</div>
+  <h2>The DCF Frame over Finite Groups</h2>
+
+  <p>
+    For DCF's digital transport layer, we specialize from the general LCA setting to
+    the finite cyclic group $\mathbb{G} = \mathbb{Z}/N\mathbb{Z}$. The Pontryagin
+    dual of $\mathbb{Z}/N\mathbb{Z}$ is itself:
+    $\widehat{\mathbb{Z}/N\mathbb{Z}} \cong \mathbb{Z}/N\mathbb{Z}$, so the DFT is
+    an automorphism on the same finite group.
+  </p>
+
+  <div class="math-block">
+    <div class="math-label">Definition 8.1 - Discrete Fourier Operator on the DCF Frame</div>
+    $$\mathcal{F}_N[k] \;=\; \sum_{n=0}^{N-1} x[n]\; e^{-2\pi i \, nk / N}, \qquad k \in \mathbb{Z}/N\mathbb{Z}$$
+  </div>
+
+  <p>
+    For $N = 136$ (17-byte header alone) or $N = 168$ (header + 4-byte payload),
+    this is the standard DFT. The commutation relation discretizes to:
+  </p>
+
+  <div class="math-block core">
+    <div class="math-label">Theorem 8.2 - Discrete Commutation</div>
+    $$\mathcal{F}_N\!\left[\mathcal{T}_m\{x[n]\}\right] \;=\; e^{-2\pi i \, mk/N}\; \mathcal{F}_N\!\left[x[n]\right]$$
+  </div>
+
+  <p>
+    And the discrete handshakeless identity - the spectral fingerprint used for
+    frame detection - becomes:
+  </p>
+
+  <div class="math-block violet">
+    <div class="math-label">Definition 8.3 - Discrete Spectral Signature</div>
+    $$\mathcal{S}_{xx}[k] \;=\; \frac{1}{N}\;\left|\,\mathcal{F}_N[k]\,\right|^2 \;=\; \frac{1}{N}\;\left|\sum_{n=0}^{N-1} x[n]\, e^{-2\pi i nk/N}\right|^2$$
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">Mapping to DCF v5.0 transport</div>
+    <p>
+      The DCF header maps directly onto the finite group
+      $\mathbb{Z}/136\mathbb{Z}$. Each field occupies a sub-range of bit positions,
+      and the spectral signature $\mathcal{S}_{xx}[k]$ acts as a structural
+      fingerprint: the receiver identifies a DCF frame by its spectral shape,
+      regardless of when (time-shift) or where (phase offset) it arrives.
+    </p>
+    <p style="margin-bottom:0">
+      The 4-byte payload maps onto $\mathbb{Z}/32\mathbb{Z}$. After the header's
+      spectral fingerprint is matched and the frame is identified, the receiver
+      extracts the payload from bit positions 136-167 and processes it through
+      the appropriate plugin - a hardware command, a position update, a game event,
+      or an effects-chain parameter, depending on the <code>type</code> field
+      identified during header detection.
+    </p>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════ §9 COMPLETE -->
+<section class="section">
+  <div class="section-number">§9 - Complete Expression</div>
+  <h2>The DCF Handshakeless Communication Theorem</h2>
+
+  <p>
+    Assembling §3-§8 into a single statement:
+  </p>
+
+  <div class="math-block core" style="padding: 1.75rem 2rem;">
+    <div class="math-label">The DCF Theorem</div>
+    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+      Let $\mathbb{G}$ be a locally compact abelian group, $\hat{\mathbb{G}}$ its
+      Pontryagin dual, $\mathcal{F}: L^2(\mathbb{G}) \to L^2(\hat{\mathbb{G}})$
+      the unitary Fourier operator, $\mathcal{T}_a$ translation by $a \in \mathbb{G}$,
+      and $\mathcal{M}_\xi$ modulation by $\xi \in \hat{\mathbb{G}}$. Then:
+    </p>
+
+    $$\underbrace{\mathcal{F} \circ \mathcal{T}_a = \mathcal{M}_{-a} \circ \mathcal{F}}_{\text{Commutation (blind sync)}}
+    \quad\Longrightarrow\quad
+    \underbrace{\left|\mathcal{F}\{f\}\right|^2 = \left|\mathcal{F}\{\mathcal{T}_a f\}\right|^2}_{\text{Shift-invariant identity}}
+    \quad\Longrightarrow\quad
+    \underbrace{\mathcal{S}_{xx}(\omega) = \lim_{T\to\infty} \frac{1}{2T}\,\mathbb{E}\!\left[|\mathcal{F}\{x_T\}|^2\right]}_{\text{Handshakeless detection}}$$
+
+    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 1.25rem;">
+      Moreover, $\mathcal{F}$ is natural with respect to $\mathbf{LCA}$:
+    </p>
+    $$\Phi : \text{Sig} \;\xRightarrow{\;\sim\;}\; \text{Spec}$$
+    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
+      guaranteeing that this identity holds across all group representations -
+      continuous ($\mathbb{R}$), discrete ($\mathbb{Z}/N\mathbb{Z}$), and
+      $p$-adic ($\mathbb{Z}_p$) - making DCF medium-agnostic by construction.
+    </p>
+
+    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 1rem;">
+      For a frame with header $\mathbb{H} = \mathbb{Z}/136\mathbb{Z}$ and payload
+      $\mathbb{P} = \mathbb{Z}/32\mathbb{Z}$:
+    </p>
+    $$\mathcal{F}_{\mathbb{H} \times \mathbb{P}} \;\cong\; \mathcal{F}_{\mathbb{H}} \otimes \mathcal{F}_{\mathbb{P}}$$
+    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem; margin-bottom: 0;">
+      Header detection and payload decoding are algebraically independent operations.
+    </p>
+  </div>
+</section>
+
+
+<hr>
+
+
+<!-- ════════════════════════════════════════════ APPENDIX A -->
+<section class="section">
+  <div class="section-number">Appendix A</div>
+  <h2>Symbol Reference</h2>
+  <table>
+    <tr><th>Symbol</th><th>Domain</th><th>Meaning</th></tr>
+    <tr><td>$\mathbb{G}$</td><td>Group Theory</td><td>Locally compact abelian group (time/space/bit-position domain)</td></tr>
+    <tr><td>$\hat{\mathbb{G}}$</td><td>Pontryagin Duality</td><td>Dual group (frequency domain)</td></tr>
+    <tr><td>$\mathcal{F}$</td><td>Operator Theory</td><td>Unitary Fourier operator</td></tr>
+    <tr><td>$\mathcal{T}_a$</td><td>Operator Theory</td><td>Translation by unknown delay $a$</td></tr>
+    <tr><td>$\mathcal{M}_\xi$</td><td>Operator Theory</td><td>Modulation (phase rotation) by $\xi$</td></tr>
+    <tr><td>$\mathcal{S}_{xx}(\omega)$</td><td>Spectral Analysis</td><td>Power spectral density - the handshakeless invariant</td></tr>
+    <tr><td>$R_{xx}(\tau)$</td><td>Statistics</td><td>Autocorrelation function</td></tr>
+    <tr><td>$\mu$</td><td>Measure Theory</td><td>Haar measure on $\mathbb{G}$ (translation-invariant)</td></tr>
+    <tr><td>$\mathbb{T}$</td><td>Topology</td><td>Circle group $\{z \in \mathbb{C} : |z| = 1\}$</td></tr>
+    <tr><td>$\Phi$</td><td>Category Theory</td><td>Natural isomorphism $\text{Sig} \Rightarrow \text{Spec}$</td></tr>
+    <tr><td>$\mathbf{LCA}$</td><td>Category Theory</td><td>Category of locally compact abelian groups</td></tr>
+    <tr><td>$\mathbf{Hilb}$</td><td>Category Theory</td><td>Category of Hilbert spaces</td></tr>
+    <tr><td>$\mathbb{Z}/N\mathbb{Z}$</td><td>Group Theory</td><td>Cyclic group of order $N$ (finite bit-domain)</td></tr>
+    <tr><td>$\otimes$</td><td>Linear Algebra</td><td>Tensor product (algebraic independence of transforms)</td></tr>
+    <tr><td>$\mathbb{H}$</td><td>DCF-specific</td><td>Header group $\mathbb{Z}/136\mathbb{Z}$ (17-byte header)</td></tr>
+    <tr><td>$\mathbb{P}$</td><td>DCF-specific</td><td>Payload group $\mathbb{Z}/32\mathbb{Z}$ (4-byte minimal payload)</td></tr>
+  </table>
+</section>
+
+
+<!-- ════════════════════════════════════════════ APPENDIX B -->
+<section class="section">
+  <div class="section-number">Appendix B</div>
+  <h2>Reading Guide</h2>
+
+  <p>
+    This document is structured for three audiences:
+  </p>
+
+  <table>
+    <tr><th>Audience</th><th>Recommended Sections</th></tr>
+    <tr>
+      <td>Engineers &amp; implementors</td>
+      <td>§0 (origin), §1 (motivation), §2 (wire format), §4.3-§4.4 (commutation relation and header application), §7 (spectral separation of header and payload), §8 (discrete formulas)</td>
+    </tr>
+    <tr>
+      <td>Signal processing &amp; DSP practitioners</td>
+      <td>All of the above, plus §3 (Hilbert space formulation), §6 (Wiener-Khinchin), §7.4-§7.5 (tensor product and CRT decomposition)</td>
+    </tr>
+    <tr>
+      <td>Mathematicians &amp; category theorists</td>
+      <td>All sections, with §5 (naturality) and §9 (complete theorem) as the main results</td>
+    </tr>
+  </table>
+
+  <p>
+    The "In plain language" callouts throughout the document provide non-technical
+    summaries of the key results. They are not simplifications - they are restatements
+    of the same content in accessible terms.
+  </p>
+</section>
+
+
+<!-- ════════════════════════════════════════════ FOOTER -->
+<section class="section" style="margin-bottom:0;">
+  <hr>
+  <p style="font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-dim); text-align: center; letter-spacing: 0.05em;">
+    &copy; 2025 DeMoD LLC &nbsp;|&nbsp; LGPL-3.0 &nbsp;|&nbsp; Patent Pending
+    <br>
+    DeMoD Communications Framework &nbsp;|&nbsp; Created by Asher
+    <br>
+    info@demod.ltd &nbsp;|&nbsp; github.com/ALH477
+  </p>
+</section>
+
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    renderMathInElement(document.body, {
+      delimiters: [
+        {left: "$$", right: "$$", display: true},
+        {left: "$", right: "$", display: false}
+      ],
+      throwOnError: false,
+      trust: true
+    });
+  });
+</script>
+
+</body>
+</html>
