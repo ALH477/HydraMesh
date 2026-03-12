@@ -2,7 +2,6 @@
 
 ![logo](hydramesh.svg)
 
-https://github.com/user-attachments/assets/6bf79b3d-dd32-4814-82eb-762778291c81
 
 **Version 5.0.1 | Oct 10, 2025**  
 **Developed by DeMoD LLC**  
