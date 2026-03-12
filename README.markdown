@@ -17,6 +17,9 @@ HydraMesh is hardware and language agnostic, supporting embedded devices (e.g., 
 
 The bash scripts are there to help you set up your environment. There are Nix and Docker presets. You're welcome.
 
+<img width="3888" height="2208" alt="image" src="https://github.com/user-attachments/assets/1294e4e6-906c-42ef-af0d-c192056803ea" />
+
+
 ### HYDRA Acronym
 The name **HydraMesh** reflects its core strengths: a self-healing, decentralized mesh with proxy-like adaptability. The acronym **HYDRA** stands for:
 
