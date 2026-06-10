@@ -340,6 +340,10 @@ int streamdb_delete(StreamDB* db, const unsigned char* key, size_t key_len) {
 
     size_t removed_size = 0;
     db->root = remove_helper(db->root, key, key_len, 0, &removed_size);
+    if (db->root == NULL) {
+        db->root = create_node();
+        if (!db->root) { MUTEX_UNLOCK(&db->mutex); return 0; }
+    }
     
     if (removed_size > 0) {
         db->total_size -= removed_size;
@@ -603,7 +607,8 @@ void streamdb_free(StreamDB* db) {
     free(db);
 }
 
-/* Example usage */
+/* Demo main — guard with STREAMDB_DEMO to avoid duplicate-symbol link failures */
+#ifdef STREAMDB_DEMO
 int main(void) {
     StreamDB* db = streamdb_init("streamdb.dat", 10000);
     if (!db) {
@@ -644,3 +649,4 @@ int main(void) {
     streamdb_free(db);
     return 0;
 }
+#endif /* STREAMDB_DEMO */

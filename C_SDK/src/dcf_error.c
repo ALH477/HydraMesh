@@ -17,6 +17,15 @@
     #include <execinfo.h>
     #include <unistd.h>
     #include <syslog.h>
+    #include <fcntl.h>
+    #include <strings.h>
+    #define dcf_strcasecmp strcasecmp
+    #define dcf_isatty      isatty
+#elif defined(DCF_PLATFORM_WINDOWS)
+    #include <io.h>
+    #include <fcntl.h>
+    #define dcf_strcasecmp _stricmp
+    #define dcf_isatty      _isatty
 #endif
 
 /* ============================================================================
@@ -356,13 +365,13 @@ DCFLogLevel dcf_log_get_level(void) {
 
 DCFLogLevel dcf_log_level_from_string(const char* str) {
     if (!str) return DCF_LOG_INFO;
-    if (strcasecmp(str, "trace") == 0) return DCF_LOG_TRACE;
-    if (strcasecmp(str, "debug") == 0) return DCF_LOG_DEBUG;
-    if (strcasecmp(str, "info") == 0) return DCF_LOG_INFO;
-    if (strcasecmp(str, "warn") == 0 || strcasecmp(str, "warning") == 0) return DCF_LOG_WARN;
-    if (strcasecmp(str, "error") == 0) return DCF_LOG_ERROR;
-    if (strcasecmp(str, "fatal") == 0) return DCF_LOG_FATAL;
-    if (strcasecmp(str, "off") == 0) return DCF_LOG_OFF;
+    if (dcf_strcasecmp(str, "trace") == 0) return DCF_LOG_TRACE;
+    if (dcf_strcasecmp(str, "debug") == 0) return DCF_LOG_DEBUG;
+    if (dcf_strcasecmp(str, "info") == 0) return DCF_LOG_INFO;
+    if (dcf_strcasecmp(str, "warn") == 0 || dcf_strcasecmp(str, "warning") == 0) return DCF_LOG_WARN;
+    if (dcf_strcasecmp(str, "error") == 0) return DCF_LOG_ERROR;
+    if (dcf_strcasecmp(str, "fatal") == 0) return DCF_LOG_FATAL;
+    if (dcf_strcasecmp(str, "off") == 0) return DCF_LOG_OFF;
     return DCF_LOG_INFO;
 }
 
@@ -377,6 +386,9 @@ bool dcf_log_is_enabled(DCFLogLevel level) {
 
 void dcf_log_write_v(DCFLogLevel level, const char* file, int line,
                      const char* func, const char* fmt, va_list args) {
+    if (!g_logger.initialized) {
+        dcf_log_init(&(DCFLoggerConfig){.min_level = DCF_LOG_WARN});
+    }
     if (!dcf_log_is_enabled(level)) return;
     
     /* Format timestamp */
@@ -423,7 +435,7 @@ void dcf_log_write_v(DCFLogLevel level, const char* file, int line,
     
     /* stderr */
     if (g_logger.config.log_to_stderr) {
-        if (g_logger.config.use_colors && isatty(fileno(stderr))) {
+        if (g_logger.config.use_colors && dcf_isatty(fileno(stderr))) {
             fprintf(stderr, "%s%s%s\n", log_colors[level], log_line, color_reset);
         } else {
             fprintf(stderr, "%s\n", log_line);
@@ -536,49 +548,45 @@ void dcf_log_get_stats(DCFLogStats* stats) {
 static DCFCrashCallback g_crash_callback = NULL;
 static void* g_crash_user_data = NULL;
 static char g_crash_log_path[DCF_MAX_PATH_LEN] = "";
+static int g_crash_log_fd = -1;
 
 #ifdef DCF_PLATFORM_POSIX
 static struct sigaction g_old_handlers[32];
 static const int crash_signals[] = { SIGSEGV, SIGABRT, SIGFPE, SIGILL, SIGBUS };
 
 static void crash_handler(int sig) {
-    /* Write to crash log */
-    FILE* f = NULL;
-    if (g_crash_log_path[0]) {
-        f = fopen(g_crash_log_path, "a");
-    }
-    
-    FILE* out = f ? f : stderr;
-    
-    time_t now = time(NULL);
-    fprintf(out, "\n=== CRASH at %s", ctime(&now));
-    fprintf(out, "Signal: %d (%s)\n", sig, strsignal(sig));
-    
-    /* Print stack trace */
+    /* Async-signal-safe: only use write(), backtrace_symbols_fd(), and
+     * signal-safe functions. No fopen/fprintf/malloc/free/ctime/strsignal
+     * inside a signal handler — those are UB per POSIX. */
+    static const char crash_prefix[] = "\n=== CRASH: signal ";
+    static const char stack_prefix[] = "Stack trace:\n";
+    char sigbuf[8];
+    int len = 0;
+    int tmp = sig;
+    if (tmp < 0) { sigbuf[len++] = '-'; tmp = -tmp; }
+    do { sigbuf[len++] = '0' + (tmp % 10); tmp /= 10; } while (tmp);
+    /* reverse digits in place */
+    for (int i = 0; i < len / 2; i++) { char c = sigbuf[i]; sigbuf[i] = sigbuf[len-1-i]; sigbuf[len-1-i] = c; }
+    sigbuf[len] = '\n';
+
+    /* Try to write to a pre-opened crash log fd; fall back to stderr */
+    int fd = STDERR_FILENO;
+    /* g_crash_log_fd is set by dcf_crash_handler_set_log_file (or remains -1) */
+    if (g_crash_log_fd >= 0) fd = g_crash_log_fd;
+
+    write(fd, crash_prefix, sizeof(crash_prefix) - 1);
+    write(fd, sigbuf, (size_t)len + 1);
+
+    write(fd, stack_prefix, sizeof(stack_prefix) - 1);
     void* frames[64];
     int n = backtrace(frames, 64);
-    char** symbols = backtrace_symbols(frames, n);
-    
-    fprintf(out, "Stack trace:\n");
-    for (int i = 0; i < n; i++) {
-        fprintf(out, "  #%d %s\n", i, symbols ? symbols[i] : "???");
-    }
-    free(symbols);
-    
-    /* Print last error if set */
-    if (tls_has_error) {
-        char buf[1024];
-        dcf_error_format(&tls_error_ctx, buf, sizeof(buf));
-        fprintf(out, "Last error:\n%s\n", buf);
-    }
-    
-    if (f) fclose(f);
-    
-    /* Call user callback */
+    backtrace_symbols_fd(frames, n, fd);
+
+    /* Call user callback (MUST be async-signal-safe if set) */
     if (g_crash_callback) {
         g_crash_callback(sig, g_crash_user_data);
     }
-    
+
     /* Restore default handler and re-raise */
     signal(sig, SIG_DFL);
     raise(sig);
@@ -614,8 +622,17 @@ void dcf_crash_handler_set_callback(DCFCrashCallback callback, void* user_data) 
 }
 
 void dcf_crash_handler_set_log_file(const char* path) {
+    if (g_crash_log_fd >= 0) {
+        close(g_crash_log_fd);
+        g_crash_log_fd = -1;
+    }
     if (path) {
         DCF_SAFE_STRCPY(g_crash_log_path, path, sizeof(g_crash_log_path));
+#ifdef DCF_PLATFORM_POSIX
+        g_crash_log_fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+#elif defined(DCF_PLATFORM_WINDOWS)
+        g_crash_log_fd = _open(path, _O_WRONLY | _O_CREAT | _O_APPEND, 0644);
+#endif
     } else {
         g_crash_log_path[0] = '\0';
     }

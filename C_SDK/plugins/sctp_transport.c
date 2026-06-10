@@ -37,8 +37,9 @@ uint8_t* sctp_receive(void* self, size_t* size) {
     socklen_t fromlen = sizeof(from);
     int flags = 0;
     struct sctp_sndrcvinfo sinfo;
-    *size = sctp_recvmsg(st->sctp_sock, buf, 1024, (struct sockaddr*)&from, &fromlen, &sinfo, &flags);
-    if (*size < 0) { free(buf); return NULL; }
+    ssize_t n = sctp_recvmsg(st->sctp_sock, buf, 1024, (struct sockaddr*)&from, &fromlen, &sinfo, &flags);
+    if (n < 0) { free(buf); return NULL; }
+    *size = (size_t)n;
     return buf;
 }
 
@@ -48,7 +49,7 @@ void sctp_destroy(void* self) {
     free(self);
 }
 
-ITransport iface = {sctp_setup, sctp_send, sctp_receive, sctp_destroy};
+DCFTransportV1 iface = {sctp_setup, sctp_send, sctp_receive, sctp_destroy};
 
 void* create_plugin() { return calloc(1, sizeof(SctpTransport)); }
 

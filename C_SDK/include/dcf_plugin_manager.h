@@ -2,13 +2,14 @@
 #define DCF_PLUGIN_MANAGER_H
 #include "dcf_config.h"
 #include "dcf_error.h"
+#include "dcf_types.h"
 
 typedef struct {
     bool (*setup)(void* self, const char* host, int port);
     bool (*send)(void* self, const uint8_t* data, size_t size, const char* target);
     uint8_t* (*receive)(void* self, size_t* size);
     void (*destroy)(void* self);
-} ITransport;
+} DCFTransportV1;
 
 typedef struct DCFPluginManager DCFPluginManager;
 

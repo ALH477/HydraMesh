@@ -19,8 +19,8 @@
 
 ;; Dependencies: Install via Quicklisp
 (ql:quickload '(:cffi :uuid :usocket :bordeaux-threads
-                :log4cl :trivial-backtrace :flexi-streams :fiveam
-                :ieee-floats :cl-json :cl-json-schema))
+                 :log4cl :trivial-backtrace :flexi-streams :fiveam
+                 :ieee-floats :cl-json))
 
 (cffi:define-foreign-library libstreamdb
   (:unix "libstreamdb.so")
@@ -50,8 +50,8 @@
 (defconstant +err-transaction+ -5)
 
 (defpackage :d-lisp
-  (:use :cl :cffi :uuid :usocket :bordeaux-threads :log4cl
-        :trivial-backtrace :flexi-streams :fiveam :ieee-floats :cl-json :cl-json-schema)
+(:use :cl :cffi :uuid :usocket :bordeaux-threads :log4cl
+         :trivial-backtrace :flexi-streams :fiveam :ieee-floats :cl-json)
   (:export :dcf-init :dcf-start :dcf-stop :dcf-send :dcf-send-udp :dcf-receive
            :dcf-status :dcf-version :dcf-get-metrics :dcf-benchmark
            :dcf-db-insert :dcf-db-query :dcf-db-delete :dcf-db-search :dcf-db-flush
@@ -494,25 +494,22 @@
   (handler-case
       (with-open-file (stream file :direction :input :if-does-not-exist :error)
         (let ((config (cl-json:decode-json stream)))
-          (cl-json-schema:validate *config-schema* config)
           (make-dcf-config
-            :transport (getf config :transport "UDP")
-            :host (getf config :host "0.0.0.0")
-            :port (getf config :port 50051)
-            :udp-port (getf config :udp-port 7777)
-            :mode (getf config :mode "p2p")
-            :node-id (getf config :node-id (format nil "node-~A" (random 10000)))
-            :peers (getf config :peers '())
-            :group-rtt-threshold (getf config :group-rtt-threshold 50)
-            :storage (getf config :storage "in-memory")
-            :streamdb-path (getf config :streamdb-path)
-            :optimization-level (getf config :optimization-level 2)
-            :retry-max (getf config :retry-max 3)
-            :udp-mtu (getf config :udp-mtu 1400)
-            :udp-reliable-timeout (getf config :udp-reliable-timeout 500)
-            :audio-priority (getf config :audio-priority t))))
-    (cl-json-schema:validation-error (e)
-      (signal-dcf-error :config-validation (format nil "Config validation failed: ~A" e)))
+            :transport (jref config "transport" "UDP")
+            :host (jref config "host" "0.0.0.0")
+            :port (jref config "port" 50051)
+            :udp-port (jref config "udp-port" 7777)
+            :mode (jref config "mode" "p2p")
+            :node-id (jref config "node-id" (format nil "node-~A" (random 10000)))
+            :peers (jref config "peers" '())
+            :group-rtt-threshold (jref config "group-rtt-threshold" 50)
+            :storage (jref config "storage" "in-memory")
+            :streamdb-path (jref config "streamdb-path" nil)
+            :optimization-level (jref config "optimization-level" 2)
+            :retry-max (jref config "retry-max" 3)
+            :udp-mtu (jref config "udp-mtu" 1400)
+            :udp-reliable-timeout (jref config "udp-reliable-timeout" 500)
+            :audio-priority (jref config "audio-priority" t))))
     (file-error (e)
       (signal-dcf-error :file-error (format nil "Failed to read config: ~A" e)))))
 
@@ -887,10 +884,19 @@
   '(:object (:required "peers")
     :properties (("peers" :array))))
 
+(defun jref (alist key &optional default)
+  "Tolerant alist accessor for cl-json output. cl-json:decode-json returns
+alists, not plists, so getf never matches. This walks the alist."
+  (let ((entry (assoc key alist :test #'equal)))
+    (if entry (cdr entry) default)))
+
 (defun validate-streamdb-data (data schema)
-  (handler-case
-      (cl-json-schema:validate schema (cl-json:decode-json-from-string data))
-    (error (e) (signal-dcf-error :schema-validation (format nil "Schema validation failed: ~A" e)))))
+  "Manual validation replacing cl-json-schema (not in Quicklisp)."
+  (declare (ignore schema))
+  (let ((decoded (handler-case (cl-json:decode-json-from-string data)
+                   (error () (signal-dcf-error :schema-validation "Invalid JSON")))))
+    (unless (assoc "peers" decoded :test #'equal)
+      (signal-dcf-error :schema-validation "Missing required key: peers"))))
 
 ;; Gaming API
 (defun dcf-send-position (player-id x y z)

@@ -1,0 +1,18 @@
+[package]
+name = "dcf-wire-codec"
+version = "1.0.0"
+edition = "2021"
+description = "DeMod 17-byte wire frame codec — reference implementation and certification"
+license = "LGPL-3.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[[test]]
+name = "certify"
+path = "tests/certify.rs"

@@ -81,6 +81,7 @@ for sdk in "${SELECTED_SDKS[@]}"; do
             buildPhase = "make";
             installPhase = "make install DESTDIR=\$out";
             meta.description = "C SDK for DCF";
+            meta.license = pkgs.lib.licenses.lgpl3Plus;
           };
 EOF
             ;;
@@ -220,6 +221,7 @@ EOF
             buildPhase = "make html";
             installPhase = "cp -r _build/html \$out";
             meta.description = "DCF Documentation";
+            meta.license = pkgs.lib.licenses.lgpl3Plus;
           };
 EOF
             ;;
@@ -240,6 +242,7 @@ cat << EOF >> flake.nix
               export PROTOC=\${protobuf}/bin/protoc
             '';
             meta.description = "Dev shell for DCF mono repo";
+              meta.license = pkgs.lib.licenses.lgpl3Plus;
           };
 
 EOF

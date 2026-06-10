@@ -22,15 +22,18 @@ bool udp_setup(void* self, const char* host, int port) {
 }
 
 bool udp_send(void* self, const uint8_t* data, size_t size, const char* target) {
+    if (size > 512) return false;
     UDPTransport* t = (UDPTransport*)self;
     struct sockaddr_in dest;
+    memset(&dest, 0, sizeof(dest));
     dest.sin_family = AF_INET;
     size_t colon = strcspn(target, ":");
     char* addr = strndup(target, colon);
     dest.sin_port = htons(atoi(target + colon + 1));
     inet_pton(AF_INET, addr, &dest.sin_addr);
     free(addr);
-    return sendto(t->sock, data, size > 512 ? 512 : size, 0, (struct sockaddr*)&dest, sizeof(dest)) >= 0;
+    ssize_t sent = sendto(t->sock, data, size, 0, (struct sockaddr*)&dest, sizeof(dest));
+    return sent == (ssize_t)size;
 }
 
 uint8_t* udp_receive(void* self, size_t* size) {
@@ -49,7 +52,7 @@ void udp_destroy(void* self) {
     free(self);
 }
 
-ITransport iface = {udp_setup, udp_send, udp_receive, udp_destroy};
+DCFTransportV1 iface = {udp_setup, udp_send, udp_receive, udp_destroy};
 
 void* create_plugin() {
     return calloc(1, sizeof(UDPTransport));

@@ -51,7 +51,7 @@ void namedpipe_destroy(void* self) {
     free(self);
 }
 
-ITransport iface = {namedpipe_setup, namedpipe_send, namedpipe_receive, namedpipe_destroy};
+DCFTransportV1 iface = {namedpipe_setup, namedpipe_send, namedpipe_receive, namedpipe_destroy};
 
 void* create_plugin() { return calloc(1, sizeof(NamedPipeTransport)); }
 

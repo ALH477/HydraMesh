@@ -63,6 +63,7 @@ struct DCFConnPool {
     dcf_thread_t health_thread;
     dcf_atomic_bool running;
     dcf_atomic_bool draining;
+    dcf_atomic_bool health_started;
     
     /* Event callback */
     DCFConnPoolEventCallback event_callback;
@@ -202,11 +203,21 @@ static DCFPooledConn* create_connection(DCFConnPool* pool, const char* peer_id) 
  * Background Threads
  * ============================================================================ */
 
+static void pool_sleep_interruptible(DCFConnPool* pool, uint32_t total_ms) {
+    const uint32_t slice = 100;
+    uint32_t elapsed = 0;
+    while (elapsed < total_ms && dcf_atomic_load(&pool->running)) {
+        uint32_t step = (total_ms - elapsed < slice) ? (total_ms - elapsed) : slice;
+        dcf_sleep_ms(step);
+        elapsed += step;
+    }
+}
+
 static void* eviction_thread_func(void* arg) {
     DCFConnPool* pool = (DCFConnPool*)arg;
     
     while (dcf_atomic_load(&pool->running)) {
-        dcf_sleep_ms(10000);  /* Check every 10 seconds */
+        pool_sleep_interruptible(pool, 10000);  /* Check every 10 seconds */
         
         if (!dcf_atomic_load(&pool->running)) break;
         
@@ -257,7 +268,7 @@ static void* health_thread_func(void* arg) {
     DCFConnPool* pool = (DCFConnPool*)arg;
     
     while (dcf_atomic_load(&pool->running)) {
-        dcf_sleep_ms(pool->config.validation_interval_ms);
+        pool_sleep_interruptible(pool, pool->config.validation_interval_ms);
         
         if (!dcf_atomic_load(&pool->running)) break;
         if (!pool->config.test_on_idle) continue;
@@ -316,6 +327,7 @@ DCFConnPool* dcf_connpool_create(const DCFConnPoolConfig* config) {
     dcf_atomic_init(&pool->running, false);
     dcf_atomic_init(&pool->draining, false);
     dcf_atomic_init(&pool->pending_acquisitions, 0);
+    dcf_atomic_init(&pool->health_started, false);
     
     return pool;
 }
@@ -365,8 +377,8 @@ DCFError dcf_connpool_start(DCFConnPool* pool) {
     }
     
     if (pool->config.test_on_idle) {
-        if (dcf_thread_create(&pool->health_thread, health_thread_func, pool) != 0) {
-            /* Continue anyway, health checking is optional */
+        if (dcf_thread_create(&pool->health_thread, health_thread_func, pool) == 0) {
+            dcf_atomic_store(&pool->health_started, true);
         }
     }
     
@@ -387,6 +399,10 @@ DCFError dcf_connpool_stop(DCFConnPool* pool) {
     /* Wait for threads */
     if (pool->config.enable_background_eviction) {
         dcf_thread_join(pool->eviction_thread, NULL);
+    }
+    if (dcf_atomic_load(&pool->health_started)) {
+        dcf_thread_join(pool->health_thread, NULL);
+        dcf_atomic_store(&pool->health_started, false);
     }
     
     return DCF_SUCCESS;

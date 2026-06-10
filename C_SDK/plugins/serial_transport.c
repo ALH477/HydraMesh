@@ -26,12 +26,10 @@ bool serial_setup(void* self, const char* device, int baud) {
 }
 
 bool serial_send(void* self, const uint8_t* data, size_t size, const char* target) {
+    (void)target;
     SerialTransport* st = (SerialTransport*)self;
-    uint8_t* encoded = malloc(size + 2);
-    // COBS encode (simplified)
-    ssize_t sent = write(st->fd, encoded, size + 2);
-    free(encoded);
-    return sent > 0;
+    ssize_t sent = write(st->fd, data, size);
+    return sent == (ssize_t)size;
 }
 
 uint8_t* serial_receive(void* self, size_t* size) {
@@ -50,7 +48,7 @@ void serial_destroy(void* self) {
     free(self);
 }
 
-ITransport iface = {serial_setup, serial_send, serial_receive, serial_destroy};
+DCFTransportV1 iface = {serial_setup, serial_send, serial_receive, serial_destroy};
 
 void* create_plugin() { return calloc(1, sizeof(SerialTransport)); }
 

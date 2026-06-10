@@ -37,7 +37,7 @@ void modbus_destroy(void* self) {
     free(self);
 }
 
-ITransport iface = {modbus_setup, modbus_send, modbus_receive, modbus_destroy};
+DCFTransportV1 iface = {modbus_setup, modbus_send, modbus_receive, modbus_destroy};
 
 void* create_plugin() { return calloc(1, sizeof(ModbusTransport)); }
 

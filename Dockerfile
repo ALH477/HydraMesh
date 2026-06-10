@@ -1,10 +1,17 @@
-# Use Ubuntu 22.04 as base for multi-language support
-FROM ubuntu:22.04
+# Runtime stage: only what's needed to run the built artifacts
+FROM ubuntu:22.04 AS runtime
 
-# Set non-interactive mode for apt
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install core tools and dependencies
+RUN apt-get update && apt-get install -y \
+    python3 libgrpc++1 libprotobuf-lite23 libncurses5 libjson-c4 libuuid1 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Build stage
+FROM ubuntu:22.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update && apt-get install -y \
     git cmake build-essential libprotobuf-dev protobuf-compiler libgrpc++-dev grpc-tools \
     python3 python3-pip perl cpanminus libncurses5-dev libuuid1 uuid-dev libjson-c-dev \
@@ -44,7 +51,8 @@ RUN mkdir -p $ANDROID_SDK_ROOT/cmdline-tools && \
     yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses && \
     $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-# Clone the repo with submodules
+# Copy license (LGPL-3.0)
+COPY LICENSE /app/LICENSE
 WORKDIR /app
 RUN git clone --recurse-submodules https://github.com/ALH477/DeMoD-Communication-Framework.git .
 

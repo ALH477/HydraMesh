@@ -185,7 +185,13 @@ extern "C" {
     #endif
 #endif
 
+#if defined(_MSC_VER)
+#define DCF_INTERNAL
+#elif defined(__GNUC__) || defined(__clang__)
 #define DCF_INTERNAL __attribute__((visibility("hidden")))
+#else
+#define DCF_INTERNAL
+#endif
 
 /* ============================================================================
  * Atomic Operations

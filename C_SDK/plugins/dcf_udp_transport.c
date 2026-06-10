@@ -136,7 +136,7 @@ void udp_destroy(void* self) {
     free(t);
 }
 
-ITransport udp_iface = {
+DCFTransportV1 udp_iface = {
     .setup = udp_setup,
     .send = udp_send,
     .receive = udp_receive,

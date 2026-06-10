@@ -16,6 +16,7 @@ option(DCF_BUILD_TESTS "Build unit tests" ON)
 option(DCF_BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(DCF_BUILD_EXAMPLES "Build examples" ON)
 option(DCF_ENABLE_SANITIZERS "Enable address/thread sanitizers" OFF)
+option(DCF_ENABLE_ARCH_NATIVE "Enable -march=native for latency benchmark" OFF)
 option(DCF_ENABLE_COVERAGE "Enable code coverage" OFF)
 option(DCF_ENABLE_LTO "Enable link-time optimization" OFF)
 
@@ -77,7 +78,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     
     if(CMAKE_C_COMPILER_ID STREQUAL "Clang")
         list(APPEND DCF_WARNINGS
-            -Weverything
+            -Wall -Wextra -Wconversion
             -Wno-padded
             -Wno-covered-switch-default
             -Wno-declaration-after-statement
@@ -326,7 +327,7 @@ if(DCF_BUILD_TESTS)
     target_link_libraries(latency_test PRIVATE dcf::dcf m)
     target_compile_options(latency_test PRIVATE 
         ${DCF_WARNINGS}
-        -O3 -march=native
+        -O3 $<$<BOOL:${DCF_ENABLE_ARCH_NATIVE}>:-march=native>
     )
     
     if(DCF_ENABLE_SANITIZERS)
@@ -410,37 +411,21 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/dcf.pc
 set(CPACK_PACKAGE_NAME "dcf")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY ${PROJECT_DESCRIPTION})
-set(CPACK_PACKAGE_VENDOR "DCF Project")
-set(CPACK_PACKAGE_CONTACT "dcf@example.com")
+set(CPACK_PACKAGE_VENDOR "DeMoD LLC")
+set(CPACK_PACKAGE_CONTACT "dcf@demod.io")
 
-# Handle LICENSE file for CPack - create placeholder if missing
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE")
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE")
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
     set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
-elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.txt")
-    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.txt")
-elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md")
-    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md")
 else()
-    # Create a minimal license file in build dir if none exists
-    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt"
-        "MIT License\n\nCopyright (c) 2025 DCF Project\n\n"
-        "Permission is hereby granted, free of charge, to any person obtaining a copy\n"
-        "of this software and associated documentation files (the \"Software\"), to deal\n"
-        "in the Software without restriction, including without limitation the rights\n"
-        "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n"
-        "copies of the Software, and to permit persons to whom the Software is\n"
-        "furnished to do so, subject to the following conditions:\n\n"
-        "The above copyright notice and this permission notice shall be included in all\n"
-        "copies or substantial portions of the Software.\n\n"
-        "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND.\n"
-    )
-    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt")
-    message(STATUS "Note: No LICENSE file found, using generated placeholder for CPack")
+    message(WARNING "No LICENSE file found for CPack")
 endif()
 
 if(UNIX AND NOT APPLE)
     set(CPACK_GENERATOR "TGZ;DEB;RPM")
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libpthread-stubs0-dev")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6")
+    set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "libgrpc++1, libprotobuf23")
     set(CPACK_RPM_PACKAGE_REQUIRES "glibc")
 elseif(APPLE)
     set(CPACK_GENERATOR "TGZ")

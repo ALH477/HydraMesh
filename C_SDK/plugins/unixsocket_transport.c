@@ -63,7 +63,7 @@ void unixsocket_destroy(void* self) {
     free(self);
 }
 
-ITransport iface = {unixsocket_setup, unixsocket_send, unixsocket_receive, unixsocket_destroy};
+DCFTransportV1 iface = {unixsocket_setup, unixsocket_send, unixsocket_receive, unixsocket_destroy};
 
 void* create_plugin() { return calloc(1, sizeof(UnixSocketTransport)); }
 

@@ -44,7 +44,7 @@ void dcf_message__free_unpacked(DCFMessage *message, ProtobufCAllocator *allocat
 
 size_t health_request__get_packed_size(const HealthRequest *message);
 size_t health_request__pack(const HealthRequest *message, uint8_t *out);
-HealthRequest *health_request__unpack(ProtobufCAllocator *allocator, size_t len, the uint8_t *data);
+HealthRequest *health_request__unpack(ProtobufCAllocator *allocator, size_t len, uint8_t *data);
 void health_request__free_unpacked(HealthRequest *message, ProtobufCAllocator *allocator);
 
 size_t health_response__get_packed_size(const HealthResponse *message);

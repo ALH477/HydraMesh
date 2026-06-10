@@ -34,8 +34,8 @@ bool can_send(void* self, const uint8_t* data, size_t size, const char* target) 
 uint8_t* can_receive(void* self, size_t* size) {
     CanTransport* ct = (CanTransport*)self;
     struct can_frame frame;
-    *size = recv(ct->sock, &frame, sizeof(frame), 0);
-    if (*size <= 0) return NULL;
+    ssize_t n = recv(ct->sock, &frame, sizeof(frame), 0);
+    if (n <= 0) return NULL;
     uint8_t* buf = malloc(frame.can_dlc);
     memcpy(buf, frame.data, frame.can_dlc);
     *size = frame.can_dlc;
@@ -48,7 +48,7 @@ void can_destroy(void* self) {
     free(self);
 }
 
-ITransport iface = {can_setup, can_send, can_receive, can_destroy};
+DCFTransportV1 iface = {can_setup, can_send, can_receive, can_destroy};
 
 void* create_plugin() { return calloc(1, sizeof(CanTransport)); }
 

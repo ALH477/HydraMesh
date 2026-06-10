@@ -290,7 +290,7 @@ int dcf_cond_wait(dcf_cond_t* cond, dcf_mutex_t* mutex) {
 
 int dcf_cond_timedwait(dcf_cond_t* cond, dcf_mutex_t* mutex, uint64_t timeout_ms) {
     struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
+    clock_gettime(CLOCK_MONOTONIC, &ts);
     ts.tv_sec += timeout_ms / 1000;
     ts.tv_nsec += (timeout_ms % 1000) * 1000000;
     if (ts.tv_nsec >= 1000000000) {
