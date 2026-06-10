@@ -1,0 +1,321 @@
+{
+ "format": "DCF-Audio L2 framing v1 (adapter over the 17-byte DeModFrame quantum)",
+ "spec": "seq = packet_id[15:5] | frag_idx[4:0]; frag_idx 0 = [len,frag_total,codec_id,flags]; frag_idx 1..N = 4 payload bytes (last zero-padded); type=CTRL(3), version=1",
+ "constants": {
+  "frag_bits": 5,
+  "max_frags": 31,
+  "max_payload": 124,
+  "max_packet_id": 2047,
+  "frame_type_ctrl": 3
+ },
+ "anchors": {
+  "exampleAudioPacket": {
+   "codec_id": 1,
+   "packet_id": 16,
+   "ts_us": 66051,
+   "src": 1,
+   "dst": 65535,
+   "payload": "deadbeef1234",
+   "frames": [
+    "d31302000001ffff06020100010203cad7",
+    "d31302010001ffffdeadbeef0102032489",
+    "d31302020001ffff1234000001020332bc"
+   ]
+  }
+ },
+ "theorem": "L2 framing is a fixed bit-placement adapter over the certified DeModFrame; matching these framing + reassembly + PCM + (separately) PM-param vectors pins the C and Rust implementations to this reference. codec_id is opaque to L2, so the framing vectors are invariant to codec choice.",
+ "framing": [
+  {
+   "codec_id": 0,
+   "src": 1,
+   "dst": 65535,
+   "packet_id": 0,
+   "ts_us": 0,
+   "flags": 1,
+   "payload": "",
+   "frames": [
+    "d31300000001ffff00000001000000d7a0"
+   ]
+  },
+  {
+   "codec_id": 1,
+   "src": 1,
+   "dst": 65535,
+   "packet_id": 37,
+   "ts_us": 74565,
+   "flags": 0,
+   "payload": "ee",
+   "frames": [
+    "d31304a00001ffff010101000123454bcc",
+    "d31304a10001ffffee0000000123453542"
+   ]
+  },
+  {
+   "codec_id": 2,
+   "src": 1,
+   "dst": 65535,
+   "packet_id": 74,
+   "ts_us": 149130,
+   "flags": 0,
+   "payload": "345c7c81",
+   "frames": [
+    "d31309400001ffff0401020002468a0b40",
+    "d31309410001ffff345c7c8102468a16cd"
+   ]
+  },
+  {
+   "codec_id": 0,
+   "src": 1,
+   "dst": 65535,
+   "packet_id": 111,
+   "ts_us": 223695,
+   "flags": 0,
+   "payload": "f6b16a762a9689",
+   "frames": [
+    "d3130de00001ffff070200000369cfa184",
+    "d3130de10001fffff6b16a760369cf3ada",
+    "d3130de20001ffff2a9689000369cf613b"
+   ]
+  },
+  {
+   "codec_id": 1,
+   "src": 1,
+   "dst": 65535,
+   "packet_id": 148,
+   "ts_us": 298260,
+   "flags": 0,
+   "payload": "7ad385bc140539ae35f4116cc1c6ae377f0cfddad9ada5d71d80c2ee9f49a66af2975e65c916a08fd6154ce023e0ad91125f31ae55b70023a05adda9",
+   "frames": [
+    "d31312800001ffff3c0f0100048d1410c2",
+    "d31312810001ffff7ad385bc048d14d51c",
+    "d31312820001ffff140539ae048d142b9e",
+    "d31312830001ffff35f4116c048d147e35",
+    "d31312840001ffffc1c6ae37048d141c0f",
+    "d31312850001ffff7f0cfdda048d14a138",
+    "d31312860001ffffd9ada5d7048d144a9c",
+    "d31312870001ffff1d80c2ee048d1424e7",
+    "d31312880001ffff9f49a66a048d148ddf",
+    "d31312890001fffff2975e65048d141a38",
+    "d313128a0001ffffc916a08f048d14803a",
+    "d313128b0001ffffd6154ce0048d14cd26",
+    "d313128c0001ffff23e0ad91048d14e473",
+    "d313128d0001ffff125f31ae048d146de3",
+    "d313128e0001ffff55b70023048d1468af",
+    "d313128f0001ffffa05adda9048d145b95"
+   ]
+  },
+  {
+   "codec_id": 2,
+   "src": 1,
+   "dst": 65535,
+   "packet_id": 185,
+   "ts_us": 372825,
+   "flags": 0,
+   "payload": "9ab36209b10af2cb89a96177437e55411fc290d6ff4abe2b15d04c2981613348b6252f7be4de45549c83cbe836a648b2eb72ca0e2055379b503e5d5fdca6b74ab50cb1c0bd7d1d499dd2c77008b89ee3c547dba91412983a3f3ed93726ec521943aeda9eca154196f67f56671dce2ca915beda6efe22156b",
+   "frames": [
+    "d31317200001ffff781e020005b059e441",
+    "d31317210001ffff9ab3620905b059daf4",
+    "d31317220001ffffb10af2cb05b05931ba",
+    "d31317230001ffff89a9617705b059a19c",
+    "d31317240001ffff437e554105b059cee1",
+    "d31317250001ffff1fc290d605b059027a",
+    "d31317260001ffffff4abe2b05b059a7b3",
+    "d31317270001ffff15d04c2905b0599170",
+    "d31317280001ffff8161334805b05936c2",
+    "d31317290001ffffb6252f7b05b059218b",
+    "d313172a0001ffffe4de455405b05940ac",
+    "d313172b0001ffff9c83cbe805b0593959",
+    "d313172c0001ffff36a648b205b059a0c8",
+    "d313172d0001ffffeb72ca0e05b059727c",
+    "d313172e0001ffff2055379b05b059d366",
+    "d313172f0001ffff503e5d5f05b059eeef",
+    "d31317300001ffffdca6b74a05b0592a68",
+    "d31317310001ffffb50cb1c005b059aef7",
+    "d31317320001ffffbd7d1d4905b059b7f9",
+    "d31317330001ffff9dd2c77005b0595083",
+    "d31317340001ffff08b89ee305b05984fa",
+    "d31317350001ffffc547dba905b0597b27",
+    "d31317360001ffff1412983a05b05916db",
+    "d31317370001ffff3f3ed93705b0598c23",
+    "d31317380001ffff26ec521905b059f7b8",
+    "d31317390001ffff43aeda9e05b05973c8",
+    "d313173a0001ffffca15419605b05981da",
+    "d313173b0001fffff67f566705b059da24",
+    "d313173c0001ffff1dce2ca905b0597579",
+    "d313173d0001ffff15beda6e05b059b067",
+    "d313173e0001fffffe22156b05b059c977"
+   ]
+  },
+  {
+   "codec_id": 0,
+   "src": 1,
+   "dst": 65535,
+   "packet_id": 222,
+   "ts_us": 447390,
+   "flags": 0,
+   "payload": "52ca52eca0446b580ecaf0883f0a3b4c35cfe0320955dd6c69d923731d299b52e713588c2cfb73855e370aa587279e0818da6ea5479bd84e6ad65213165b28f7c69548f178b42e6a7b46fdc07d532780f461b124c84c21abd134b6377c9a01c81704d59737583fd701c301f53c0c0249ecf8e1cd2284f86a50c3ddc1",
+   "frames": [
+    "d3131bc00001ffff7c1f000006d39e9d90",
+    "d3131bc10001ffff52ca52ec06d39ebf47",
+    "d3131bc20001ffffa0446b5806d39e3e92",
+    "d3131bc30001ffff0ecaf08806d39efc95",
+    "d3131bc40001ffff3f0a3b4c06d39e0d10",
+    "d3131bc50001ffff35cfe03206d39e3b28",
+    "d3131bc60001ffff0955dd6c06d39e8702",
+    "d3131bc70001ffff69d9237306d39ed719",
+    "d3131bc80001ffff1d299b5206d39e7d08",
+    "d3131bc90001ffffe713588c06d39edc16",
+    "d3131bca0001ffff2cfb738506d39e75f5",
+    "d3131bcb0001ffff5e370aa506d39ea565",
+    "d3131bcc0001ffff87279e0806d39ea174",
+    "d3131bcd0001ffff18da6ea506d39e8733",
+    "d3131bce0001ffff479bd84e06d39eb42c",
+    "d3131bcf0001ffff6ad6521306d39e3f35",
+    "d3131bd00001ffff165b28f706d39e42dc",
+    "d3131bd10001ffffc69548f106d39e0011",
+    "d3131bd20001ffff78b42e6a06d39eb903",
+    "d3131bd30001ffff7b46fdc006d39e23e5",
+    "d3131bd40001ffff7d53278006d39eccde",
+    "d3131bd50001fffff461b12406d39e20da",
+    "d3131bd60001ffffc84c21ab06d39e7ab4",
+    "d3131bd70001ffffd134b63706d39ee55b",
+    "d3131bd80001ffff7c9a01c806d39eba7f",
+    "d3131bd90001ffff1704d59706d39e1009",
+    "d3131bda0001ffff37583fd706d39e1329",
+    "d3131bdb0001ffff01c301f506d39efc92",
+    "d3131bdc0001ffff3c0c024906d39e6c5c",
+    "d3131bdd0001ffffecf8e1cd06d39e7b4d",
+    "d3131bde0001ffff2284f86a06d39e634d",
+    "d3131bdf0001ffff50c3ddc106d39ef961"
+   ]
+  }
+ ],
+ "reassembly": [
+  {
+   "name": "in_order",
+   "input_frames": [
+    "d31300a0000100020a030100010203040f",
+    "d31300a1000100026167c3de010203db94",
+    "d31300a2000100026fa7cfa001020339b7",
+    "d31300a300010002d8980000010203874a",
+    "d31300c000010002080202000102105e2c",
+    "d31300c100010002170103f2010210f65f",
+    "d31300c200010002947fac2101021039c6"
+   ],
+   "packets": [
+    {
+     "packet_id": 5,
+     "ts_us": 66051,
+     "codec_id": 1,
+     "payload": "6167c3de6fa7cfa0d898",
+     "flags": 0
+    },
+    {
+     "packet_id": 6,
+     "ts_us": 66064,
+     "codec_id": 2,
+     "payload": "170103f2947fac21",
+     "flags": 0
+    }
+   ],
+   "lost": []
+  },
+  {
+   "name": "reordered",
+   "input_frames": [
+    "d31300c100010002170103f2010210f65f",
+    "d31300a2000100026fa7cfa001020339b7",
+    "d31300a300010002d8980000010203874a",
+    "d31300a1000100026167c3de010203db94",
+    "d31300c200010002947fac2101021039c6",
+    "d31300c000010002080202000102105e2c",
+    "d31300a0000100020a030100010203040f"
+   ],
+   "packets": [
+    {
+     "packet_id": 6,
+     "ts_us": 66064,
+     "codec_id": 2,
+     "payload": "170103f2947fac21",
+     "flags": 0
+    },
+    {
+     "packet_id": 5,
+     "ts_us": 66051,
+     "codec_id": 1,
+     "payload": "6167c3de6fa7cfa0d898",
+     "flags": 0
+    }
+   ],
+   "lost": []
+  },
+  {
+   "name": "frag_drop_lost",
+   "input_frames": [
+    "d31300a0000100020a030100010203040f",
+    "d31300a1000100026167c3de010203db94",
+    "d31300a300010002d8980000010203874a",
+    "d31300c000010002080202000102105e2c",
+    "d31300c100010002170103f2010210f65f",
+    "d31300c200010002947fac2101021039c6"
+   ],
+   "packets": [
+    {
+     "packet_id": 6,
+     "ts_us": 66064,
+     "codec_id": 2,
+     "payload": "170103f2947fac21",
+     "flags": 0
+    }
+   ],
+   "lost": [
+    5
+   ]
+  },
+  {
+   "name": "duplicate",
+   "input_frames": [
+    "d31300a0000100020a030100010203040f",
+    "d31300a0000100020a030100010203040f",
+    "d31300a1000100026167c3de010203db94",
+    "d31300a1000100026167c3de010203db94",
+    "d31300a2000100026fa7cfa001020339b7",
+    "d31300a300010002d8980000010203874a",
+    "d31300c000010002080202000102105e2c",
+    "d31300c100010002170103f2010210f65f",
+    "d31300c200010002947fac2101021039c6"
+   ],
+   "packets": [
+    {
+     "packet_id": 5,
+     "ts_us": 66051,
+     "codec_id": 1,
+     "payload": "6167c3de6fa7cfa0d898",
+     "flags": 0
+    },
+    {
+     "packet_id": 6,
+     "ts_us": 66064,
+     "codec_id": 2,
+     "payload": "170103f2947fac21",
+     "flags": 0
+    }
+   ],
+   "lost": []
+  }
+ ],
+ "pcm_roundtrip": [
+  {
+   "bytes": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f7071727374757677"
+  },
+  {
+   "bytes": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+   "bytes": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+  },
+  {
+   "bytes": "cad43656915976eb2c34ddf3f07f82500ead5bade475315af48d9643d263955de8631d9b3e49122ce4d73dd796569db47389d27f217d5682832903ee79dc061360d352e449452e1ad495ffaff20eeb7eee4750faea76a01b8cb9d69c5d69ea97dab86d4d908af95568631168507b78dc2b9edd086e496517"
+  }
+ ]
+}

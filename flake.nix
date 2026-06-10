@@ -157,6 +157,27 @@
             '';
             meta.description = "Lisp SDK dev shell";
           };
+
+          # HydraMesh communications client (Tauri 2: client/). Build/run with:
+          #   nix develop .#comms
+          #   cd client && npm install && cargo tauri dev
+          comms = pkgs.mkShell {
+            nativeBuildInputs = [
+              pkgs.pkg-config pkgs.rustc pkgs.cargo pkgs.nodejs pkgs.cargo-tauri
+            ];
+            buildInputs = [
+              # Tauri webview (Linux)
+              pkgs.glib pkgs.gtk3 pkgs.webkitgtk_4_1 pkgs.libsoup_3
+              pkgs.gdk-pixbuf pkgs.cairo pkgs.pango pkgs.atk pkgs.openssl
+              pkgs.dbus pkgs.librsvg
+              # Real-time audio + Opus (cpal + the `audio` feature)
+              pkgs.alsa-lib pkgs.libopus
+            ];
+            shellHook = ''
+              echo "◈ HydraMesh comms client — cd client && npm install && cargo tauri dev"
+            '';
+            meta.description = "HydraMesh Tauri comms client dev shell";
+          };
         };
       }
     );

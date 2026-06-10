@@ -70,3 +70,59 @@ jobs:
         working-directory: codec
         run: |
           cargo test --test certify
+
+  certify-audio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Regenerate audio vectors and diff against committed
+        run: |
+          python3 python/MCP/gen_audio_vectors.py /tmp/audio_vectors.json
+          diff /tmp/audio_vectors.json    Documentation/audio_vectors.json
+          diff /tmp/pm_param_vectors.json Documentation/pm_param_vectors.json
+          diff /tmp/audio_vectors.gen.h   codec/audio_vectors.gen.h
+          echo "audio vectors: committed == regenerated"
+
+      - name: Build and run C audio certification (L2-only)
+        run: |
+          gcc -std=c11 -Wall -Wextra -I codec \
+            -o /tmp/test_audio_certify C_SDK/tests/test_audio_certify.c -lm
+          /tmp/test_audio_certify
+
+      - name: Run Rust audio certification
+        working-directory: codec
+        run: cargo test --test certify_audio
+
+      - name: Regenerate Faust C and diff (only if faust is available)
+        continue-on-error: true
+        run: |
+          if command -v faust >/dev/null 2>&1; then
+            faust -lang c -cn DcfPmCodec codec/faust/dcf_pm_codec.dsp -o /tmp/dcf_pm_faust.c
+            diff /tmp/dcf_pm_faust.c codec/faust/dcf_pm_faust.c \
+              && echo "Faust C: committed == regenerated"
+          else
+            echo "faust not installed — skipping PM synthesis regeneration check"
+          fi
+
+  certify-lua:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lua 5.4
+        run: sudo apt-get update && sudo apt-get install -y lua5.4
+
+      - name: Certify the Lua DCF-Audio framework
+        run: lua5.4 lua/selftest.lua
+
+      - name: Smoke the rendezvous CLI
+        run: lua5.4 lua/dcf_jam.lua --passphrase ci-jam --codec pcm --blocks 20

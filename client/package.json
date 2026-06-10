@@ -1,0 +1,23 @@
+{
+  "name": "hydramesh-client",
+  "private": true,
+  "version": "0.1.0",
+  "license": "LGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "vue": "^3.4.0",
+    "@tauri-apps/api": "^2"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@vitejs/plugin-vue": "^5",
+    "typescript": "^5.4",
+    "vite": "^5",
+    "vue-tsc": "^2"
+  }
+}

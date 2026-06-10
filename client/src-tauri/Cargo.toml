@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: LGPL-3.0-only
+# Copyright (c) 2026 DeMoD LLC.
+[package]
+name = "hydramesh-client"
+version = "0.1.0"
+description = "HydraMesh — dedicated communications client (mesh, messaging, DCF-Audio)"
+authors = ["DeMoD LLC"]
+edition = "2021"
+license = "LGPL-3.0-only"
+
+[lib]
+name = "hydramesh_client_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+parking_lot = "0.12"
+log = "0.4"
+env_logger = "0.11"
+
+# HydraMesh engine: the node/transport/peers/mesh + the certified wire/audio codec.
+dcf-rust-sdk = { path = "../../rust" }
+dcf-wire-codec = { path = "../../codec" }
+
+# Real-time audio I/O (mic capture + speaker playback) — optional so the mesh +
+# messaging + wire-inspector client can build headless (CI) without audio system libs.
+cpal = { version = "0.15", optional = true }
+ogg = { version = "0.9", optional = true }       # Ogg-Opus container writing (recorder)
+
+[features]
+# Default desktop build: real audio + Opus/PM codecs + recording.
+default = ["audio"]
+audio = ["dep:cpal", "dep:ogg", "dcf-wire-codec/opus", "dcf-wire-codec/pm"]

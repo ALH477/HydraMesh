@@ -1,0 +1,63 @@
+{
+ "format": "DCF-Audio PM (Faust phase-mod, codec_id=2) 8-byte parameter block v1",
+ "layout": [
+  "f0_hi",
+  "f0_lo",
+  "amp",
+  "mod_index",
+  "mod_ratio",
+  "bright",
+  "env",
+  "flags"
+ ],
+ "cases": [
+  {
+   "params": {
+    "f0": 0,
+    "amp": 0,
+    "mod_index": 0,
+    "mod_ratio": 0,
+    "bright": 0,
+    "env": 0,
+    "flags": 0
+   },
+   "bytes": "0000000000000000"
+  },
+  {
+   "params": {
+    "f0": 65535,
+    "amp": 255,
+    "mod_index": 255,
+    "mod_ratio": 255,
+    "bright": 255,
+    "env": 255,
+    "flags": 255
+   },
+   "bytes": "ffffffffffffffff"
+  },
+  {
+   "params": {
+    "f0": 440,
+    "amp": 200,
+    "mod_index": 64,
+    "mod_ratio": 2,
+    "bright": 128,
+    "env": 96,
+    "flags": 2
+   },
+   "bytes": "01b8c84002806002"
+  },
+  {
+   "params": {
+    "f0": 4660,
+    "amp": 17,
+    "mod_index": 99,
+    "mod_ratio": 5,
+    "bright": 33,
+    "env": 7,
+    "flags": 1
+   },
+   "bytes": "1234116305210701"
+  }
+ ]
+}

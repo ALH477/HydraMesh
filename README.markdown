@@ -3,7 +3,7 @@
 ![logo](hydramesh.svg)
 
 
-**Version 5.0.1 | Oct 10, 2025**  
+**Version 5.2.0 | Jun 10, 2026**
 **Developed by DeMoD LLC**  
 **Contact:** alh477@demod.ltd 
 
@@ -97,6 +97,37 @@ graph TD
     
     A --> AQ[Persistence Layer]
     AQ --> AR[StreamDB] 
+```
+
+## Collaborative Audio (DCF-Audio)
+
+HydraMesh carries real-time, collaborative audio (jamming, talkback) over the mesh
+**without a new wire format**: a 20 ms codec block is an adapter over the 17-byte
+`DeModFrame`, serialised into a short burst of ordinary `CTRL` frames. The framing
+layer (L2) is codec-agnostic and **byte-certified across C, Rust, and Python** — the
+same way the wire quantum is. See [`Documentation/DCF_AUDIO_SPEC.md`](Documentation/DCF_AUDIO_SPEC.md).
+
+Three codecs ship behind a `codec_id` registry:
+
+| id | Codec | Use | Notes |
+|----|-------|-----|-------|
+| 0 | **Opus** | broadband collaboration | ~24 kbps; needs libopus |
+| 1 | **PCM-diag** | LAN / debug reference | 6 kHz 8-bit; byte-deterministic |
+| 2 | **Faust phase-mod** | musical / instrument | resynthesises timbre from an 8-byte param block |
+
+Run the headless 2-peer loopback jam (latency / packet-loss / SNR report):
+
+```bash
+cd codec && cargo run --example jam_loopback -- --codec pcm          # default, no deps
+cd codec && cargo run --example jam_loopback -- --codec pcm --loss 0.05   # exercise PLC
+```
+
+Certify an audio implementation against the golden vectors:
+
+```bash
+python3 python/MCP/gen_audio_vectors.py /tmp/audio_vectors.json   # regenerate + verify laws
+cd codec && cargo test --test certify_audio                       # Rust
+gcc -std=c11 -I codec C_SDK/tests/test_audio_certify.c -lm -o /tmp/ac && /tmp/ac   # C
 ```
 
 ## Installation

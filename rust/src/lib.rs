@@ -29,6 +29,22 @@ use uuid::Uuid;
 pub mod generated;
 pub use generated::dcf as proto;
 
+/// DCF-Audio: collaborative audio over the DeModFrame wire (re-exported codec crate).
+/// Provides `packetize`, `AudioReassembler`, `codec_for`, etc. See DCF_AUDIO_SPEC.md.
+pub use dcf_wire_codec::audio;
+
+/// Feed a received AUDIO payload that is a single 17-byte DeModFrame into a
+/// reassembler; returns `Some(packet)` once a full audio block has arrived. An
+/// application's `handle_audio` can own an [`audio::AudioReassembler`] and call this
+/// to turn the per-frame AUDIO stream back into 20 ms codec blocks.
+pub fn reassemble_audio_payload(
+    reasm: &mut audio::AudioReassembler,
+    payload: &[u8],
+) -> Option<audio::AudioPacket> {
+    let frame: [u8; 17] = payload.try_into().ok()?;
+    reasm.push(&frame)
+}
+
 // Re-exports for convenience
 pub use proto::{
     DcfMessage, DcfResponse, Empty, Metrics, PeerInfo, RoleAssignment,
@@ -487,6 +503,15 @@ pub struct GamingMetrics {
     pub events_received: u64,
 }
 
+/// A peer with its address and latest network stats — for UI/recorder consumption.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PeerDetail {
+    pub id: String,
+    pub host: String,
+    pub port: u16,
+    pub stats: NetworkStats,
+}
+
 // ============================================================================
 // DCF Node - Main Service
 // ============================================================================
@@ -499,6 +524,8 @@ pub struct DcfNode {
     peer_map: Arc<RwLock<HashMap<String, (String, u16)>>>,
     metrics: Arc<RwLock<GamingMetrics>>,
     network_stats: Arc<RwLock<NetworkStats>>,
+    /// Per-peer network stats (RTT/jitter), keyed by peer_id; updated on PONG.
+    per_peer_stats: Arc<RwLock<HashMap<String, NetworkStats>>>,
     sequence_counter: AtomicU32,
     running: AtomicBool,
     role: Arc<RwLock<String>>,
@@ -531,6 +558,7 @@ impl DcfNode {
             peer_map: Arc::new(RwLock::new(HashMap::new())),
             metrics: Arc::new(RwLock::new(GamingMetrics::default())),
             network_stats: Arc::new(RwLock::new(NetworkStats::default())),
+            per_peer_stats: Arc::new(RwLock::new(HashMap::new())),
             sequence_counter: AtomicU32::new(0),
             running: AtomicBool::new(false),
             role: Arc::new(RwLock::new("p2p".to_string())),
@@ -580,6 +608,46 @@ impl DcfNode {
         self.peer_map.read().get(peer_id).cloned()
     }
 
+    /// Peers with their host/port and latest per-peer network stats (RTT/jitter).
+    pub fn list_peers_detailed(&self) -> Vec<PeerDetail> {
+        let map = self.peer_map.read();
+        let stats = self.per_peer_stats.read();
+        self.peers
+            .read()
+            .iter()
+            .map(|id| {
+                let (host, port) = map.get(id).cloned().unwrap_or_default();
+                PeerDetail {
+                    id: id.clone(),
+                    host,
+                    port,
+                    stats: stats.get(id).cloned().unwrap_or_default(),
+                }
+            })
+            .collect()
+    }
+
+    /// Resolve the peer_id for a source address (matched by port, then ip) and fold
+    /// a fresh RTT sample into its per-peer stats. Called from the PONG handler.
+    fn record_peer_rtt(&self, from: SocketAddr, rtt_ms: f64) {
+        let peer_id = {
+            let map = self.peer_map.read();
+            map.iter()
+                .find(|(_, (host, port))| {
+                    *port == from.port()
+                        && (host == &from.ip().to_string()
+                            || host == "localhost"
+                            || host == "0.0.0.0")
+                })
+                .or_else(|| map.iter().find(|(_, (_, port))| *port == from.port()))
+                .map(|(id, _)| id.clone())
+        };
+        if let Some(id) = peer_id {
+            let mut stats = self.per_peer_stats.write();
+            stats.entry(id).or_default().update_rtt(rtt_ms);
+        }
+    }
+
     // ========================================================================
     // Gaming API - Matching Lisp HydraMesh
     // ========================================================================
@@ -620,6 +688,46 @@ impl DcfNode {
 
         self.metrics.write().audio_packets_sent += 1;
         log::debug!("Audio packet sent ({} bytes)", audio_data.len());
+        Ok(())
+    }
+
+    /// Send one encoded audio block over the mesh using the certified DCF-Audio L2
+    /// framing: the codec output (<=124 bytes for one 20 ms block) is packetized into
+    /// 17-byte DeModFrame CTRL frames, each shipped as an unreliable AUDIO message.
+    /// The receiver feeds these payloads to [`reassemble_audio_payload`]. See
+    /// `dcf_wire_codec::audio` and Documentation/DCF_AUDIO_SPEC.md.
+    ///
+    /// `channel` is the rendezvous channel placed in the frame `dst` field
+    /// (`0xFFFF` = broadcast). Peers tuned to the same channel hear each other; this
+    /// is pure `dst` semantics, so the emitted frames remain ordinary certified
+    /// DeModFrames.
+    pub fn send_audio_dcf(
+        &self,
+        codec_id: u8,
+        encoded: &[u8],
+        packet_id: u16,
+        ts_us: u32,
+        channel: u16,
+    ) -> Result<()> {
+        let endpoint = self.udp_endpoint.as_ref()
+            .ok_or_else(|| DcfError::NotInitialized("UDP endpoint not initialized".to_string()))?;
+
+        let frames = audio::packetize(codec_id, encoded, packet_id, ts_us, 0, channel, 0)
+            .map_err(|e| DcfError::InvalidMessage(format!("audio packetize failed: {:?}", e)))?;
+
+        let peer_map = self.peer_map.read();
+        for peer_id in self.peers.read().iter() {
+            if let Some((host, port)) = peer_map.get(peer_id) {
+                for f in &frames {
+                    let msg = ProtoMessage::new(msg_type::AUDIO, self.next_sequence(), f.to_vec());
+                    endpoint.send_message(&msg, host, *port, false)?;
+                }
+            }
+        }
+
+        self.metrics.write().audio_packets_sent += 1;
+        log::debug!("DCF audio block sent: codec={} packet_id={} ({} frames)",
+                    codec_id, packet_id, frames.len());
         Ok(())
     }
 
@@ -992,6 +1100,17 @@ impl MessageHandler for DefaultMessageHandler {
 // UDP Receiver Task
 // ============================================================================
 
+/// Periodically ping every peer so per-peer RTT (`list_peers_detailed`) stays fresh.
+/// Spawn alongside `run_udp_receiver`.
+pub async fn run_ping_scheduler(node: Arc<DcfNode>, every: Duration) {
+    while node.is_running() {
+        for peer_id in node.list_peers() {
+            let _ = node.send_ping(&peer_id);
+        }
+        tokio::time::sleep(every).await;
+    }
+}
+
 pub async fn run_udp_receiver(
     node: Arc<DcfNode>,
     handler: Arc<dyn MessageHandler>,
@@ -1063,6 +1182,7 @@ async fn handle_incoming_message(
                 .unwrap_or(0);
             let rtt = (now.saturating_sub(msg.timestamp)) as f64 / 1000.0;
             endpoint.stats.write().update_rtt(rtt);
+            node.record_peer_rtt(from, rtt);
         }
         msg_type::RELIABLE => {
             let _ = endpoint.send_ack(msg.sequence, &from);

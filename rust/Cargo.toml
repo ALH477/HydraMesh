@@ -75,6 +75,9 @@ snap = "1.1"
 # Configuration
 config = "0.13"
 
+# DCF wire + audio codec (17-byte DeModFrame, DCF-Audio L2 framing)
+dcf-wire-codec = { path = "../codec" }
+
 [build-dependencies]
 tonic-build = "0.10"
 
