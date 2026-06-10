@@ -1,0 +1,72 @@
+name: Wire Certification
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  certify-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install MCP dependency
+        run: pip install mcp
+
+      - name: Verify wire laws and regenerate golden vectors
+        run: python3 GUI/MCP/verify_laws.py GUI/MCP/golden_vectors.json
+
+      - name: Diff regenerated golden vectors against committed
+        run: |
+          python3 -c "
+          import json
+          committed = json.loads(open('Documentation/golden_vectors.json').read())
+          regenerated = json.loads(open('GUI/MCP/golden_vectors.json').read())
+          assert committed['anchors'] == regenerated['anchors'], 'anchors mismatch'
+          assert len(committed['encode_basis']) == len(regenerated['encode_basis']), 'encode_basis length mismatch'
+          assert len(committed['syndrome_basis']) == len(regenerated['syndrome_basis']), 'syndrome_basis length mismatch'
+          for i, (c, r) in enumerate(zip(committed['encode_basis'], regenerated['encode_basis'])):
+              assert c['frame'].lower() == r['frame'].lower(), f'encode_basis[{i}] mismatch: {c[\"frame\"]} != {r[\"frame\"]}'
+          for i, (c, r) in enumerate(zip(committed['syndrome_basis'], regenerated['syndrome_basis'])):
+              assert int(c['syndrome']) == int(r['syndrome']), f'syndrome_basis[{i}] mismatch: {c[\"syndrome\"]} != {r[\"syndrome\"]}'
+          print('golden_vectors.json: committed and regenerated match')
+          "
+
+      - name: Run certify_sdk self-test
+        run: python3 GUI/MCP/certify_sdk.py --selftest
+
+      - name: Run MCP self-test
+        run: python3 GUI/MCP/wirelab_mcp.py --selftest
+
+  certify-c:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build C certification test
+        run: |
+          mkdir -p build && cd build
+          gcc -std=c11 -Wall -Wextra -I../codec -o wire_certify ../C_SDK/tests/test_wire_certify.c -lm
+
+      - name: Run C wire certification
+        run: build/wire_certify
+
+  certify-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run Rust wire certification
+        working-directory: codec
+        run: |
+          cargo test --test certify
