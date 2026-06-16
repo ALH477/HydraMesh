@@ -8,6 +8,7 @@
 mod audio;
 mod channel;
 mod engine;
+mod game;
 mod sync;
 #[cfg(feature = "audio")]
 mod recorder;
@@ -26,6 +27,7 @@ pub struct AppState {
     handler: Mutex<Option<Arc<engine::UiHandler>>>,
     channel: Arc<AtomicU16>,
     jam: Mutex<Option<audio::Jam>>,
+    game: Mutex<Option<Arc<game::GameSession>>>,
 }
 
 #[derive(Deserialize)]
@@ -75,6 +77,7 @@ fn disconnect(state: State<AppState>) {
     if let Some(j) = state.jam.lock().take() {
         audio::stop(j);
     }
+    *state.game.lock() = None;
     if let Some(n) = state.node.lock().take() {
         let _ = n.stop();
     }
@@ -135,6 +138,33 @@ fn stop_jam(state: State<AppState>) {
     if let Some(j) = state.jam.lock().take() {
         audio::stop(j);
     }
+}
+
+#[tauri::command]
+fn start_game(state: State<AppState>) -> Result<u16, String> {
+    let node = state.node.lock().clone().ok_or("not connected")?;
+    let node_id = node.node_id().to_string();
+    let session = Arc::new(game::GameSession::new(node, state.channel.clone(), &node_id));
+    let pid = session.player_id();
+    *state.game.lock() = Some(session);
+    Ok(pid)
+}
+
+#[tauri::command]
+fn stop_game(state: State<AppState>) {
+    *state.game.lock() = None;
+}
+
+#[tauri::command]
+fn send_game_position(state: State<AppState>, x: f32, y: f32) -> Result<(), String> {
+    let session = state.game.lock().clone().ok_or("start the game first")?;
+    session.send_position(x, y)
+}
+
+#[tauri::command]
+fn send_game_action(state: State<AppState>, text: String) -> Result<(), String> {
+    let session = state.game.lock().clone().ok_or("start the game first")?;
+    session.send_action(&text)
 }
 
 #[derive(Serialize)]
@@ -248,6 +278,10 @@ pub fn run() {
             send_message,
             start_jam,
             stop_jam,
+            start_game,
+            stop_game,
+            send_game_position,
+            send_game_action,
             decode_frame,
             metrics,
             peers,

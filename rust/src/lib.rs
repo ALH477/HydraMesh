@@ -45,6 +45,22 @@ pub fn reassemble_audio_payload(
     reasm.push(&frame)
 }
 
+/// DCF-Game: multiplayer state/events over the DeModFrame wire (re-exported codec).
+/// Provides `packetize`, `GameReassembler`, body packers, etc. See DCF_GAME_SPEC.md.
+pub use dcf_wire_codec::game;
+
+/// Feed a received GAME payload that is a single 17-byte DeModFrame into a
+/// reassembler; returns `Some(packet)` once a full game message has arrived. An
+/// application's `handle_game` can own a [`game::GameReassembler`] (one per `src_id`)
+/// and call this to turn the per-frame GAME stream back into whole messages.
+pub fn reassemble_game_payload(
+    reasm: &mut game::GameReassembler,
+    payload: &[u8],
+) -> Option<game::GamePacket> {
+    let frame: [u8; 17] = payload.try_into().ok()?;
+    reasm.push(&frame)
+}
+
 // Re-exports for convenience
 pub use proto::{
     DcfMessage, DcfResponse, Empty, Metrics, PeerInfo, RoleAssignment,
@@ -64,6 +80,8 @@ pub mod msg_type {
     pub const ACK: u8 = 6;
     pub const PING: u8 = 7;
     pub const PONG: u8 = 8;
+    /// DCF-Game L2 frame (one 17-byte DeModFrame DATA frame). See DCF_GAME_SPEC.md.
+    pub const GAME_DCF: u8 = 9;
 }
 
 const DEFAULT_UDP_PORT: u16 = 7777;
@@ -731,6 +749,54 @@ impl DcfNode {
         Ok(())
     }
 
+    /// Send one game message over the mesh using the certified DCF-Game L2 framing:
+    /// the body (<=124 bytes) is packetized into 17-byte DeModFrame DATA frames, each
+    /// shipped as a [`msg_type::GAME_DCF`] message. The receiver feeds these payloads to
+    /// [`reassemble_game_payload`]. See `dcf_wire_codec::game` and DCF_GAME_SPEC.md.
+    ///
+    /// `src` is the sender's player id, placed in the frame `src` field so receivers can
+    /// multiplex opponents (unlike `send_audio_dcf`, which leaves `src=0`). `channel` is
+    /// the rendezvous channel in the frame `dst` field (`0xFFFF` = broadcast to the
+    /// lobby). `reliable` requests the transport's ARQ (use it for EVENT/JOIN; leave it
+    /// off for SNAPSHOT/INPUT, which are dead-reckoned). The descriptor `flags` mirror
+    /// this so receivers see the intended delivery class.
+    pub fn send_game_dcf(
+        &self,
+        msg_type_id: u8,
+        body: &[u8],
+        packet_id: u16,
+        ts_us: u32,
+        src: u16,
+        channel: u16,
+        reliable: bool,
+    ) -> Result<()> {
+        let endpoint = self.udp_endpoint.as_ref()
+            .ok_or_else(|| DcfError::NotInitialized("UDP endpoint not initialized".to_string()))?;
+
+        let flags = if reliable {
+            game::FLAG_RELIABLE | game::FLAG_ORDERED
+        } else {
+            0
+        };
+        let frames = game::packetize(msg_type_id, body, packet_id, ts_us, src, channel, flags)
+            .map_err(|e| DcfError::InvalidMessage(format!("game packetize failed: {:?}", e)))?;
+
+        let peer_map = self.peer_map.read();
+        for peer_id in self.peers.read().iter() {
+            if let Some((host, port)) = peer_map.get(peer_id) {
+                for f in &frames {
+                    let msg = ProtoMessage::new(msg_type::GAME_DCF, self.next_sequence(), f.to_vec());
+                    endpoint.send_message(&msg, host, *port, reliable)?;
+                }
+            }
+        }
+
+        self.metrics.write().events_sent += 1;
+        log::debug!("DCF game message sent: msg_type={} packet_id={} ({} frames, reliable={})",
+                    msg_type_id, packet_id, frames.len(), reliable);
+        Ok(())
+    }
+
     /// Send game event (reliable, critical)
     pub fn send_game_event(&self, event_type: u8, data: &str) -> Result<()> {
         let endpoint = self.udp_endpoint.as_ref()
@@ -1077,6 +1143,10 @@ pub trait MessageHandler: Send + Sync {
     fn handle_position(&self, position: Position, from: SocketAddr);
     fn handle_audio(&self, data: &[u8], from: SocketAddr);
     fn handle_game_event(&self, event: GameEvent, from: SocketAddr);
+    /// One DCF-Game L2 frame (a single 17-byte DeModFrame DATA frame). Feed `data` to
+    /// a per-`src_id` [`game::GameReassembler`] via [`reassemble_game_payload`] to
+    /// recover whole messages. Defaults to a no-op so existing handlers still compile.
+    fn handle_game(&self, _data: &[u8], _from: SocketAddr) {}
 }
 
 /// Default handler that just logs messages
@@ -1093,6 +1163,10 @@ impl MessageHandler for DefaultMessageHandler {
 
     fn handle_game_event(&self, event: GameEvent, from: SocketAddr) {
         log::info!("Game event from {}: {:?}", from, event);
+    }
+
+    fn handle_game(&self, data: &[u8], from: SocketAddr) {
+        log::debug!("Game frame from {} ({} bytes)", from, data.len());
     }
 }
 
@@ -1206,6 +1280,10 @@ async fn handle_incoming_message(
                 let _ = endpoint.send_ack(msg.sequence, &from);
                 handler.handle_game_event(event, from);
             }
+        }
+        msg_type::GAME_DCF => {
+            node.metrics.write().events_received += 1;
+            handler.handle_game(&msg.payload, from);
         }
         _ => {
             log::debug!("Unknown message type {} from {}", msg.msg_type, from);

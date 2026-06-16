@@ -9,6 +9,8 @@ export interface FrameJson {
   version: number; frame_type: string; seq: number; src: number; dst: number; payload: string; ts_us: number
 }
 export interface UiMessage { from: string; text: string; channel: number }
+export interface UiGameSnapshot { src: number; x: number; y: number; channel: number }
+export interface UiGameEvent { src: number; text: string; channel: number }
 
 export const api = {
   connect: (node_id: string, host: string, port: number, peers: PeerArg[]) =>
@@ -20,6 +22,10 @@ export const api = {
   sendMessage: (text: string) => invoke<void>('send_message', { text }),
   startJam: (codec: string) => invoke<void>('start_jam', { codec }),
   stopJam: () => invoke<void>('stop_jam'),
+  startGame: () => invoke<number>('start_game'),
+  stopGame: () => invoke<void>('stop_game'),
+  sendGamePosition: (x: number, y: number) => invoke<void>('send_game_position', { x, y }),
+  sendGameAction: (text: string) => invoke<void>('send_game_action', { text }),
   decodeFrame: (hex: string) => invoke<FrameJson>('decode_frame', { hex }),
   metrics: () => invoke<Record<string, unknown>>('metrics'),
   peers: () => invoke<PeerDetail[]>('peers'),

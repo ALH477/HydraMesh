@@ -113,6 +113,37 @@ jobs:
             echo "faust not installed — skipping PM synthesis regeneration check"
           fi
 
+  certify-game:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Regenerate game vectors and diff against committed
+        run: |
+          python3 python/MCP/gen_game_vectors.py /tmp/game_vectors.json
+          diff /tmp/game_vectors.json    Documentation/game_vectors.json
+          diff /tmp/game_vectors.json    python/MCP/game_vectors.json
+          diff /tmp/game_vectors.gen.h   codec/game_vectors.gen.h
+          echo "game vectors: committed == regenerated"
+
+      - name: Build and run C game certification (L2-only)
+        run: |
+          gcc -std=c11 -Wall -Wextra -I codec \
+            -o /tmp/test_game_certify C_SDK/tests/test_game_certify.c -lm
+          /tmp/test_game_certify
+
+      - name: Run Rust game certification
+        working-directory: codec
+        run: cargo test --test certify_game
+
   certify-lua:
     runs-on: ubuntu-latest
     steps:
