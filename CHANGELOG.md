@@ -17,6 +17,13 @@ reserved for when the full advertised language set is green in CI.
   only strictly-positive RTT samples. `hydramesh-hotfix.lisp` is now a thin compatibility shim —
   every fix lives in source, which self-certifies on load.
 
+### Changed
+- `flake.nix`: added `meta.license = lgpl3Only` to every derivation; fixed three source paths
+  (`nodejs` → `JS/nodejs`, `docs` → `Documentation`, `streamdb` → `lisp/streamdb`); switched
+  `dcf-rust` to a deterministic `cargoLock.lockFile` (no precomputed hash). The Go `vendorHash`,
+  npm `npmDepsHash`, and streamdb `cargoHash` are `lib.fakeHash` placeholders — the real values
+  require a `nix` build environment (unavailable here); fill via `nix build` (see `DCF_BACKLOG.md`).
+
 ## [0.3.0] - 2026-06-17
 
 First tagged release — the repository legitimacy program. Every advertised language now has a

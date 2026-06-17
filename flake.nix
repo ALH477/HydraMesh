@@ -32,6 +32,7 @@
             buildPhase = "make";
             installPhase = "make install DESTDIR=$out";
             meta.description = "C SDK for DCF";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 
           # C++ SDK (assumes proto gen in build)
@@ -46,6 +47,7 @@
             buildPhase = "cmake . && make";
             installPhase = "make install DESTDIR=$out";
             meta.description = "C++ SDK for DCF";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 
           # Go SDK
@@ -53,11 +55,12 @@
             pname = "dcf-go";
             version = "0.3.0";
             src = self + "/go";
-            vendorHash = "sha256-0000000000000000000000000000000000000000000="; # Update with actual
+            vendorHash = pkgs.lib.fakeHash; # TODO: real hash via `nix build` (needs a nix environment)
             preBuild = ''
               ${protobuf}/bin/protoc -I${self} --go_out=. --go-grpc_out=. ${self}/messages.proto ${self}/services.proto
             '';
             meta.description = "Go SDK for DCF";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 
           # Lisp SDK (dev shell oriented, as it's interpreted)
@@ -65,10 +68,11 @@
           streamdb = pkgs.rustPlatform.buildRustPackage {
             pname = "streamdb";
             version = "0.3.0";
-            src = self + "/streamdb";
-            cargoHash = "sha256-0000000000000000000000000000000000000000000="; # Update with actual
+            src = self + "/lisp/streamdb";
+            cargoHash = pkgs.lib.fakeHash; # TODO: real hash via `nix build` (needs a nix environment)
             buildType = "release";
             meta.description = "StreamDB for DCF Lisp SDK";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 
           # Python SDK
@@ -81,6 +85,7 @@
               python -m grpc_tools.protoc -I${self} --python_out=dcf --grpc_python_out=dcf ${self}/messages.proto ${self}/services.proto
             '';
             meta.description = "Python SDK for DCF";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 
           # Rust SDK
@@ -88,26 +93,28 @@
             pname = "dcf-rust";
             version = "0.3.0";
             src = self + "/rust";
-            cargoHash = "sha256-0000000000000000000000000000000000000000000="; # Update with actual
+            cargoLock.lockFile = self + "/rust/Cargo.lock"; # deterministic — no precomputed hash needed
             nativeBuildInputs = [ protobuf ];
             buildPhase = ''
               ${pkgs.tonic-build}/bin/tonic-build --build-server --out-dir src ${self}/services.proto
               cargo build --release
             '';
             meta.description = "Rust SDK for DCF";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 
           # Node.js SDK
           dcf-nodejs = pkgs.nodePackages.buildNpmPackage {
             pname = "dcf-nodejs";
             version = "0.3.0";
-            src = self + "/nodejs";
-            npmDepsHash = "sha256-0000000000000000000000000000000000000000000="; # Update with actual
+            src = self + "/JS/nodejs";
+            npmDepsHash = pkgs.lib.fakeHash; # TODO: real hash via `nix build` (needs a nix environment)
             nativeBuildInputs = [ protobuf pkgs.grpc-tools.grpc_tools_node_protoc_ts ];
             preBuild = ''
               protoc -I${self} --js_out=import_style=commonjs,binary:src --grpc_out=grpc_js:src --plugin=protoc-gen-grpc=${pkgs.grpc-tools}/bin/grpc_node_plugin ${self}/messages.proto ${self}/services.proto
             '';
             meta.description = "Node.js SDK for DCF";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 
           # Perl SDK (wrapper for modules)
@@ -122,17 +129,19 @@
             '';
             installPhase = "cp -r lib $out/lib";
             meta.description = "Perl SDK for DCF";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 
           # Docs
           dcf-docs = pkgs.stdenv.mkDerivation {
             pname = "dcf-docs";
             version = "0.3.0";
-            src = self + "/docs";
+            src = self + "/Documentation";
             nativeBuildInputs = pkgs.python3.withPackages (ps: with ps; [ sphinx myst-parser ]);
             buildPhase = "make html";
             installPhase = "cp -r _build/html $out";
             meta.description = "DCF Documentation";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 
           # Default package (e.g., all SDKs)

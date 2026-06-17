@@ -23,9 +23,11 @@ references live in [`DCF_CODE_REVIEW.md`](DCF_CODE_REVIEW.md).
 
 - Make `.github/workflows/wire-certify.yml` a **required status check** on `main` (a GitHub
   branch-protection setting, not a file change).
-- `flake.nix`: replace the placeholder hashes (`sha256-0000…` `vendorHash` / `cargoHash` /
-  `npmDepsHash`) with real values and add `meta.license` to every derivation so `nix build`
-  works end-to-end. (The `c_sdk` → `C_SDK` path case is fixed.)
+- `flake.nix`: `meta.license` added to every derivation; `dcf-rust` now uses a deterministic
+  `cargoLock.lockFile`; the `nodejs`/`docs`/`streamdb`/`c_sdk` source paths are fixed. **Still
+  pending (needs a `nix` environment):** real `vendorHash` (Go), `npmDepsHash` (npm), and
+  streamdb `cargoHash` — currently `lib.fakeHash`; fill by running `nix build` and copying the
+  reported hash. The aspirational SDK packages also need their proto-gen build steps repaired.
 - **B3** regression tests for the already-fixed crashers **C4/C5/C6** under ASan/TSan, so they
   cannot silently return.
 - Flip **Haskell / Kotlin / Swift / Lisp** from the Design tier to Certified once their
