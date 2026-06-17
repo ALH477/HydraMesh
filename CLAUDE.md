@@ -15,6 +15,8 @@ cross-language certification, now extended with a certified **audio** layer.
 Read these first — they are normative:
 - `Documentation/WIRE_QUANTUM_SPEC.md` — the 17-byte `DeModFrame` wire format.
 - `Documentation/DCF_AUDIO_SPEC.md` — collaborative audio as an adapter over it.
+- `Documentation/DCF_GAME_SPEC.md` — multiplayer game state/events as an adapter
+  over it (same fragmentation scheme as audio, on `DATA` frames).
 - `Documentation/DCF_CODE_REVIEW.md` — frank, module-by-module status (consult
   before trusting any module's surface area).
 
@@ -85,6 +87,36 @@ Opus is behind `--features opus` / `-DDCF_AUDIO_OPUS` (needs libopus); PM behind
 **not** byte-certified — only L2 framing, PCM-diag bytes, and the PM param layout
 are. Rust SDK hookup: `DcfNode::send_audio_dcf` + `reassemble_audio_payload`
 (`rust/src/lib.rs`).
+
+## DCF-Game (multiplayer game state/events over the wire)
+
+A second adapter over `DeModFrame`, structurally identical to DCF-Audio but on
+`DATA` (type 0) frames instead of `CTRL`, so the two never collide. One game
+message (state snapshot, input frame, or opaque event) is serialised into
+`1 + ceil(payload_len/4)` ordinary `DATA` frames. The L2 framing is
+**message-type-agnostic and byte-certified across C/Rust/Python**; `msg_type_id`
+lives in the descriptor, so adding message types never changes the vectors.
+
+- `seq = packet_id[15:5] | frag_idx[4:0]`; `frag_idx 0` = `[len, frag_total, msg_type_id, flags]`; payload ≤ **124 B/message**.
+- Message types: SNAPSHOT (id 0, 14 B certified), INPUT (id 1, 6 B certified),
+  EVENT (id 2, opaque), JOIN (id 3, certified). Descriptor `flags`: bit0 RELIABLE,
+  bit1 ORDERED, bit2 END_TICK — these pick the transport path, not the L2 bytes.
+- L2 references: `codec/demod_game.h` (C), `codec/src/game.rs` (Rust),
+  `python/MCP/gamelab_core.py` (Python). Spec: `Documentation/DCF_GAME_SPEC.md`.
+- Vectors: `Documentation/game_vectors.json` (+ identical `python/MCP/` copy) and
+  `codec/game_vectors.gen.h` (dependency-free C test).
+- Topology: direct P2P / LAN first (mDNS + `add_peer`, frequency-channel
+  rendezvous via `dst`); multi-hop mesh forwarding is a future, additive extension.
+
+```sh
+python3 python/MCP/gen_game_vectors.py /tmp/gv.json           # regen + verify laws
+cd codec && cargo test --test certify_game                    # Rust
+gcc -std=c11 -I codec C_SDK/tests/test_game_certify.c -lm -o /tmp/gc && /tmp/gc  # C
+```
+
+SDK hookup: `DcfNode::send_game_dcf` + `reassemble_game_payload` and
+`MessageHandler::handle_game` (`rust/src/lib.rs`). Client: a **Game** tab (a 2-D
+dot-arena demo) alongside Jam/Messages in `client/`.
 
 ## Comms client (`client/`) — Tauri 2 end-user app
 

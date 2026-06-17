@@ -1,0 +1,419 @@
+{
+ "format": "DCF-Game L2 framing v1 (adapter over the 17-byte DeModFrame quantum)",
+ "spec": "seq = packet_id[15:5] | frag_idx[4:0]; frag_idx 0 = [len,frag_total,msg_type_id,flags]; frag_idx 1..N = 4 payload bytes (last zero-padded); type=DATA(0), version=1",
+ "constants": {
+  "frag_bits": 5,
+  "max_frags": 31,
+  "max_payload": 124,
+  "max_packet_id": 2047,
+  "frame_type_data": 0
+ },
+ "anchors": {
+  "exampleGameMessage": {
+   "msg_type_id": 2,
+   "packet_id": 16,
+   "ts_us": 66051,
+   "src": 1,
+   "dst": 65535,
+   "flags": 1,
+   "payload": "cafebabe0042",
+   "frames": [
+    "d31002000001ffff06020201010203df12",
+    "d31002010001ffffcafebabe0102036b6a",
+    "d31002020001ffff0042000001020320fa"
+   ]
+  }
+ },
+ "theorem": "L2 framing is a fixed bit-placement adapter over the certified DeModFrame; matching these framing + reassembly + SNAPSHOT/INPUT/JOIN body vectors pins the C and Rust implementations to this reference. msg_type_id is opaque to L2, so the framing vectors are invariant to message-type choice and to the reliable/ordered flags.",
+ "framing": [
+  {
+   "msg_type_id": 0,
+   "src": 1,
+   "dst": 65535,
+   "packet_id": 0,
+   "ts_us": 0,
+   "flags": 1,
+   "payload": "",
+   "frames": [
+    "d31000000001ffff000000010000005a03"
+   ]
+  },
+  {
+   "msg_type_id": 1,
+   "src": 1,
+   "dst": 65535,
+   "packet_id": 37,
+   "ts_us": 74565,
+   "flags": 0,
+   "payload": "d4",
+   "frames": [
+    "d31004a00001ffff01010100012345c66f",
+    "d31004a10001ffffd40000000123451222"
+   ]
+  },
+  {
+   "msg_type_id": 2,
+   "src": 1,
+   "dst": 65535,
+   "packet_id": 74,
+   "ts_us": 149130,
+   "flags": 3,
+   "payload": "076744eb",
+   "frames": [
+    "d31009400001ffff0401020302468a1d3f",
+    "d31009410001ffff076744eb02468ac9f5"
+   ]
+  },
+  {
+   "msg_type_id": 3,
+   "src": 1,
+   "dst": 65535,
+   "packet_id": 111,
+   "ts_us": 223695,
+   "flags": 4,
+   "payload": "474b1a7405dbc0",
+   "frames": [
+    "d3100de00001ffff070203040369cf0804",
+    "d3100de10001ffff474b1a740369cf1a3c",
+    "d3100de20001ffff05dbc0000369cf95c0"
+   ]
+  },
+  {
+   "msg_type_id": 0,
+   "src": 1,
+   "dst": 65535,
+   "packet_id": 148,
+   "ts_us": 298260,
+   "flags": 0,
+   "payload": "0d552038f83fb451d02babdfefce5cc055dc6825d93959e5f5018883b2cf1d63d0370d1a5cad5b4f2df0866fc53dc473d69e6d4d3740590be97224ca",
+   "frames": [
+    "d31012800001ffff3c0f0000048d143730",
+    "d31012810001ffff0d552038048d1482a1",
+    "d31012820001fffff83fb451048d140d32",
+    "d31012830001ffffd02babdf048d14f1f8",
+    "d31012840001ffffefce5cc0048d147525",
+    "d31012850001ffff55dc6825048d145be9",
+    "d31012860001ffffd93959e5048d147ac6",
+    "d31012870001fffff5018883048d148418",
+    "d31012880001ffffb2cf1d63048d14ecf7",
+    "d31012890001ffffd0370d1a048d1415dd",
+    "d310128a0001ffff5cad5b4f048d14b0bf",
+    "d310128b0001ffff2df0866f048d1490cb",
+    "d310128c0001ffffc53dc473048d14e2c3",
+    "d310128d0001ffffd69e6d4d048d142d2c",
+    "d310128e0001ffff3740590b048d1460cb",
+    "d310128f0001ffffe97224ca048d144d78"
+   ]
+  },
+  {
+   "msg_type_id": 1,
+   "src": 1,
+   "dst": 65535,
+   "packet_id": 185,
+   "ts_us": 372825,
+   "flags": 2,
+   "payload": "04ea9d3de5c11309f40b6ff158c2e2b9024e28ef2f10343d84ba5d8ab0f9af6d6d6cf4dfecc42cd708bd2a7d66c4eac30f5fda28a5d679c4ae4135e81143b9e3397937cfc72f862fe2598091ad7f4bc4fb982bc5302d4e3212ec8ab6bb07609731f29169d0d4d14b6eee763c323b3db280c5e7ee975e6907",
+   "frames": [
+    "d31017200001ffff781e010205b0596a58",
+    "d31017210001ffff04ea9d3d05b0597d9c",
+    "d31017220001ffffe5c1130905b059254b",
+    "d31017230001fffff40b6ff105b0591d35",
+    "d31017240001ffff58c2e2b905b0599c3d",
+    "d31017250001ffff024e28ef05b0597ee6",
+    "d31017260001ffff2f10343d05b059c5a8",
+    "d31017270001ffff84ba5d8a05b0593e8b",
+    "d31017280001ffffb0f9af6d05b059bfc1",
+    "d31017290001ffff6d6cf4df05b0597f01",
+    "d310172a0001ffffecc42cd705b0593560",
+    "d310172b0001ffff08bd2a7d05b059ad16",
+    "d310172c0001ffff66c4eac305b0594982",
+    "d310172d0001ffff0f5fda2805b059493c",
+    "d310172e0001ffffa5d679c405b059e94e",
+    "d310172f0001ffffae4135e805b05945ce",
+    "d31017300001ffff1143b9e305b0592544",
+    "d31017310001ffff397937cf05b059e7e0",
+    "d31017320001ffffc72f862f05b059029f",
+    "d31017330001ffffe259809105b05940c8",
+    "d31017340001ffffad7f4bc405b059b156",
+    "d31017350001fffffb982bc505b059d580",
+    "d31017360001ffff302d4e3205b059a163",
+    "d31017370001ffff12ec8ab605b059fae4",
+    "d31017380001ffffbb07609705b0597306",
+    "d31017390001ffff31f2916905b0595269",
+    "d310173a0001ffffd0d4d14b05b05984d3",
+    "d310173b0001ffff6eee763c05b059b03c",
+    "d310173c0001ffff323b3db205b05965cb",
+    "d310173d0001ffff80c5e7ee05b059ae73",
+    "d310173e0001ffff975e690705b0591230"
+   ]
+  },
+  {
+   "msg_type_id": 2,
+   "src": 1,
+   "dst": 65535,
+   "packet_id": 222,
+   "ts_us": 447390,
+   "flags": 1,
+   "payload": "234a8a22ddeeb1ce8a23a15eca4a6c3c7c7b7135db05a55ba0d82663b5df0b5aa2dafa4bc9ceb37cc534d3c786738c21edc7e52eda92328cc8c5ecd12aa0259a0587c0235cd2da32852aea738fd072f246a88e15bd53e1154fecb89650a6a97f22e7dda01dd12de1ff0f6e736662aaa232779f4ade4437ac749a8600",
+   "frames": [
+    "d3101bc00001ffff7c1f020106d39e2204",
+    "d3101bc10001ffff234a8a2206d39efef5",
+    "d3101bc20001ffffddeeb1ce06d39e2a3a",
+    "d3101bc30001ffff8a23a15e06d39ee82a",
+    "d3101bc40001ffffca4a6c3c06d39e8c0f",
+    "d3101bc50001ffff7c7b713506d39e6050",
+    "d3101bc60001ffffdb05a55b06d39e39d7",
+    "d3101bc70001ffffa0d8266306d39e7a33",
+    "d3101bc80001ffffb5df0b5a06d39e191d",
+    "d3101bc90001ffffa2dafa4b06d39e8f42",
+    "d3101bca0001ffffc9ceb37c06d39eaa1d",
+    "d3101bcb0001ffffc534d3c706d39e1aaf",
+    "d3101bcc0001ffff86738c2106d39e6663",
+    "d3101bcd0001ffffedc7e52e06d39e0560",
+    "d3101bce0001ffffda92328c06d39e248b",
+    "d3101bcf0001ffffc8c5ecd106d39e7c44",
+    "d3101bd00001ffff2aa0259a06d39ed7a9",
+    "d3101bd10001ffff0587c02306d39ed777",
+    "d3101bd20001ffff5cd2da3206d39e0fc1",
+    "d3101bd30001ffff852aea7306d39eee2e",
+    "d3101bd40001ffff8fd072f206d39e8dbe",
+    "d3101bd50001ffff46a88e1506d39efa76",
+    "d3101bd60001ffffbd53e11506d39eb565",
+    "d3101bd70001ffff4fecb89606d39e3c6e",
+    "d3101bd80001ffff50a6a97f06d39ea79b",
+    "d3101bd90001ffff22e7dda006d39e87b1",
+    "d3101bda0001ffff1dd12de106d39ed459",
+    "d3101bdb0001ffffff0f6e7306d39e5f76",
+    "d3101bdc0001ffff6662aaa206d39e9521",
+    "d3101bdd0001ffff32779f4a06d39eca10",
+    "d3101bde0001ffffde4437ac06d39eef51",
+    "d3101bdf0001ffff749a860006d39edf59"
+   ]
+  }
+ ],
+ "reassembly": [
+  {
+   "name": "in_order",
+   "input_frames": [
+    "d31000a0000100020e040002010203c712",
+    "d31000a10001000235b5ec30010203196f",
+    "d31000a2000100021c085e2f01020349d1",
+    "d31000a300010002d36a5b4f0102031885",
+    "d31000a400010002b1a30000010203765a",
+    "d31000c0000100020903020101021058fa",
+    "d31000c100010002e39d1e39010210d87e",
+    "d31000c2000100022e33b0c40102106372",
+    "d31000c30001000273000000010210d69d"
+   ],
+   "packets": [
+    {
+     "packet_id": 5,
+     "ts_us": 66051,
+     "msg_type_id": 0,
+     "payload": "35b5ec301c085e2fd36a5b4fb1a3",
+     "flags": 2
+    },
+    {
+     "packet_id": 6,
+     "ts_us": 66064,
+     "msg_type_id": 2,
+     "payload": "e39d1e392e33b0c473",
+     "flags": 1
+    }
+   ],
+   "lost": []
+  },
+  {
+   "name": "reordered",
+   "input_frames": [
+    "d31000a300010002d36a5b4f0102031885",
+    "d31000c100010002e39d1e39010210d87e",
+    "d31000c30001000273000000010210d69d",
+    "d31000c0000100020903020101021058fa",
+    "d31000a400010002b1a30000010203765a",
+    "d31000a2000100021c085e2f01020349d1",
+    "d31000c2000100022e33b0c40102106372",
+    "d31000a10001000235b5ec30010203196f",
+    "d31000a0000100020e040002010203c712"
+   ],
+   "packets": [
+    {
+     "packet_id": 6,
+     "ts_us": 66064,
+     "msg_type_id": 2,
+     "payload": "e39d1e392e33b0c473",
+     "flags": 1
+    },
+    {
+     "packet_id": 5,
+     "ts_us": 66051,
+     "msg_type_id": 0,
+     "payload": "35b5ec301c085e2fd36a5b4fb1a3",
+     "flags": 2
+    }
+   ],
+   "lost": []
+  },
+  {
+   "name": "frag_drop_lost",
+   "input_frames": [
+    "d31000a0000100020e040002010203c712",
+    "d31000a10001000235b5ec30010203196f",
+    "d31000a300010002d36a5b4f0102031885",
+    "d31000a400010002b1a30000010203765a",
+    "d31000c0000100020903020101021058fa",
+    "d31000c100010002e39d1e39010210d87e",
+    "d31000c2000100022e33b0c40102106372",
+    "d31000c30001000273000000010210d69d"
+   ],
+   "packets": [
+    {
+     "packet_id": 6,
+     "ts_us": 66064,
+     "msg_type_id": 2,
+     "payload": "e39d1e392e33b0c473",
+     "flags": 1
+    }
+   ],
+   "lost": [
+    5
+   ]
+  },
+  {
+   "name": "duplicate",
+   "input_frames": [
+    "d31000a0000100020e040002010203c712",
+    "d31000a0000100020e040002010203c712",
+    "d31000a10001000235b5ec30010203196f",
+    "d31000a10001000235b5ec30010203196f",
+    "d31000a2000100021c085e2f01020349d1",
+    "d31000a300010002d36a5b4f0102031885",
+    "d31000a400010002b1a30000010203765a",
+    "d31000c0000100020903020101021058fa",
+    "d31000c100010002e39d1e39010210d87e",
+    "d31000c2000100022e33b0c40102106372",
+    "d31000c30001000273000000010210d69d"
+   ],
+   "packets": [
+    {
+     "packet_id": 5,
+     "ts_us": 66051,
+     "msg_type_id": 0,
+     "payload": "35b5ec301c085e2fd36a5b4fb1a3",
+     "flags": 2
+    },
+    {
+     "packet_id": 6,
+     "ts_us": 66064,
+     "msg_type_id": 2,
+     "payload": "e39d1e392e33b0c473",
+     "flags": 1
+    }
+   ],
+   "lost": []
+  }
+ ],
+ "snapshot_roundtrip": [
+  {
+   "bytes": "000102030405060708090a0b0c0d",
+   "fields": {
+    "x": 0.00390625,
+    "y": 2.01171875,
+    "z": 4.01953125,
+    "vx": 6.02734375,
+    "vy": 8.03515625,
+    "vz": 10.04296875,
+    "yaw": 3085
+   }
+  },
+  {
+   "bytes": "ffffffffffffffffffffffffffff",
+   "fields": {
+    "x": -0.00390625,
+    "y": -0.00390625,
+    "z": -0.00390625,
+    "vx": -0.00390625,
+    "vy": -0.00390625,
+    "vz": -0.00390625,
+    "yaw": 65535
+   }
+  },
+  {
+   "bytes": "0000000000000000000000000000",
+   "fields": {
+    "x": 0.0,
+    "y": 0.0,
+    "z": 0.0,
+    "vx": 0.0,
+    "vy": 0.0,
+    "vz": 0.0,
+    "yaw": 0
+   }
+  },
+  {
+   "bytes": "15d5a222f579d5010af22e9b7eaa",
+   "fields": {
+    "x": 21.83203125,
+    "y": -93.8671875,
+    "z": -10.52734375,
+    "vx": -42.99609375,
+    "vy": 10.9453125,
+    "vz": 46.60546875,
+    "yaw": 32426
+   }
+  }
+ ],
+ "input_roundtrip": [
+  {
+   "bytes": "000102030405",
+   "fields": {
+    "tick": 66051,
+    "buttons": 1029
+   }
+  },
+  {
+   "bytes": "ffffffffffff",
+   "fields": {
+    "tick": 4294967295,
+    "buttons": 65535
+   }
+  },
+  {
+   "bytes": "000000000000",
+   "fields": {
+    "tick": 0,
+    "buttons": 0
+   }
+  },
+  {
+   "bytes": "0894b730de66",
+   "fields": {
+    "tick": 143963952,
+    "buttons": 56934
+   }
+  }
+ ],
+ "join_roundtrip": [
+  {
+   "fields": {
+    "player_id": 1,
+    "name": "p1"
+   },
+   "bytes": "0001027031"
+  },
+  {
+   "fields": {
+    "player_id": 43981,
+    "name": "longerplayername"
+   },
+   "bytes": "abcd106c6f6e676572706c617965726e616d65"
+  },
+  {
+   "fields": {
+    "player_id": 65534,
+    "name": ""
+   },
+   "bytes": "fffe00"
+  }
+ ]
+}

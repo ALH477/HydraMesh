@@ -2,9 +2,10 @@
 <!-- Copyright (c) 2026 DeMoD LLC. -->
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { api, on, type UiMessage, type FrameJson, type PeerDetail, type RecordingResult } from './ipc'
+import { api, on, type UiMessage, type FrameJson, type PeerDetail, type RecordingResult,
+  type UiGameSnapshot, type UiGameEvent } from './ipc'
 
-const tabs = ['Connect', 'Peers', 'Messages', 'Jam', 'Wire'] as const
+const tabs = ['Connect', 'Peers', 'Messages', 'Jam', 'Game', 'Wire'] as const
 const tab = ref<(typeof tabs)[number]>('Connect')
 
 const conn = reactive({ node_id: 'me', host: '0.0.0.0', port: 50551, connected: false, selfId: '' })
@@ -19,6 +20,17 @@ const messages = ref<UiMessage[]>([])
 
 const jam = reactive({ codec: 'opus', running: false })
 const level = reactive({ rx: 0 })
+
+// Dot-arena demo: cursor = unreliable SNAPSHOT; "ping" = reliable EVENT.
+const ARENA_W = 10, ARENA_H = 7.5 // metres mapped onto the arena box
+const game = reactive({
+  running: false,
+  playerId: 0,
+  me: { x: ARENA_W / 2, y: ARENA_H / 2 },
+  others: {} as Record<number, { x: number; y: number; t: number }>,
+  events: [] as { src: number; text: string }[],
+})
+let lastPosSent = 0
 
 const wireHex = ref('D31302000001FFFF06020100010203CAD7')
 const wire = ref<FrameJson | null>(null)
@@ -51,6 +63,25 @@ async function toggleJam() {
     else { await api.startJam(jam.codec); jam.running = true }
   } catch (e) { fail(e) }
 }
+async function toggleGame() {
+  try {
+    if (game.running) { await api.stopGame(); game.running = false }
+    else { game.playerId = await api.startGame(); game.running = true }
+  } catch (e) { fail(e) }
+}
+function onArenaMove(e: MouseEvent) {
+  if (!game.running) return
+  const box = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  game.me.x = ((e.clientX - box.left) / box.width) * ARENA_W
+  game.me.y = ((e.clientY - box.top) / box.height) * ARENA_H
+  const now = performance.now()
+  if (now - lastPosSent < 50) return // throttle SNAPSHOTs to ~20 Hz
+  lastPosSent = now
+  api.sendGamePosition(game.me.x, game.me.y).catch(fail)
+}
+async function pingArena() {
+  try { await api.sendGameAction(`ping from ${game.playerId}`) } catch (e) { fail(e) }
+}
 async function decode() { try { wire.value = await api.decodeFrame(wireHex.value) } catch (e) { fail(e) } }
 async function refreshPeers() { if (conn.connected) { try { peerDetails.value = await api.peers() } catch (e) { fail(e) } } }
 async function toggleRec() {
@@ -63,9 +94,16 @@ async function toggleRec() {
 onMounted(async () => {
   await on<UiMessage>('message', (m) => messages.value.push(m))
   await on<{ dir: string; rms: number }>('audio-level', (l) => { if (l.dir === 'rx') level.rx = l.rms })
+  await on<UiGameSnapshot>('game-snapshot', (s) => { game.others[s.src] = { x: s.x, y: s.y, t: Date.now() } })
+  await on<UiGameEvent>('game-event', (e) => { game.events.unshift({ src: e.src, text: e.text }); game.events.splice(8) })
   await on<string>('status', () => {})
   decode()
   setInterval(refreshPeers, 2000)
+  // Drop opponents that have gone silent (>2 s without a snapshot).
+  setInterval(() => {
+    const cut = Date.now() - 2000
+    for (const k of Object.keys(game.others)) if (game.others[+k].t < cut) delete game.others[+k]
+  }, 1000)
 })
 </script>
 
@@ -142,6 +180,29 @@ onMounted(async () => {
         bit-exact Opus track on a shared timeline; ffmpeg muxes a multitrack master + a mixdown.</p>
     </section>
 
+    <section v-show="tab === 'Game'">
+      <div class="row">
+        <button @click="toggleGame">{{ game.running ? 'Leave arena' : 'Join arena' }}</button>
+        <button :disabled="!game.running" @click="pingArena">Ping (reliable event)</button>
+        <span class="dim">CH {{ chan.active }} · you are #{{ game.playerId }}</span>
+      </div>
+      <div class="arena" @mousemove="onArenaMove">
+        <div class="dot me" :style="{ left: (game.me.x / ARENA_W * 100) + '%', top: (game.me.y / ARENA_H * 100) + '%' }">
+          <span class="tag">you</span>
+        </div>
+        <div v-for="(o, src) in game.others" :key="src" class="dot other"
+          :style="{ left: (o.x / ARENA_W * 100) + '%', top: (o.y / ARENA_H * 100) + '%' }">
+          <span class="tag">#{{ src }}</span>
+        </div>
+      </div>
+      <p class="dim">Move your cursor in the box: your position streams as unreliable SNAPSHOTs
+        (dead-reckoned, latest-wins per source). "Ping" sends a reliable, ordered EVENT —
+        both ride the certified DCF-Game framing over channel {{ chan.active }}.</p>
+      <div class="log" style="height:90px">
+        <div v-for="(e, i) in game.events" :key="i"><b>#{{ e.src }}</b>: {{ e.text }}</div>
+      </div>
+    </section>
+
     <section v-show="tab === 'Wire'">
       <label>DeModFrame hex <input v-model="wireHex" @keyup.enter="decode" /></label>
       <div class="row"><button @click="decode">Decode</button></div>
@@ -179,5 +240,10 @@ button { background: #1e2234; color: #50e6dc; border: 0; padding: 6px 14px; bord
 .log { height: 280px; overflow: auto; background: #0d0d14; border: 1px solid #20202e; border-radius: 6px; padding: 8px }
 .meter { height: 8px; background: #14141f; border-radius: 4px; overflow: hidden }
 .meter > div { height: 100%; background: #4cff82 }
+.arena { position: relative; height: 300px; background: #0d0d14; border: 1px solid #26263a; border-radius: 8px; overflow: hidden; cursor: crosshair }
+.dot { position: absolute; width: 14px; height: 14px; border-radius: 50%; transform: translate(-50%, -50%); transition: left .05s linear, top .05s linear }
+.dot.me { background: #50e6dc; box-shadow: 0 0 8px #50e6dc }
+.dot.other { background: #ffb454; box-shadow: 0 0 8px #ffb454 }
+.dot .tag { position: absolute; left: 16px; top: -2px; font-size: 11px; color: #9a9ab0; white-space: nowrap }
 table td { padding: 2px 12px 2px 0 } table td:first-child { color: #6a6a86 }
 </style>
