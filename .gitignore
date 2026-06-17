@@ -27,6 +27,12 @@ dist/
 # Swift
 .build/
 
+# Perl (ExtUtils::MakeMaker)
+/perl/Makefile
+perl/blib/
+perl/pm_to_blib
+perl/MYMETA.*
+
 # generated docs
 Documentation/_build/
 Documentation/_include/

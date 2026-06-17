@@ -265,3 +265,19 @@ jobs:
 
       - name: Certify the Node.js DeModFrame codec against the golden vectors
         run: node JS/nodejs/test/certify.js
+
+  certify-perl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Perl
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: '5.38'
+
+      - name: Certify the Perl DeModFrame codec against the golden vectors
+        working-directory: perl
+        run: |
+          perl Makefile.PL
+          make test
