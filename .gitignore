@@ -1,11 +1,37 @@
+# Rust
 target/
+
+# Python
 __pycache__/
 *.pyc
-
-# build artifacts
-*.so
+*.egg-info/
 .venv/
+
+# C / C++ build artifacts
+*.o
+*.a
+*.so
+build/
+
+# Node.js
+node_modules/
+dist/
+
+# Lisp
+*.fasl
+
+# JVM / Gradle
+.gradle/
+*.class
+
+# Swift
+.build/
 
 # generated docs
 Documentation/_build/
 Documentation/_include/
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store

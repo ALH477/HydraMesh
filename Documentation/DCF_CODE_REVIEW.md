@@ -278,10 +278,10 @@ with a linkable protocol library), add a real top-level `LICENSE`, set
 `CPACK_RESOURCE_FILE_LICENSE` to it, and fix the flake `meta.license`. Keep the
 GPL-3.0 notice scoped to the DOOM example only.
 
-**Remove the slur in the HydraMesh acknowledgments.** There is a line in the
-acknowledgments section containing a slur ("LLM MONGLOIDS"). Whatever the intent,
-it cannot ship in a repo you license, demo to the Air Force, or hand to a church
-donee. Delete it. This is a one-line edit with outsized reputational stakes.
+**Remove the slur in the HydraMesh acknowledgments. (RESOLVED)** A line in the
+`lisp/README.md` acknowledgments section contained a slur with outsized
+reputational stakes — it could not ship in a repo you license, demo, or hand to a
+donee. The offending line has been removed.
 
 ---
 
