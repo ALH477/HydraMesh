@@ -1,0 +1,739 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="DCF-Audio — Collaborative Audio over the DeModFrame Wire" href="DCF_AUDIO_SPEC.html"><link rel="prev" title="DCF Wire Quantum — Canonical Specification" href="WIRE_QUANTUM_SPEC.html">
+        <link rel="canonical" href="https://alh477.github.io/HydraMesh/wire_quanta_category.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>The DeMoD Wire Quantum: A Categorical Formalization - DeMoD Communication Framework</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=2d41b0bc" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f0f0f0;
+  --color-code-foreground: black;
+  --color-brand-primary: #0c8aa6;
+  --color-brand-content: #0c8aa6;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #282a36;
+  --color-code-foreground: #f8f8f2;
+  --color-brand-primary: #34d6e8;
+  --color-brand-content: #34d6e8;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #282a36;
+  --color-code-foreground: #f8f8f2;
+  --color-brand-primary: #34d6e8;
+  --color-brand-content: #34d6e8;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">DeMoD Communication Framework</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  
+  <span class="sidebar-brand-text">DeMoD Communication Framework</span>
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Start here</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="_include/readme.html">HydraMesh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="_include/readme.html#demod-llc-cut-the-bullshit-cut-the-price-innovation-without-the-overhead">DeMoD LLC Cut the bullshit, Cut the price. Innovation without the overhead.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="_include/agent-to-agent.html">Agent-to-agent over DCF — a teaching guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="_include/architecture.html">HydraMesh / DCF — Architecture Map</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Specifications</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="WIRE_QUANTUM_SPEC.html">DCF Wire Quantum — Canonical Specification</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">The DeMoD Wire Quantum: A Categorical Formalization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DCF_AUDIO_SPEC.html">DCF-Audio — Collaborative Audio over the DeModFrame Wire</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DCF_GAME_SPEC.html">DCF-Game — Low-Latency Multiplayer over the DeModFrame Wire</a></li>
+<li class="toctree-l1"><a class="reference internal" href="SUPERPACK_SPEC.html">DCF SuperPack — 32-byte container for two DeModFrame quanta</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="DCF_CODE_REVIEW.html">DCF / HydraMesh code review</a></li>
+<li class="toctree-l1"><a class="reference internal" href="_include/contributing.html">Contributing to HydraMesh / DCF</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/ALH477/HydraMesh/blob/main/Documentation/wire_quanta_category.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/ALH477/HydraMesh/edit/main/Documentation/wire_quanta_category.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="the-demod-wire-quantum-a-categorical-formalization">
+<h1>The DeMoD Wire Quantum: A Categorical Formalization<a class="headerlink" href="#the-demod-wire-quantum-a-categorical-formalization" title="Link to this heading">¶</a></h1>
+<p><strong>DeMoD LLC · DCF mono repo</strong>
+Companion to the Pontryagin-duality / Fourier treatment of the handshakeless
+channel. This document supplies the <strong>codec / algebraic</strong> half: it proves that
+the 17-byte <code class="docutils literal notranslate"><span class="pre">DeModFrame</span></code> is <em>cemented</em> — uniquely determined, uniquely decodable,
+and uniquely realized across every language SDK — and reduces “cemented” from
+rhetoric to a checkable universal property with a finite certificate.</p>
+<p>All claims here are machine-anchored. The constants <code class="docutils literal notranslate"><span class="pre">0x29B1</span></code>, <code class="docutils literal notranslate"><span class="pre">0x4EC3</span></code>, <code class="docutils literal notranslate"><span class="pre">0xA963</span></code>
+and the frame <code class="docutils literal notranslate"><span class="pre">D31012340001FFFFDEADBEEFAB12CDA963</span></code> are produced by
+<code class="docutils literal notranslate"><span class="pre">verify_laws.py</span></code> and re-checked by <code class="docutils literal notranslate"><span class="pre">wirelab_mcp.py</span> <span class="pre">--selftest</span></code>, the SBCL run in
+<code class="docutils literal notranslate"><span class="pre">hydramesh-hotfix.lisp</span></code>, and the Lua self-test in <code class="docutils literal notranslate"><span class="pre">wirelab.lua</span></code>. Notation is
+plain Unicode; ⊕ is GF(2) addition (XOR), B = GF(2), Bⁿ the n-bit words.</p>
+<hr class="docutils" />
+<section id="scope-and-how-this-composes-with-the-spectral-picture">
+<h2>§0. Scope and how this composes with the spectral picture<a class="headerlink" href="#scope-and-how-this-composes-with-the-spectral-picture" title="Link to this heading">¶</a></h2>
+<p>The spectral document treats a frame as a point of a compact abelian group —
+header in ℤ/136ℤ-style coordinates, payload in ℤ/32ℤ — and reads transmission
+through Pontryagin duality and the Fourier transform, with <em>naturality</em> of the
+dual pairing across media as the central structural fact. That picture is about
+<strong>how the channel carries the group</strong>.</p>
+<p>This document is dual in spirit and disjoint in content. It treats a frame as an
+<strong>object assembled by a codec</strong> and asks what makes that assembly canonical:</p>
+<ul class="simple">
+<li><p>§1–§3: the frame as a <strong>retract</strong> of raw bytes (<code class="docutils literal notranslate"><span class="pre">encode</span></code>/<code class="docutils literal notranslate"><span class="pre">decode</span></code> as a
+section/retraction pair) and validity as an <strong>equalizer</strong>.</p></li>
+<li><p>§4: traffic as a <strong>free monoid</strong> of quanta — unique decipherability.</p></li>
+<li><p>§5: the spec as a <strong>finite limit</strong>; every SDK as a <strong>cone</strong>; interoperability
+as the <strong>unique mediating isomorphism</strong>. <em>This is the definition of “cemented.”</em></p></li>
+<li><p>§6: the <strong>finite certificate</strong> — affineness over GF(2) collapses
+“agree on all 2¹⁰⁸ frames” to “agree on 109 + 137 vectors.”</p></li>
+<li><p>§7: a worked failure — the shipped HydraMesh CRC bug as a <em>broken equalizer</em>,
+SBCL-verified before and after.</p></li>
+<li><p>§8: where the two documents meet (commuting functors; RTT as enrichment).</p></li>
+</ul>
+<p>The bridge in one line: the spectral document fixes the <em>group</em> the wire carries;
+this one fixes the <em>map</em> that names points of that group, and proves the map is
+forced. Together they pin both the carrier and the coordinates.</p>
+</section>
+<hr class="docutils" />
+<section id="the-frame-functor-and-the-wire-object">
+<h2>§1. The frame functor and the wire object<a class="headerlink" href="#the-frame-functor-and-the-wire-object" title="Link to this heading">¶</a></h2>
+<p>Fix the version-1 layout (big-endian), 17 bytes = 136 bits:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>[0]      sync      = 0xD3                      (8 bits, constant)
+[1]      ver|type  = (1&lt;&lt;4) | type             (ver nibble constant, type∈2⁴)
+[2..3]   seq        u16                         (16 bits)
+[4..5]   src        u16                         (16 bits)
+[6..7]   dst        u16                         (16 bits)
+[8..11]  payload    4 bytes                     (32 bits)
+[12..14] ts_us      u24                         (24 bits)
+[15..16] crc16      CRC-16/CCITT-FALSE([0..14]) (16 bits, derived)
+</pre></div>
+</div>
+<p><strong>Field object.</strong> The <em>free</em> (unconstrained) field data is the product set</p>
+<p>Φ = T × S × A × A × P × U,</p>
+<p>with T = 2⁴ (type nibble), S = A = 2¹⁶ (seq, and src/dst share the address set
+A), P = 2³² (payload), U = 2²⁴ (timestamp). So |Φ| = 2⁴⁺¹⁶⁺¹⁶⁺¹⁶⁺³²⁺²⁴ = <strong>2¹⁰⁸</strong>.
+The sync byte and version nibble are <em>not</em> free coordinates; they are constants
+the codec writes, which is exactly why they belong to validity (§2), not to Φ.</p>
+<p><strong>Wire object.</strong> W = B¹⁷ = GF(2)¹³⁶, the raw 17-byte words, |W| = 2¹³⁶.</p>
+<p><strong>Encoding.</strong> <code class="docutils literal notranslate"><span class="pre">encode</span> <span class="pre">:</span> <span class="pre">Φ</span> <span class="pre">→</span> <span class="pre">W</span></code> places fields, writes sync/version, and appends
+the CRC. <strong>Decoding</strong> <code class="docutils literal notranslate"><span class="pre">decode</span> <span class="pre">:</span> <span class="pre">W</span> <span class="pre">⇀</span> <span class="pre">Φ</span></code> is partial: it checks length, sync,
+version nibble, and CRC, then reads fields.</p>
+<blockquote>
+<div><p><strong>Proposition 1.1 (encode is affine over GF(2)).</strong>
+Writing Φ ≅ GF(2)¹⁰⁸ by concatenating field bits, <code class="docutils literal notranslate"><span class="pre">encode</span></code> is an affine map
+GF(2)¹⁰⁸ → GF(2)¹³⁶, i.e. encode(x) = M·x ⊕ c for a fixed matrix M and vector c.</p>
+</div></blockquote>
+<p><em>Proof.</em> Field placement is a fixed permutation-with-padding of input bits into
+output positions — GF(2)-linear. The sync byte and version nibble are constants,
+contributing to c. The CRC of bytes [0..14] is computed by the CCITT recurrence
+crcᵢ₊₁ = (crcᵢ ⊕ bᵢ·2⁸) shifted with conditional XOR by the polynomial; each step
+is GF(2)-affine in the running state, and the nonzero init 0xFFFF makes the whole
+map affine rather than linear. Affine ∘ linear = affine, and the CRC bits are an
+affine function of [0..14], themselves affine in x. Hence encode is affine. ∎</p>
+<p><code class="docutils literal notranslate"><span class="pre">verify_laws.py</span></code> checks the affine signature of the CRC empirically:
+crc(x⊕y) = crc(x) ⊕ crc(y) ⊕ crc(0) on 500 random pairs, with crc(0¹⁵) = <strong>0x4EC3</strong>.</p>
+</section>
+<hr class="docutils" />
+<section id="validity-as-an-equalizer">
+<h2>§2. Validity as an equalizer<a class="headerlink" href="#validity-as-an-equalizer" title="Link to this heading">¶</a></h2>
+<p>Let the <strong>syndrome map</strong> σ : W → GF(2)¹⁶ be</p>
+<p>σ(w) = CRC([w₀..w₁₄]) ⊕ (w₁₅‖w₁₆),</p>
+<p>the XOR of the recomputed CRC with the stored CRC. By Prop 1.1, σ is <strong>affine</strong>.</p>
+<p>Let the <strong>structural constraints</strong> be the two affine conditions
+sync(w) = 0xD3 and ver(w) = 1, each an affine equation κⱼ(w) = constant.</p>
+<blockquote>
+<div><p><strong>Definition 2.1 (Valid).</strong> <code class="docutils literal notranslate"><span class="pre">Valid</span> <span class="pre">⊆</span> <span class="pre">W</span></code> is the simultaneous solution set
+{ w : σ(w) = 0, sync(w) = 0xD3, ver(w) = 1 }.</p>
+</div></blockquote>
+<p>Categorically, <code class="docutils literal notranslate"><span class="pre">Valid</span></code> is a <strong>finite limit</strong>: the pullback of the constant maps
+along (σ, sync, ver). Equivalently it is the <strong>equalizer</strong> of the pair
+(check, const) : W ⇉ GF(2)¹⁶ × B⁸ × B⁴ where <code class="docutils literal notranslate"><span class="pre">check</span></code> computes (σ, sync, ver) and
+<code class="docutils literal notranslate"><span class="pre">const</span></code> returns (0, 0xD3, 1). This is the precise sense in which “a valid frame”
+is not a predicate bolted on after the fact but a <em>universal</em> sub-object of W.</p>
+</section>
+<hr class="docutils" />
+<section id="the-frame-is-a-cemented-retract-theorem-1">
+<h2>§3. The frame is a cemented retract (Theorem 1)<a class="headerlink" href="#the-frame-is-a-cemented-retract-theorem-1" title="Link to this heading">¶</a></h2>
+<blockquote>
+<div><p><strong>Theorem 1 (Cemented codec).</strong>
+(a) <code class="docutils literal notranslate"><span class="pre">encode</span> <span class="pre">:</span> <span class="pre">Φ</span> <span class="pre">→</span> <span class="pre">W</span></code> is a split monomorphism (injective with a left inverse).
+(b) Its corestriction <code class="docutils literal notranslate"><span class="pre">encode</span> <span class="pre">:</span> <span class="pre">Φ</span> <span class="pre">→</span> <span class="pre">Valid</span></code> is a <strong>bijection</strong>.
+(c) <code class="docutils literal notranslate"><span class="pre">decode</span></code> restricted to <code class="docutils literal notranslate"><span class="pre">Valid</span></code> is the <strong>two-sided inverse</strong> of (b); on
+W∖Valid, <code class="docutils literal notranslate"><span class="pre">decode</span></code> is undefined. Thus Φ is a <strong>retract</strong> of W:
+decode ∘ encode = id_Φ, and encode ∘ decode = id on Valid.
+(d) Any decoder agreeing with the spec’s accept/reject behavior and field
+readout equals <code class="docutils literal notranslate"><span class="pre">decode</span></code> on all of W — the retraction is <strong>unique</strong>.</p>
+</div></blockquote>
+<p><em>Proof.</em>
+(a) Distinct field tuples differ in at least one placed bit, and placement is
+injective into [0..14]∪payload positions, so encode is injective. decode∘encode
+reads back exactly the placed fields ⇒ id_Φ; that is the left inverse.</p>
+<p>(b) encode lands in <code class="docutils literal notranslate"><span class="pre">Valid</span></code>: it writes sync = 0xD3, ver = 1, and sets the CRC
+bytes so σ = 0 by construction. It is injective by (a). For surjectivity, take
+w ∈ Valid. Read the 108 field bits to get x ∈ Φ. Then encode(x) agrees with w on
+all field positions, on sync and version (both fixed by w ∈ Valid), and on the
+CRC: encode(x) recomputes CRC([0..14]); since w’s [0..14] equal encode(x)’s
+[0..14] and σ(w) = 0 forces w’s stored CRC to equal CRC of its own [0..14],
+the CRC bytes match too. So encode(x) = w.</p>
+<p>(c) Immediate from (b): a bijection onto Valid composed with its inverse. decode
+rejects everything outside Valid by Definition 2.1.</p>
+<p>(d) Suppose D : W ⇀ Φ matches the spec: it accepts exactly Valid and returns the
+documented field bits. On Valid, “documented field bits” <em>is</em> the inverse of the
+bijection in (b), so D = decode there. Off Valid both are undefined. ∎</p>
+<p><strong>Reading.</strong> “Atomic” is now a theorem, not a hope: Φ sits inside W as a retract
+whose image is <em>exactly</em> the valid words, and the decoder that realizes the
+retraction is unique. There is nothing to standardize twice.</p>
+<p><code class="docutils literal notranslate"><span class="pre">verify_laws.py</span></code> exercises Theorem 1 directly: decode∘encode = id on 2032 frames
+(random + every corner of each field), and encode∘decode = id on 500 valid words.</p>
+</section>
+<hr class="docutils" />
+<section id="traffic-is-a-free-monoid-of-quanta-theorem-2">
+<h2>§4. Traffic is a free monoid of quanta (Theorem 2)<a class="headerlink" href="#traffic-is-a-free-monoid-of-quanta-theorem-2" title="Link to this heading">¶</a></h2>
+<p>Let Φ* be finite sequences of frames (the free monoid on Φ, concatenation as ∘,
+empty sequence as unit) and B* the free monoid of byte strings. Extend the codec:
+<code class="docutils literal notranslate"><span class="pre">encode*</span> <span class="pre">:</span> <span class="pre">Φ*</span> <span class="pre">→</span> <span class="pre">B*</span></code> concatenates 17-byte encodings.</p>
+<blockquote>
+<div><p><strong>Lemma 2.1 (Self-synchronization bound).</strong> Model an adversary-free channel as
+i.i.d. uniform bytes. The probability a fixed 17-byte window is accepted by
+<code class="docutils literal notranslate"><span class="pre">decode</span></code> is exactly
+P[sync]·P[ver | sync]·P[σ = 0 | sync, ver] = 2⁻⁸ · 2⁻⁴ · 2⁻¹⁶ = <strong>2⁻²⁸</strong>.</p>
+</div></blockquote>
+<p><em>Proof.</em> The three constraints are affine and <strong>independent</strong> in coordinates:
+sync fixes byte 0 (2⁻⁸); the version nibble fixes 4 bits of byte 1 (2⁻⁴);
+conditioned on the first 15 bytes, σ = 0 fixes the 16 CRC bits to one value out
+of 2¹⁶ (2⁻¹⁶), since the stored CRC is uniform and independent of [0..14] under
+the i.i.d. model. Multiply. ∎</p>
+<p>So a random window false-locks with probability 2⁻²⁸ ≈ 3.7×10⁻⁹; expected bytes
+to a spurious frame ≈ 2²⁸. This is the quantitative content of “the sync byte +
+fixed length + CRC self-synchronize.”</p>
+<blockquote>
+<div><p><strong>Theorem 2 (Quanta / unique decipherability).</strong>
+(a) <code class="docutils literal notranslate"><span class="pre">encode*</span></code> is an injective monoid homomorphism: Φ* embeds in B* as a
+<strong>uniform code</strong> (every codeword has length 17).
+(b) On any <em>aligned</em> stream (a concatenation of whole frames), factorization
+into frame quanta is <strong>unique</strong>: there is at most one way to cut an aligned
+byte string into valid 17-byte frames, and <code class="docutils literal notranslate"><span class="pre">decode*</span></code> recovers it.</p>
+</div></blockquote>
+<p><em>Proof.</em> (a) A uniform-length code over an alphabet is automatically a prefix
+code, hence uniquely decodable (no codeword is a prefix of another since all
+share one length); injectivity of encode (Thm 1a) lifts to injectivity of the
+concatenation. (b) Aligned cuts occur only at multiples of 17, so the partition
+is forced; each block is decoded by the unique decoder of Thm 1d. ∎</p>
+<p><strong>Caveat (honest).</strong> On an <em>unaligned</em> raw stream, decoding is a partial map with
+resync semantics — a valid frame could in principle begin mid-block. Lemma 2.1
+bounds how often that misfires (2⁻²⁸ per offset) but does not make it impossible.
+Uniqueness in (b) is a statement about aligned streams; resync is a probabilistic
+guarantee, and the document is explicit about which is which. <code class="docutils literal notranslate"><span class="pre">verify_laws.py</span></code>
+checks (b) on a 64-frame aligned stream.</p>
+</section>
+<hr class="docutils" />
+<section id="cemented-a-universal-property-theorem-3">
+<h2>§5. “Cemented” = a universal property (Theorem 3)<a class="headerlink" href="#cemented-a-universal-property-theorem-3" title="Link to this heading">¶</a></h2>
+<p>This is the heart of the contribution: a definition of <em>cemented</em> that an SDK can
+be tested against.</p>
+<p><strong>The spec as a limit.</strong> Present the frame specification as the diagram 𝒟 whose
+cone apex is a set X equipped with:</p>
+<ul class="simple">
+<li><p>field projections π_T, π_seq, π_src, π_dst, π_pay, π_ts onto T, S, A, A, P, U;</p></li>
+<li><p>a structure map into W (the serialization);</p></li>
+<li><p>commuting constraints: the serialization satisfies sync = 0xD3, ver = 1, σ = 0,
+and re-reading bytes through the π’s reproduces the projections.</p></li>
+</ul>
+<blockquote>
+<div><p><strong>Definition 5.1.</strong> The <strong>specification object</strong> Spec is the limit lim 𝒟 in Set.
+By §1–§3 this limit exists and Spec ≅ Φ ≅ Valid, with the limiting cone given by
+the field reads and the inclusion Valid ↪ W.</p>
+</div></blockquote>
+<p><strong>An SDK as a cone.</strong> A language implementation L (C, Lisp, Haskell, Rust, Python,
+x86 ASM) provides a set X_L (its in-memory frame type), field accessors, and an
+<code class="docutils literal notranslate"><span class="pre">encode_L</span></code>/<code class="docutils literal notranslate"><span class="pre">decode_L</span></code> pair. <em>L conforms</em> iff (X_L, accessors, encode_L) is a cone
+over 𝒟 — i.e. its accessors land in the right field sets and its serialization
+meets sync/ver/σ and round-trips.</p>
+<blockquote>
+<div><p><strong>Theorem 3 (Cementing).</strong>
+If L conforms, there is a <strong>unique</strong> mediating map u_L : X_L → Spec commuting
+with every projection and with serialization. If additionally encode_L is
+injective and onto Valid (L is <em>faithful</em>), u_L is an <strong>isomorphism</strong>.
+Consequently any two faithful conforming SDKs L, L′ satisfy a unique
+isomorphism φ = u_{L′}⁻¹ ∘ u_L : X_L ≅ X_{L′} that commutes with all field
+reads and with the wire — they are <em>the same codec up to canonical iso</em>.</p>
+</div></blockquote>
+<p><em>Proof.</em> Universal property of the limit: a cone over 𝒟 factors uniquely through
+lim 𝒟 = Spec, giving u_L. Faithfulness makes encode_L a bijection onto Valid
+(Thm 1b applied to L), and Spec ≅ Valid, so u_L is a bijection respecting the
+cone, i.e. an iso. Compose two such isos over the shared apex Spec; uniqueness of
+each mediating map gives uniqueness of φ. ∎</p>
+<blockquote>
+<div><p><strong>Definition 5.2 (Fully cemented).</strong> The wire is <strong>fully cemented</strong> when
+(i) the version nibble is frozen (the limit 𝒟 is fixed, not a moving target),
+and (ii) every shipped SDK is a <em>faithful</em> cone over 𝒟. By Theorem 3 this is
+equivalent to: all SDKs are canonically isomorphic codecs, with the isomorphisms
+uniquely determined and mutually compatible. “Cemented” is then not a claim about
+any one implementation but a property of the <em>whole family</em> — there is one frame,
+realized one way, and the realizations cannot drift without breaking the cone.</p>
+</div></blockquote>
+<p>This is the payoff: <em>cemented</em> is now falsifiable. §7 exhibits a real SDK that
+<strong>fails</strong> to be a cone, and §6 gives the finite test that decides faithfulness.</p>
+</section>
+<hr class="docutils" />
+<section id="the-finite-certificate-theorem-4">
+<h2>§6. The finite certificate (Theorem 4)<a class="headerlink" href="#the-finite-certificate-theorem-4" title="Link to this heading">¶</a></h2>
+<p>A universal property is only useful operationally if conformance is checkable.
+Affineness makes it a finite check.</p>
+<blockquote>
+<div><p><strong>Theorem 4 (Finite certification).</strong>
+Let L be any implementation whose encoder is <strong>bit-placement + CRC</strong> (hence
+affine, Prop 1.1) and whose acceptance test is “structural constants hold and
+σ = 0” (hence an affine syndrome). Then:
+(a) <code class="docutils literal notranslate"><span class="pre">encode_L</span> <span class="pre">=</span> <span class="pre">encode</span></code> on <strong>all 2¹⁰⁸ frames</strong> iff they agree on the <strong>109
+encode-basis vectors</strong>: the zero input and the 108 unit inputs e_i.
+(b) <code class="docutils literal notranslate"><span class="pre">σ_L</span> <span class="pre">=</span> <span class="pre">σ</span></code> on <strong>all 2¹³⁶ words</strong> (so L classifies validity identically) iff
+they agree on the <strong>137 syndrome-basis vectors</strong>: the zero word and the 136
+single-bit words.
+Hence agreement on <strong>109 + 137 = 246 vectors</strong> ⇒ L is a faithful cone ⇒ (Thm 3)
+L is canonically isomorphic to the reference. The 246 vectors are a finite
+<strong>proof object</strong> for “cemented.”</p>
+</div></blockquote>
+<p><em>Proof.</em> An affine map f(x) = M·x ⊕ c on GF(2)ⁿ is determined by f(0) = c and
+f(e_i) = M·e_i ⊕ c (the i-th column of M, XOR c). Two affine maps agreeing on
+{0, e₁, …, eₙ} agree on every x = ⊕_{i∈I} e_i because
+f(⊕e_i) = (⊕ M e_i) ⊕ c = ⊕(f(e_i) ⊕ c) ⊕ c, fixed by the basis values. Apply
+with n = 108 for encode (a) and n = 136 for σ (b). Faithfulness: matching σ
+everywhere fixes Valid; matching encode everywhere fixes the bijection Φ → Valid;
+together they make encode_L a faithful cone (Thm 1b). ∎</p>
+<p><strong>Scope, stated honestly.</strong> Theorem 4 certifies implementations <em>in the affine
+class</em> — i.e. real bit-placement-plus-CRC codecs, which is what every DCF SDK is.
+It is <strong>not</strong> a universal oracle: a pathological decoder doing nonlinear work
+(e.g. a lookup table that special-cases one frame) is outside the hypothesis and
+must be checked by other means. For the actual SDK family the hypothesis holds,
+so the 246 vectors are decisive. This is a deliberate, declared boundary — the
+certificate is a theorem about a class, not a magic universal test.</p>
+<p><strong>Anchors (machine-checked).</strong></p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>quantity</p></th>
+<th class="head"><p>value</p></th>
+<th class="head"><p>produced by</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>CRC-16/CCITT-FALSE(“123456789”)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x29B1</span></code></p></td>
+<td><p>reference check value</p></td>
+</tr>
+<tr class="row-odd"><td><p>CRC(0¹⁵) = affine offset c</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x4EC3</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">verify_laws.py</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>CRC(exampleFrame body [0..14])</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0xA963</span></code></p></td>
+<td><p>cross-language anchor</p></td>
+</tr>
+<tr class="row-odd"><td><p>exampleFrame (17 B)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">D31012340001FFFFDEADBEEFAB12CDA963</span></code></p></td>
+<td><p>Haskell <code class="docutils literal notranslate"><span class="pre">FrameSpec</span></code> ≡ Python ≡ Lua ≡ fixed Lisp</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The certificate ships as <code class="docutils literal notranslate"><span class="pre">golden_vectors.json</span></code> (109 encode + 137 syndrome
+vectors). <code class="docutils literal notranslate"><span class="pre">wirelab_mcp.py</span></code>’s <code class="docutils literal notranslate"><span class="pre">certify</span></code> tool runs it; pass another SDK’s emitted
+vectors to certify that SDK.</p>
+</section>
+<hr class="docutils" />
+<section id="worked-failure-the-hydramesh-crc-as-a-broken-equalizer">
+<h2>§7. Worked failure: the HydraMesh CRC as a broken equalizer<a class="headerlink" href="#worked-failure-the-hydramesh-crc-as-a-broken-equalizer" title="Link to this heading">¶</a></h2>
+<p>The shipped <code class="docutils literal notranslate"><span class="pre">crc16-ccitt</span></code> in <code class="docutils literal notranslate"><span class="pre">lisp/src/hydramesh.lisp</span></code> had an inner <code class="docutils literal notranslate"><span class="pre">let*</span></code> that
+shadowed the running <code class="docutils literal notranslate"><span class="pre">crc</span></code>, so every iteration’s update was discarded and the
+function <strong>returned <code class="docutils literal notranslate"><span class="pre">#xFFFF</span></code> for all input</strong>. This is not just “a bug”; in the
+language of §2 it is a <em>collapse of the syndrome map</em>.</p>
+<blockquote>
+<div><p><strong>Observation 7.1.</strong> With crc ≡ const, the Lisp syndrome becomes
+σ_Lisp(w) = const ⊕ (w₁₅‖w₁₆), which is <strong>independent of bytes [0..14]</strong>.
+Its zero set <code class="docutils literal notranslate"><span class="pre">Valid_Lisp</span></code> = { w : sync = 0xD3, ver = 1, (w₁₅‖w₁₆) = const } has
+size 2¹³⁶⁻⁸⁻⁴⁻¹⁶ = <strong>2¹⁰⁸ … wait — only the 28 structural+CRC bits are fixed</strong>:
+|Valid_Lisp| = 2¹³⁶⁻²⁸ = 2¹⁰⁸ words <em>with the CRC bits pinned to one constant</em>,
+versus the true <code class="docutils literal notranslate"><span class="pre">Valid</span></code> which pins the CRC bits to a <strong>data-dependent</strong> value.</p>
+</div></blockquote>
+<p>The two equalizers have the same cardinality but are <em>different sub-objects</em> of W:
+the true <code class="docutils literal notranslate"><span class="pre">Valid</span></code> couples the last 2 bytes to the first 15; <code class="docutils literal notranslate"><span class="pre">Valid_Lisp</span></code> frees that
+coupling and instead demands a fixed CRC literal. So:</p>
+<ul class="simple">
+<li><p><strong>encode_Lisp does not land in <code class="docutils literal notranslate"><span class="pre">Valid</span></code></strong> for general data (it writes <code class="docutils literal notranslate"><span class="pre">0xFFFF</span></code> as
+the CRC, valid only for the unique body whose true CRC is <code class="docutils literal notranslate"><span class="pre">0xFFFF</span></code>), so the Lisp
+encoder is <strong>not a cone</strong> over 𝒟 — Theorem 3’s hypothesis fails, and there is
+<strong>no</strong> mediating isomorphism to the Haskell/Python/Rust codec.</p></li>
+<li><p><strong>Interop breaks asymmetrically</strong>: a real peer rejects almost every Lisp frame
+(wrong CRC); the Lisp peer accepts corrupted frames whose first 15 bytes were
+mangled but whose last 2 bytes still read <code class="docutils literal notranslate"><span class="pre">0xFFFF</span></code>. The integrity guarantee of
+Lemma 2.1 degrades from 2⁻²⁸ to 2⁻²⁸ <em>against the wrong target</em> — it is checking
+a constant, not the data.</p></li>
+</ul>
+<blockquote>
+<div><p><strong>Verification (SBCL, in-container).</strong>
+broken(‘123456789’) = <code class="docutils literal notranslate"><span class="pre">#xFFFF</span></code> (expected <code class="docutils literal notranslate"><span class="pre">0x29B1</span></code>) — bug reproduced.
+fixed (‘123456789’) = <code class="docutils literal notranslate"><span class="pre">0x29B1</span></code>; fixed(exampleFrame body) = <code class="docutils literal notranslate"><span class="pre">0xA963</span></code> — cone
+restored. The fix is in <code class="docutils literal notranslate"><span class="pre">hydramesh-hotfix.lisp</span></code> (F1), which then asserts both
+anchors at load time and refuses to load if the codec is not a cone.</p>
+</div></blockquote>
+<p>This is the formalism earning its keep: “the Lisp SDK fails to preserve the
+validity equalizer, so it is not a cone over the spec and admits no mediating
+iso” is a precise, true sentence that names exactly what broke and why every
+other language rejected the frames.</p>
+</section>
+<hr class="docutils" />
+<section id="where-the-two-documents-meet-one-paragraph">
+<h2>§8. Where the two documents meet (one paragraph)<a class="headerlink" href="#where-the-two-documents-meet-one-paragraph" title="Link to this heading">¶</a></h2>
+<p>The spectral/Pontryagin document and this one commute. Let Ŝ be its spectral
+functor (frame ↦ point of the dual group, transmission ↦ Fourier-side action) and
+let E be the codec functor of §5 (field tuple ↦ word in Valid). Both factor
+through the same object W: E lands in Valid ⊆ W, and Ŝ reads its group coordinates
+off W. On Valid the square <code class="docutils literal notranslate"><span class="pre">Φ</span> <span class="pre">—E→</span> <span class="pre">Valid</span> <span class="pre">—Ŝ→</span> <span class="pre">Ĝ</span></code> equals <code class="docutils literal notranslate"><span class="pre">Φ</span> <span class="pre">—(group</span> <span class="pre">coords)→</span> <span class="pre">Ĝ</span></code>,
+because the field bits E places are exactly the group coordinates Ŝ dualizes —
+the codec names the very coordinates the transform acts on. Two enrichments make
+this live: RTT-weighted routing is a Lawvere [0,∞]-enriched category on the peer
+graph (objects = nodes, hom = measured latency, composition = triangle
+inequality), and the redundancy/forwarding path is then a minimal morphism in the
+free category on that graph — Dijkstra as choice of a shortest composite. The
+frame quantum is the unit that travels those morphisms; the spectral document
+governs <em>how</em> it rides the channel, this one governs <em>what it is</em> and <em>that every
+SDK builds the same one</em>.</p>
+</section>
+<hr class="docutils" />
+<section id="artifacts-and-how-to-certify-a-new-sdk">
+<h2>§9. Artifacts and how to certify a new SDK<a class="headerlink" href="#artifacts-and-how-to-certify-a-new-sdk" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>file</p></th>
+<th class="head"><p>role</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">wirelab_core.py</span></code></p></td>
+<td><p>reference codec (encode/decode/σ), the affine maps of §1–§2</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">verify_laws.py</span></code></p></td>
+<td><p>executable Laws 0–6: anchors, affinity, retraction, quanta, certificate</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">golden_vectors.json</span></code></p></td>
+<td><p>the 109 + 137 finite certificate of §6 (Theorem 4 proof object)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">wirelab_mcp.py</span></code></p></td>
+<td><p>MCP server: <code class="docutils literal notranslate"><span class="pre">crc16_ccitt</span></code>, <code class="docutils literal notranslate"><span class="pre">encode_frame</span></code>, <code class="docutils literal notranslate"><span class="pre">decode_frame</span></code>, <code class="docutils literal notranslate"><span class="pre">field_map</span></code>, <code class="docutils literal notranslate"><span class="pre">bitflip_audit</span></code>, <code class="docutils literal notranslate"><span class="pre">certify</span></code>, <code class="docutils literal notranslate"><span class="pre">golden_vectors</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">wirelab.lua</span></code></p></td>
+<td><p>DeMoD UI front panel; self-certifies the pure-Lua codec against the anchors on launch</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hydramesh-hotfix.lisp</span></code></p></td>
+<td><p>restores the Lisp codec to a cone (§7) and asserts the anchors</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>To certify a new or modified SDK (the §5 cone test, reduced to §6):</strong></p>
+<ol class="arabic simple">
+<li><p>Have the SDK emit, in golden order, its 109 encoded basis frames and 137
+single-bit syndromes (the same inputs <code class="docutils literal notranslate"><span class="pre">verify_laws.py</span></code> uses).</p></li>
+<li><p>Run <code class="docutils literal notranslate"><span class="pre">certify</span></code> with that JSON (MCP tool, or diff against <code class="docutils literal notranslate"><span class="pre">golden_vectors.json</span></code>).</p></li>
+<li><p>Zero mismatches ⇒ by Theorem 4 the SDK agrees with the reference on all 2¹⁰⁸
+frames and all 2¹³⁶ words ⇒ by Theorem 3 it is a faithful cone, canonically
+isomorphic to every other faithful SDK. That is the certificate of <em>cemented</em>.
+Any mismatch points at the exact basis vector — i.e. the exact bit — that drifted,
+the way the <code class="docutils literal notranslate"><span class="pre">0x29B1</span></code> anchor instantly localized the HydraMesh shadowing bug.</p></li>
+</ol>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="DCF_AUDIO_SPEC.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">DCF-Audio — Collaborative Audio over the DeModFrame Wire</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="WIRE_QUANTUM_SPEC.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">DCF Wire Quantum — Canonical Specification</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, DeMoD LLC
+            </div>
+            Made with 
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">The DeMoD Wire Quantum: A Categorical Formalization</a><ul>
+<li><a class="reference internal" href="#scope-and-how-this-composes-with-the-spectral-picture">§0. Scope and how this composes with the spectral picture</a></li>
+<li><a class="reference internal" href="#the-frame-functor-and-the-wire-object">§1. The frame functor and the wire object</a></li>
+<li><a class="reference internal" href="#validity-as-an-equalizer">§2. Validity as an equalizer</a></li>
+<li><a class="reference internal" href="#the-frame-is-a-cemented-retract-theorem-1">§3. The frame is a cemented retract (Theorem 1)</a></li>
+<li><a class="reference internal" href="#traffic-is-a-free-monoid-of-quanta-theorem-2">§4. Traffic is a free monoid of quanta (Theorem 2)</a></li>
+<li><a class="reference internal" href="#cemented-a-universal-property-theorem-3">§5. “Cemented” = a universal property (Theorem 3)</a></li>
+<li><a class="reference internal" href="#the-finite-certificate-theorem-4">§6. The finite certificate (Theorem 4)</a></li>
+<li><a class="reference internal" href="#worked-failure-the-hydramesh-crc-as-a-broken-equalizer">§7. Worked failure: the HydraMesh CRC as a broken equalizer</a></li>
+<li><a class="reference internal" href="#where-the-two-documents-meet-one-paragraph">§8. Where the two documents meet (one paragraph)</a></li>
+<li><a class="reference internal" href="#artifacts-and-how-to-certify-a-new-sdk">§9. Artifacts and how to certify a new SDK</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=05a7714e"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <script src="_static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>

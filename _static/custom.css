@@ -1,0 +1,101 @@
+/* DeMoD Communication Framework — distinctive Furo theme overrides.
+   Identity: signal-cyan over deep-indigo "ink", amber accent, Space Grotesk
+   display + JetBrains Mono code, a faint RF-grid hero. */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root {
+  --font-stack: "Inter", system-ui, -apple-system, sans-serif;
+  --font-stack--monospace: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --dcf-ink: #0b1020;
+  --dcf-cyan: #14b8cc;
+  --dcf-amber: #f4a43a;
+}
+
+/* Display font for headings + the sidebar brand */
+h1, h2, h3, h4,
+.sidebar-brand-text,
+.sd-card-title {
+  font-family: "Space Grotesk", var(--font-stack);
+  letter-spacing: -0.018em;
+}
+.sidebar-brand-text { color: var(--color-brand-primary); font-weight: 700; }
+
+/* A thin signal underline under H2s */
+.content h2 {
+  padding-bottom: 0.25rem;
+  border-bottom: 2px solid color-mix(in srgb, var(--color-brand-primary) 35%, transparent);
+}
+
+/* ── Hero ─────────────────────────────────────────────────────────────────── */
+.dcf-hero {
+  margin: -0.5rem 0 2.6rem;
+  padding: 3rem 2.2rem 2.3rem;
+  border-radius: 18px;
+  position: relative;
+  overflow: hidden;
+  color: #e8eefc;
+  border: 1px solid rgba(120, 160, 220, 0.18);
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(20, 184, 204, 0.20), transparent 55%),
+    radial-gradient(120% 120% at 100% 0%, rgba(244, 164, 58, 0.13), transparent 50%),
+    linear-gradient(180deg, #0b1020, #0e1531);
+}
+.dcf-hero::before {                 /* faint RF mesh grid, faded toward the bottom */
+  content: "";
+  position: absolute; inset: 0;
+  opacity: 0.28; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(120, 160, 220, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 160, 220, 0.18) 1px, transparent 1px);
+  background-size: 26px 26px;
+  -webkit-mask-image: radial-gradient(85% 65% at 50% 0%, #000, transparent);
+          mask-image: radial-gradient(85% 65% at 50% 0%, #000, transparent);
+}
+.dcf-hero > * { position: relative; }
+.dcf-eyebrow {
+  font-family: var(--font-stack--monospace);
+  text-transform: uppercase; letter-spacing: 0.28em;
+  font-size: 0.72rem; color: var(--dcf-cyan); margin: 0 0 0.7rem;
+}
+.dcf-title {
+  font-family: "Space Grotesk";
+  font-size: clamp(1.7rem, 4.2vw, 2.75rem); line-height: 1.08;
+  margin: 0.2rem 0 0.85rem; color: #fff;
+}
+.dcf-title span { color: var(--dcf-cyan); }
+.dcf-sub { max-width: 52ch; color: #aebbd6; font-size: 1.03rem; line-height: 1.6; }
+.dcf-cta { display: flex; gap: 0.7rem; flex-wrap: wrap; margin: 1.5rem 0 0.3rem; }
+.dcf-btn {
+  display: inline-block; padding: 0.6rem 1.05rem; border-radius: 10px;
+  font-weight: 600; text-decoration: none;
+  background: var(--dcf-cyan); color: #04222a !important;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.dcf-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(20, 184, 204, 0.35); }
+.dcf-btn.ghost {
+  background: transparent; color: #cfe7ee !important;
+  border: 1px solid rgba(120, 160, 220, 0.4);
+}
+.dcf-btn.ghost:hover { border-color: var(--dcf-cyan); box-shadow: none; }
+.dcf-frame {
+  margin-top: 1.7rem; padding: 0.7rem 0.9rem; border-radius: 10px; overflow-x: auto;
+  background: rgba(4, 10, 26, 0.6); border: 1px solid rgba(120, 160, 220, 0.25);
+  font-family: var(--font-stack--monospace); font-size: 0.82rem; color: #9fe9f2;
+}
+
+/* ── Cards (sphinx-design) ────────────────────────────────────────────────── */
+.sd-card {
+  border-radius: 14px;
+  border: 1px solid var(--color-background-border);
+  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.sd-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--color-brand-primary);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.14);
+}
+
+/* ── Code blocks ──────────────────────────────────────────────────────────── */
+.highlight { border-radius: 10px; }
+div.highlight, pre { border-left: 3px solid color-mix(in srgb, var(--color-brand-primary) 60%, transparent); }

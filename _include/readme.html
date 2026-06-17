@@ -1,0 +1,1058 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Agent-to-agent over DCF — a teaching guide" href="agent-to-agent.html"><link rel="prev" title="Explore" href="../index.html">
+        <link rel="canonical" href="https://alh477.github.io/HydraMesh/_include/readme.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>HydraMesh - DeMoD Communication Framework</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=2d41b0bc" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f0f0f0;
+  --color-code-foreground: black;
+  --color-brand-primary: #0c8aa6;
+  --color-brand-content: #0c8aa6;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #282a36;
+  --color-code-foreground: #f8f8f2;
+  --color-brand-primary: #34d6e8;
+  --color-brand-content: #34d6e8;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #282a36;
+  --color-code-foreground: #f8f8f2;
+  --color-brand-primary: #34d6e8;
+  --color-brand-content: #34d6e8;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">DeMoD Communication Framework</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  
+  <span class="sidebar-brand-text">DeMoD Communication Framework</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Start here</span></p>
+<ul class="current">
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">HydraMesh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#demod-llc-cut-the-bullshit-cut-the-price-innovation-without-the-overhead">DeMoD LLC Cut the bullshit, Cut the price. Innovation without the overhead.</a></li>
+<li class="toctree-l1"><a class="reference internal" href="agent-to-agent.html">Agent-to-agent over DCF — a teaching guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">HydraMesh / DCF — Architecture Map</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Specifications</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../WIRE_QUANTUM_SPEC.html">DCF Wire Quantum — Canonical Specification</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../wire_quanta_category.html">The DeMoD Wire Quantum: A Categorical Formalization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../DCF_AUDIO_SPEC.html">DCF-Audio — Collaborative Audio over the DeModFrame Wire</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../DCF_GAME_SPEC.html">DCF-Game — Low-Latency Multiplayer over the DeModFrame Wire</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../SUPERPACK_SPEC.html">DCF SuperPack — 32-byte container for two DeModFrame quanta</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../DCF_CODE_REVIEW.html">DCF / HydraMesh code review</a></li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to HydraMesh / DCF</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/ALH477/HydraMesh/blob/main/Documentation/_include/readme.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/ALH477/HydraMesh/edit/main/Documentation/_include/readme.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="hydramesh">
+<h1>HydraMesh<a class="headerlink" href="#hydramesh" title="Link to this heading">¶</a></h1>
+<p><img alt="logo" src="_include/hydramesh.svg" /></p>
+<p><strong>Version 5.2.0 | Jun 10, 2026</strong>
+<strong>Developed by DeMoD LLC</strong><br />
+<strong>Contact:</strong> alh477&#64;demod.ltd</p>
+<p><strong>License:</strong> <a class="reference external" href="https://www.gnu.org/licenses/lgpl-3.0"><img alt="License: LGPL v3" src="https://img.shields.io/badge/License-LGPLv3-blue.svg" /></a><br />
+<img alt="gpl" src="https://www.gnu.org/graphics/lgplv3-with-text-154x68.png" /></p>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading">¶</a></h2>
+<p>HydraMesh is a free and open-source software (FOSS) framework evolved from the DeMoD Secure Protocol, designed for low-latency, modular, and interoperable data exchange. It supports applications like IoT messaging, real-time gaming synchronization, distributed computing, and edge networking. HydraMesh features a handshakeless design, efficient Protocol Buffers serialization, and a compatibility layer for UDP, TCP, WebSocket, and gRPC transports, enabling seamless peer-to-peer (P2P) networking with self-healing redundancy.</p>
+<p>HydraMesh is hardware and language agnostic, supporting embedded devices (e.g., Raspberry Pi), cloud servers, and mobile platforms (Android/iOS) with bindings in Perl, Python, C, C++, JavaScript (Node.js), Go, Rust, Java/Kotlin, Swift, and Lisp. Version 5.0.0 introduces a plugin system for custom modules and transports, an AUTO mode for dynamic role assignment managed by a master node, and enhanced extensibility. The linkable library is <strong>LGPL-3.0</strong>; GPL-3.0 is scoped to the bundled DOOM example only. It includes CLI, TUI, server/client logic, P2P, and AUTO modes, making it versatile for standalone tools, libraries, or networked services. SDKs (e.g., C SDK, HydraMesh-Lisp SDK) are developed as submodules for streamlined integration.</p>
+<img width="3888" height="2208" alt="image" src="https://github.com/user-attachments/assets/1294e4e6-906c-42ef-af0d-c192056803ea" />
+</section>
+<section id="quick-start">
+<h2>Quick start<a class="headerlink" href="#quick-start" title="Link to this heading">¶</a></h2>
+<p><strong>New here?</strong> HydraMesh has one invariant — the 17-byte <code class="docutils literal notranslate"><span class="pre">DeModFrame</span></code> wire quantum —
+and everything else (audio, game, transports) is an <em>adapter</em> over it, kept honest
+by a cross-language <strong>certificate</strong>. The fastest “it works” is a green cert run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>--recurse-submodules<span class="w"> </span>https://github.com/ALH477/DeMoD-Communication-Framework.git
+<span class="nb">cd</span><span class="w"> </span>DeMoD-Communication-Framework
+
+<span class="c1"># 1. Get a toolchain — pick ONE:</span>
+nix<span class="w"> </span>develop<span class="w">                  </span><span class="c1"># all toolchains in one shell (recommended); or</span>
+./install_deps.sh<span class="w">            </span><span class="c1"># distro-aware native install (Debian/Arch/Fedora); or</span>
+docker<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </span>hydramesh<span class="w"> </span>.<span class="w">  </span><span class="c1"># everything in a container</span>
+
+<span class="c1"># 2. First success — certify the wire codec across Python + Rust + C:</span>
+make<span class="w"> </span>certify<span class="w">                 </span><span class="c1"># see `make help` for setup / test / docs / client</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">help</span></code> lists every task. Read these first — they are normative:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#Documentation/WIRE_QUANTUM_SPEC.md"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">Documentation/WIRE_QUANTUM_SPEC.md</span></code></span></a> — the 17-byte frame format.</p></li>
+<li><p><a class="reference internal" href="#Documentation/DCF_AUDIO_SPEC.md"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">Documentation/DCF_AUDIO_SPEC.md</span></code></span></a> — collaborative audio as an adapter over it.</p></li>
+<li><p><a class="reference internal" href="#ARCHITECTURE.md"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">ARCHITECTURE.md</span></code></span></a> — the map of the repo (what ships, what’s experimental).</p></li>
+<li><p><a class="reference internal" href="#CONTRIBUTING.md"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">CONTRIBUTING.md</span></code></span></a> — how to build, test, and open a PR (the certificate is the contract).</p></li>
+</ul>
+<p>The bash scripts (<code class="docutils literal notranslate"><span class="pre">install_deps.sh</span></code>, <code class="docutils literal notranslate"><span class="pre">*-edit-gen.sh</span></code>) and <code class="docutils literal notranslate"><span class="pre">flake.nix</span></code> / <code class="docutils literal notranslate"><span class="pre">Dockerfile</span></code>
+bootstrap your environment. See <strong>Installation</strong> below for per-language prerequisites.</p>
+<section id="hydra-acronym">
+<h3>HYDRA Acronym<a class="headerlink" href="#hydra-acronym" title="Link to this heading">¶</a></h3>
+<p>The name <strong>HydraMesh</strong> reflects its core strengths: a self-healing, decentralized mesh with proxy-like adaptability. The acronym <strong>HYDRA</strong> stands for:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Letter</p></th>
+<th class="head"><p>Meaning</p></th>
+<th class="head"><p>Feature</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>H</strong></p></td>
+<td><p><strong>Highly</strong></p></td>
+<td><p>Performance</p></td>
+<td><p>Sub-millisecond latency with &lt;1% overhead, ideal for gaming and real-time apps.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Y</strong></p></td>
+<td><p><strong>Yielding</strong></p></td>
+<td><p>Adaptive Routing</p></td>
+<td><p>AI-driven topology optimization using Dijkstra and RTT-based grouping.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>D</strong></p></td>
+<td><p><strong>Decentralized</strong></p></td>
+<td><p>P2P Mesh</p></td>
+<td><p>No single point of failure, with AUTO mode for dynamic role switching.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>R</strong></p></td>
+<td><p><strong>Resilient</strong></p></td>
+<td><p>Self-Healing</p></td>
+<td><p>Automatic failover and redundancy, recovering peers in &lt;50ms.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>A</strong></p></td>
+<td><p><strong>Adaptive</strong></p></td>
+<td><p>Proxy Middleware</p></td>
+<td><p>Plugin system and transport switching (e.g., gRPC, LoRaWAN) for flexible data relay.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<blockquote>
+<div><p><strong>Important</strong>: HydraMesh complies with U.S. export regulations (EAR and ITAR). It avoids encryption to remain export-control-free. Users must ensure custom extensions comply; consult legal experts for specific use cases. DeMoD LLC disclaims liability for non-compliant modifications.</p>
+</div></blockquote>
+</section>
+</section>
+<section id="features">
+<h2>Features<a class="headerlink" href="#features" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Modularity</strong>: Independent components with standardized APIs; plugin system for custom extensions.</p></li>
+<li><p><strong>Interoperability</strong>: Protocol Buffers and gRPC ensure cross-language (Perl, Python, C, C++, JS, Go, Rust, Java, Swift, Lisp) and cross-platform compatibility.</p></li>
+<li><p><strong>Low Latency</strong>: Sub-millisecond exchanges with &lt;1% overhead; handshakeless design for real-time applications.</p></li>
+<li><p><strong>Flexibility</strong>: Compatibility layer for UDP, TCP, WebSocket, gRPC, and custom transports via plugins; supports mobile bindings.</p></li>
+<li><p><strong>Dynamic Role Assignment</strong>: AUTO mode allows nodes to switch between client, server, or P2P roles under master node control, enabling AI-driven network optimization.</p></li>
+<li><p><strong>Usability</strong>: CLI for automation, TUI for monitoring; server, client, P2P, and AUTO modes with logging; master node commands for role and config management.</p></li>
+<li><p><strong>Self-Healing P2P</strong>: Redundant paths, failure detection, RTT-based grouping (clusters by &lt;50ms threshold), and optimized routing (Dijkstra with RTT weights).</p></li>
+<li><p><strong>Persistence</strong>: Integrated StreamDB for state, metrics, and message logging in HydraMesh-Lisp SDK, with potential extensions to other SDKs.</p></li>
+<li><p><strong>Open Source</strong>: LGPL-3.0 (library) ensures transparency and community contributions.</p></li>
+</ul>
+</section>
+<section id="architecture">
+<h2>Architecture<a class="headerlink" href="#architecture" title="Link to this heading">¶</a></h2>
+<div class="highlight-mermaid notranslate"><div class="highlight"><pre><span></span>graph TD
+    A[HydraMesh Framework] --&gt; B[CLI]
+    A --&gt; C[TUI]
+    A --&gt; D[Networking Layer]
+    
+    D --&gt; E[Server Mode]
+    D --&gt; F[Client Mode]
+    D --&gt; G[P2P Mode]
+    D --&gt; H[AUTO Mode]
+    H --&gt; I[Master Node]
+    I --&gt; J[Role Assignment]
+    I --&gt; K[Config Management]
+    I --&gt; L[Metrics Collection]
+    G --&gt; M[Self-Healing Redundancy]
+    M --&gt; N[Peer Discovery]
+    M --&gt; O[Failure Detection]
+    M --&gt; P[RTT-Based Grouping]
+    
+    D --&gt; Q[Transport Layer]
+    Q --&gt; R[WebSocket]
+    Q --&gt; S[UDP]
+    Q --&gt; T[TCP]
+    Q --&gt; U[gRPC]
+    Q --&gt; V[Custom Plugins]
+    
+    D --&gt; W[Protocol Buffers]
+    W --&gt; X[Serialization/Deserialization]
+    
+    A --&gt; Y[Language Bindings]
+    Y --&gt; Z[Perl]
+    Y --&gt; AA[Python]
+    Y --&gt; AB[C/C++]
+    Y --&gt; AC[Node.js]
+    Y --&gt; AD[Go]
+    Y --&gt; AE[Rust]
+    Y --&gt; AF[Java/Kotlin]
+    Y --&gt; AG[Swift]
+    Y --&gt; AH[Lisp]
+    
+    A --&gt; AI[Platform Support]
+    AI --&gt; AJ[Embedded Devices]
+    AI --&gt; AK[Cloud Servers]
+    AI --&gt; AL[Mobile: Android/iOS]
+    
+    A --&gt; AM[SDKs]
+    AM --&gt; AN[C SDK]
+    AM --&gt; AO[HydraMesh-Lisp SDK]
+    AM --&gt; AP[Future SDKs: Python, Perl, etc.]
+    
+    A --&gt; AQ[Persistence Layer]
+    AQ --&gt; AR[StreamDB] 
+</pre></div>
+</div>
+</section>
+<section id="collaborative-audio-dcf-audio">
+<h2>Collaborative Audio (DCF-Audio)<a class="headerlink" href="#collaborative-audio-dcf-audio" title="Link to this heading">¶</a></h2>
+<p>HydraMesh carries real-time, collaborative audio (jamming, talkback) over the mesh
+<strong>without a new wire format</strong>: a 20 ms codec block is an adapter over the 17-byte
+<code class="docutils literal notranslate"><span class="pre">DeModFrame</span></code>, serialised into a short burst of ordinary <code class="docutils literal notranslate"><span class="pre">CTRL</span></code> frames. The framing
+layer (L2) is codec-agnostic and <strong>byte-certified across C, Rust, and Python</strong> — the
+same way the wire quantum is. See <a class="reference internal" href="#Documentation/DCF_AUDIO_SPEC.md"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">Documentation/DCF_AUDIO_SPEC.md</span></code></span></a>.</p>
+<p>Three codecs ship behind a <code class="docutils literal notranslate"><span class="pre">codec_id</span></code> registry:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>id</p></th>
+<th class="head"><p>Codec</p></th>
+<th class="head"><p>Use</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p><strong>Opus</strong></p></td>
+<td><p>broadband collaboration</p></td>
+<td><p>~24 kbps; needs libopus</p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p><strong>PCM-diag</strong></p></td>
+<td><p>LAN / debug reference</p></td>
+<td><p>6 kHz 8-bit; byte-deterministic</p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p><strong>Faust phase-mod</strong></p></td>
+<td><p>musical / instrument</p></td>
+<td><p>resynthesises timbre from an 8-byte param block</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Run the headless 2-peer loopback jam (latency / packet-loss / SNR report):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>codec<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>cargo<span class="w"> </span>run<span class="w"> </span>--example<span class="w"> </span>jam_loopback<span class="w"> </span>--<span class="w"> </span>--codec<span class="w"> </span>pcm<span class="w">          </span><span class="c1"># default, no deps</span>
+<span class="nb">cd</span><span class="w"> </span>codec<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>cargo<span class="w"> </span>run<span class="w"> </span>--example<span class="w"> </span>jam_loopback<span class="w"> </span>--<span class="w"> </span>--codec<span class="w"> </span>pcm<span class="w"> </span>--loss<span class="w"> </span><span class="m">0</span>.05<span class="w">   </span><span class="c1"># exercise PLC</span>
+</pre></div>
+</div>
+<p>Certify an audio implementation against the golden vectors:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>python/MCP/gen_audio_vectors.py<span class="w"> </span>/tmp/audio_vectors.json<span class="w">   </span><span class="c1"># regenerate + verify laws</span>
+<span class="nb">cd</span><span class="w"> </span>codec<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>cargo<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--test<span class="w"> </span>certify_audio<span class="w">                       </span><span class="c1"># Rust</span>
+gcc<span class="w"> </span>-std<span class="o">=</span>c11<span class="w"> </span>-I<span class="w"> </span>codec<span class="w"> </span>C_SDK/tests/test_audio_certify.c<span class="w"> </span>-lm<span class="w"> </span>-o<span class="w"> </span>/tmp/ac<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>/tmp/ac<span class="w">   </span><span class="c1"># C</span>
+</pre></div>
+</div>
+</section>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
+<p>Clone the repository with submodules:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>--recurse-submodules<span class="w"> </span>https://github.com/ALH477/DeMoD-Communication-Framework.git
+<span class="nb">cd</span><span class="w"> </span>DeMoD-Communication-Framework
+</pre></div>
+</div>
+<section id="prerequisites">
+<h3>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>Perl</strong>: CPAN modules: <code class="docutils literal notranslate"><span class="pre">JSON</span></code>, <code class="docutils literal notranslate"><span class="pre">IO::Socket::INET</span></code>, <code class="docutils literal notranslate"><span class="pre">Getopt::Long</span></code>, <code class="docutils literal notranslate"><span class="pre">Curses::UI</span></code>, <code class="docutils literal notranslate"><span class="pre">Google::ProtocolBuffers::Dynamic</span></code>, <code class="docutils literal notranslate"><span class="pre">Grpc::XS</span></code>, <code class="docutils literal notranslate"><span class="pre">Module::Pluggable</span></code>.</p></li>
+<li><p><strong>Python</strong>: <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">protobuf</span> <span class="pre">grpcio</span> <span class="pre">grpcio-tools</span> <span class="pre">importlib</span></code>.</p></li>
+<li><p><strong>C SDK</strong>: <code class="docutils literal notranslate"><span class="pre">libprotobuf-c</span></code>, <code class="docutils literal notranslate"><span class="pre">libuuid</span></code>, <code class="docutils literal notranslate"><span class="pre">libdl</span></code>, <code class="docutils literal notranslate"><span class="pre">libcjson</span></code>, <code class="docutils literal notranslate"><span class="pre">cmake</span></code>, <code class="docutils literal notranslate"><span class="pre">ncurses</span></code>.</p></li>
+<li><p><strong>C++</strong>: <code class="docutils literal notranslate"><span class="pre">grpc</span></code>, <code class="docutils literal notranslate"><span class="pre">protobuf</span></code>.</p></li>
+<li><p><strong>Node.js</strong>: <code class="docutils literal notranslate"><span class="pre">grpc</span></code>, <code class="docutils literal notranslate"><span class="pre">protobufjs</span></code>.</p></li>
+<li><p><strong>Go</strong>: <code class="docutils literal notranslate"><span class="pre">go</span> <span class="pre">get</span> <span class="pre">google.golang.org/grpc</span></code>, <code class="docutils literal notranslate"><span class="pre">go</span> <span class="pre">get</span> <span class="pre">google.golang.org/protobuf</span></code>.</p></li>
+<li><p><strong>Rust</strong>: <code class="docutils literal notranslate"><span class="pre">tonic</span></code>, <code class="docutils literal notranslate"><span class="pre">prost</span></code> (for gRPC/Protobuf).</p></li>
+<li><p><strong>Java/Kotlin (Android)</strong>: <code class="docutils literal notranslate"><span class="pre">io.grpc:grpc-okhttp</span></code>, <code class="docutils literal notranslate"><span class="pre">com.google.protobuf:protobuf-java</span></code>.</p></li>
+<li><p><strong>Swift (iOS)</strong>: <code class="docutils literal notranslate"><span class="pre">GRPC-Swift</span></code>, <code class="docutils literal notranslate"><span class="pre">SwiftProtobuf</span></code>.</p></li>
+<li><p><strong>Lisp</strong>: SBCL with Quicklisp; dependencies: <code class="docutils literal notranslate"><span class="pre">cl-protobufs</span></code>, <code class="docutils literal notranslate"><span class="pre">cl-grpc</span></code>, <code class="docutils literal notranslate"><span class="pre">cffi</span></code>, etc. (see <code class="docutils literal notranslate"><span class="pre">lisp/src/hydramesh.lisp</span></code>).</p></li>
+<li><p><strong>StreamDB</strong>: Build <code class="docutils literal notranslate"><span class="pre">libstreamdb.so</span></code> from <code class="docutils literal notranslate"><span class="pre">streamdb/</span></code> using Cargo for persistence in HydraMesh-Lisp SDK.</p></li>
+</ul>
+</section>
+<section id="generating-protobuf-grpc">
+<h3>Generating Protobuf/gRPC<a class="headerlink" href="#generating-protobuf-grpc" title="Link to this heading">¶</a></h3>
+<p>Use <code class="docutils literal notranslate"><span class="pre">protoc</span></code> to generate bindings for each language:</p>
+<ul class="simple">
+<li><p><strong>Perl/Python</strong>: <code class="docutils literal notranslate"><span class="pre">protoc</span> <span class="pre">--perl_out=perl/lib</span> <span class="pre">--python_out=python/dcf</span> <span class="pre">--grpc_out=python/dcf</span> <span class="pre">--plugin=protoc-gen-grpc_python=python</span> <span class="pre">-m</span> <span class="pre">grpc_tools.protoc</span> <span class="pre">messages.proto</span> <span class="pre">services.proto</span></code></p></li>
+<li><p><strong>C SDK</strong>: <code class="docutils literal notranslate"><span class="pre">protoc</span> <span class="pre">--c_out=c_sdk/src</span> <span class="pre">messages.proto</span></code></p></li>
+<li><p><strong>C++</strong>: <code class="docutils literal notranslate"><span class="pre">protoc</span> <span class="pre">--cpp_out=cpp/src</span> <span class="pre">--grpc_out=cpp/src</span> <span class="pre">--plugin=protoc-gen-grpc=grpc_cpp_plugin</span> <span class="pre">messages.proto</span> <span class="pre">services.proto</span></code></p></li>
+<li><p><strong>Node.js</strong>: <code class="docutils literal notranslate"><span class="pre">protoc</span> <span class="pre">--js_out=import_style=commonjs:nodejs/src</span> <span class="pre">--grpc_out=nodejs/src</span> <span class="pre">--plugin=protoc-gen-grpc=grpc_node_plugin</span> <span class="pre">messages.proto</span> <span class="pre">services.proto</span></code></p></li>
+<li><p><strong>Go</strong>: <code class="docutils literal notranslate"><span class="pre">protoc</span> <span class="pre">--go_out=go/src</span> <span class="pre">--go-grpc_out=go/src</span> <span class="pre">messages.proto</span> <span class="pre">services.proto</span></code></p></li>
+<li><p><strong>Rust</strong>: Use <code class="docutils literal notranslate"><span class="pre">tonic-build</span></code> in <code class="docutils literal notranslate"><span class="pre">build.rs</span></code></p></li>
+<li><p><strong>Android</strong>: <code class="docutils literal notranslate"><span class="pre">protoc</span> <span class="pre">--java_out=android/app/src/main</span> <span class="pre">--grpc_out=android/app/src/main</span> <span class="pre">--plugin=protoc-gen-grpc-java=grpc-java-plugin</span> <span class="pre">messages.proto</span> <span class="pre">services.proto</span></code></p></li>
+<li><p><strong>iOS</strong>: <code class="docutils literal notranslate"><span class="pre">protoc</span> <span class="pre">--swift_out=ios/Sources</span> <span class="pre">--grpc-swift_out=ios/Sources</span> <span class="pre">messages.proto</span> <span class="pre">services.proto</span></code></p></li>
+<li><p><strong>Lisp</strong>: <code class="docutils literal notranslate"><span class="pre">protoc</span> <span class="pre">--lisp_out=lisp/src</span> <span class="pre">messages.proto</span> <span class="pre">services.proto</span></code></p></li>
+</ul>
+</section>
+<section id="building-sdks">
+<h3>Building SDKs<a class="headerlink" href="#building-sdks" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><strong>C SDK</strong>: <code class="docutils literal notranslate"><span class="pre">cd</span> <span class="pre">c_sdk</span> <span class="pre">&amp;&amp;</span> <span class="pre">mkdir</span> <span class="pre">build</span> <span class="pre">&amp;&amp;</span> <span class="pre">cd</span> <span class="pre">build</span> <span class="pre">&amp;&amp;</span> <span class="pre">cmake</span> <span class="pre">..</span> <span class="pre">&amp;&amp;</span> <span class="pre">make</span></code></p></li>
+<li><p><strong>Perl</strong>: <code class="docutils literal notranslate"><span class="pre">cpanm</span> <span class="pre">--installdeps</span> <span class="pre">.</span></code></p></li>
+<li><p><strong>Python</strong>: <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-r</span> <span class="pre">python/requirements.txt</span></code></p></li>
+<li><p><strong>Lisp</strong>: Load via SBCL: <code class="docutils literal notranslate"><span class="pre">(load</span> <span class="pre">&quot;lisp/src/hydramesh.lisp&quot;)</span></code></p></li>
+<li><p><strong>Others</strong>: Follow language-specific build tools (e.g., <code class="docutils literal notranslate"><span class="pre">cargo</span> <span class="pre">build</span></code> for Rust).</p></li>
+</ul>
+</section>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
+<section id="perl-grpc-client">
+<h3>Perl (gRPC Client)<a class="headerlink" href="#perl-grpc-client" title="Link to this heading">¶</a></h3>
+<div class="highlight-perl notranslate"><div class="highlight"><pre><span></span><span class="c1"># perl/hydramesh.pl</span>
+<span class="k">use</span><span class="w"> </span><span class="nn">Grpc::XS</span><span class="p">;</span>
+<span class="k">use</span><span class="w"> </span><span class="nn">HydraMesh::Messages</span><span class="w"> </span><span class="sx">qw(HydraMeshMessage)</span><span class="p">;</span>
+<span class="k">my</span><span class="w"> </span><span class="nv">$client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nn">Grpc::XS::</span><span class="n">channel</span><span class="p">(</span><span class="s">&#39;localhost:50051&#39;</span><span class="p">);</span>
+<span class="k">my</span><span class="w"> </span><span class="nv">$stub</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">$client</span><span class="o">-&gt;</span><span class="n">service</span><span class="p">(</span><span class="s">&#39;HydraMeshService&#39;</span><span class="p">);</span>
+<span class="k">my</span><span class="w"> </span><span class="nv">$request</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nn">HydraMeshMessage</span><span class="o">-&gt;</span><span class="k">new</span><span class="p">(</span><span class="n">data</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="s">&#39;Hello&#39;</span><span class="p">);</span>
+<span class="k">my</span><span class="w"> </span><span class="nv">$response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">$stub</span><span class="o">-&gt;</span><span class="n">SendMessage</span><span class="p">(</span><span class="nv">$request</span><span class="p">);</span>
+<span class="k">print</span><span class="w"> </span><span class="nv">$response</span><span class="o">-&gt;</span><span class="p">{</span><span class="n">data</span><span class="p">},</span><span class="w"> </span><span class="s">&quot;\n&quot;</span><span class="p">;</span>
+</pre></div>
+</div>
+</section>
+<section id="python-grpc-client">
+<h3>Python (gRPC Client)<a class="headerlink" href="#python-grpc-client" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># python/hydramesh.py</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">grpc</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">hydramesh.services_pb2_grpc</span><span class="w"> </span><span class="kn">import</span> <span class="n">HydraMeshServiceStub</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">hydramesh.messages_pb2</span><span class="w"> </span><span class="kn">import</span> <span class="n">HydraMeshMessage</span>
+<span class="n">channel</span> <span class="o">=</span> <span class="n">grpc</span><span class="o">.</span><span class="n">insecure_channel</span><span class="p">(</span><span class="s1">&#39;localhost:50051&#39;</span><span class="p">)</span>
+<span class="n">stub</span> <span class="o">=</span> <span class="n">HydraMeshServiceStub</span><span class="p">(</span><span class="n">channel</span><span class="p">)</span>
+<span class="n">request</span> <span class="o">=</span> <span class="n">HydraMeshMessage</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="s1">&#39;Hello&#39;</span><span class="p">)</span>
+<span class="n">response</span> <span class="o">=</span> <span class="n">stub</span><span class="o">.</span><span class="n">SendMessage</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="c-sdk-client">
+<h3>C SDK (Client)<a class="headerlink" href="#c-sdk-client" title="Link to this heading">¶</a></h3>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="c1">// c_sdk/examples/client.c</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;hydramesh_sdk/hydramesh_client.h&gt;</span>
+<span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">HydraMeshClient</span><span class="o">*</span><span class="w"> </span><span class="n">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hydramesh_client_init</span><span class="p">(</span><span class="s">&quot;config.json&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="n">hydramesh_client_start</span><span class="p">(</span><span class="n">client</span><span class="p">);</span>
+<span class="w">    </span><span class="n">hydramesh_client_send</span><span class="p">(</span><span class="n">client</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Hello&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;peer1&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="n">hydramesh_client_stop</span><span class="p">(</span><span class="n">client</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="c-grpc-server">
+<h3>C++ (gRPC Server)<a class="headerlink" href="#c-grpc-server" title="Link to this heading">¶</a></h3>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="c1">// cpp/src/hydramesh.cpp</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;grpcpp/grpcpp.h&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;services.grpc.pb.h&quot;</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ServerImpl</span><span class="w"> </span><span class="k">final</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="k">public</span><span class="w"> </span><span class="n">HydraMeshService</span><span class="o">::</span><span class="n">Service</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">grpc</span><span class="o">::</span><span class="n">Status</span><span class="w"> </span><span class="nf">SendMessage</span><span class="p">(</span><span class="n">grpc</span><span class="o">::</span><span class="n">ServerContext</span><span class="o">*</span><span class="w"> </span><span class="n">context</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">HydraMeshMessage</span><span class="o">*</span><span class="w"> </span><span class="n">request</span><span class="p">,</span><span class="w"> </span><span class="n">HydraMeshMessage</span><span class="o">*</span><span class="w"> </span><span class="n">response</span><span class="p">)</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">response</span><span class="o">-&gt;</span><span class="n">set_data</span><span class="p">(</span><span class="s">&quot;Echo: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">request</span><span class="o">-&gt;</span><span class="n">data</span><span class="p">());</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">grpc</span><span class="o">::</span><span class="n">Status</span><span class="o">::</span><span class="n">OK</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+<span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">grpc</span><span class="o">::</span><span class="n">ServerBuilder</span><span class="w"> </span><span class="n">builder</span><span class="p">;</span>
+<span class="w">    </span><span class="n">builder</span><span class="p">.</span><span class="n">AddListeningPort</span><span class="p">(</span><span class="s">&quot;0.0.0.0:50051&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">grpc</span><span class="o">::</span><span class="n">InsecureServerCredentials</span><span class="p">());</span>
+<span class="w">    </span><span class="n">ServerImpl</span><span class="w"> </span><span class="n">service</span><span class="p">;</span>
+<span class="w">    </span><span class="n">builder</span><span class="p">.</span><span class="n">RegisterService</span><span class="p">(</span><span class="o">&amp;</span><span class="n">service</span><span class="p">);</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">grpc</span><span class="o">::</span><span class="n">Server</span><span class="o">&gt;</span><span class="w"> </span><span class="n">server</span><span class="p">(</span><span class="n">builder</span><span class="p">.</span><span class="n">BuildAndStart</span><span class="p">());</span>
+<span class="w">    </span><span class="n">server</span><span class="o">-&gt;</span><span class="n">Wait</span><span class="p">();</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="node-js-grpc-client">
+<h3>Node.js (gRPC Client)<a class="headerlink" href="#node-js-grpc-client" title="Link to this heading">¶</a></h3>
+<div class="highlight-javascript notranslate"><div class="highlight"><pre><span></span><span class="c1">// nodejs/src/hydramesh.js</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">grpc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">require</span><span class="p">(</span><span class="s1">&#39;@grpc/grpc-js&#39;</span><span class="p">);</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">protoLoader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">require</span><span class="p">(</span><span class="s1">&#39;@grpc/proto-loader&#39;</span><span class="p">);</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">packageDefinition</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">protoLoader</span><span class="p">.</span><span class="nx">loadSync</span><span class="p">([</span><span class="s1">&#39;messages.proto&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;services.proto&#39;</span><span class="p">]);</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">hydrameshProto</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">grpc</span><span class="p">.</span><span class="nx">loadPackageDefinition</span><span class="p">(</span><span class="nx">packageDefinition</span><span class="p">).</span><span class="nx">hydramesh</span><span class="p">;</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">hydrameshProto</span><span class="p">.</span><span class="nx">HydraMeshService</span><span class="p">(</span><span class="s1">&#39;localhost:50051&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">grpc</span><span class="p">.</span><span class="nx">credentials</span><span class="p">.</span><span class="nx">createInsecure</span><span class="p">());</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">request</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">data</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;Hello&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">recipient</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;peer1&#39;</span><span class="w"> </span><span class="p">};</span>
+<span class="nx">client</span><span class="p">.</span><span class="nx">sendMessage</span><span class="p">(</span><span class="nx">request</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="w"> </span><span class="nx">response</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">err</span><span class="p">)</span><span class="w"> </span><span class="nx">console</span><span class="p">.</span><span class="nx">error</span><span class="p">(</span><span class="nx">err</span><span class="p">);</span>
+<span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">response</span><span class="p">.</span><span class="nx">data</span><span class="p">);</span>
+<span class="p">});</span>
+</pre></div>
+</div>
+</section>
+<section id="go-grpc-server">
+<h3>Go (gRPC Server)<a class="headerlink" href="#go-grpc-server" title="Link to this heading">¶</a></h3>
+<div class="highlight-go notranslate"><div class="highlight"><pre><span></span><span class="c1">// go/src/hydramesh.go</span>
+<span class="kn">package</span><span class="w"> </span><span class="nx">main</span>
+<span class="kn">import</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="s">&quot;net&quot;</span>
+<span class="w">    </span><span class="s">&quot;google.golang.org/grpc&quot;</span>
+<span class="w">    </span><span class="nx">pb</span><span class="w"> </span><span class="s">&quot;hydramesh&quot;</span><span class="w">  </span><span class="c1">// Generated package</span>
+<span class="p">)</span>
+<span class="kd">type</span><span class="w"> </span><span class="nx">server</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">pb</span><span class="p">.</span><span class="nx">UnimplementedHydraMeshServiceServer</span><span class="w"> </span><span class="p">}</span>
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">s</span><span class="w"> </span><span class="o">*</span><span class="nx">server</span><span class="p">)</span><span class="w"> </span><span class="nx">SendMessage</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">in</span><span class="w"> </span><span class="o">*</span><span class="nx">pb</span><span class="p">.</span><span class="nx">HydraMeshMessage</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">pb</span><span class="p">.</span><span class="nx">HydraMeshMessage</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">pb</span><span class="p">.</span><span class="nx">HydraMeshMessage</span><span class="p">{</span><span class="nx">Data</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Echo: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">in</span><span class="p">.</span><span class="nx">Data</span><span class="p">},</span><span class="w"> </span><span class="kc">nil</span>
+<span class="p">}</span>
+<span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">lis</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">net</span><span class="p">.</span><span class="nx">Listen</span><span class="p">(</span><span class="s">&quot;tcp&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;:50051&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="nx">s</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">grpc</span><span class="p">.</span><span class="nx">NewServer</span><span class="p">()</span>
+<span class="w">    </span><span class="nx">pb</span><span class="p">.</span><span class="nx">RegisterHydraMeshServiceServer</span><span class="p">(</span><span class="nx">s</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">server</span><span class="p">{})</span>
+<span class="w">    </span><span class="nx">s</span><span class="p">.</span><span class="nx">Serve</span><span class="p">(</span><span class="nx">lis</span><span class="p">)</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="rust-grpc-server">
+<h3>Rust (gRPC Server)<a class="headerlink" href="#rust-grpc-server" title="Link to this heading">¶</a></h3>
+<div class="highlight-rust notranslate"><div class="highlight"><pre><span></span><span class="c1">// rust/src/main.rs</span>
+<span class="k">use</span><span class="w"> </span><span class="n">tonic</span><span class="p">::{</span><span class="n">transport</span><span class="p">::</span><span class="n">Server</span><span class="p">,</span><span class="w"> </span><span class="n">Request</span><span class="p">,</span><span class="w"> </span><span class="n">Response</span><span class="p">,</span><span class="w"> </span><span class="n">Status</span><span class="p">};</span>
+<span class="k">use</span><span class="w"> </span><span class="n">services</span><span class="p">::</span><span class="n">hydramesh_service_server</span><span class="p">::{</span><span class="n">HydraMeshService</span><span class="p">,</span><span class="w"> </span><span class="n">HydraMeshServiceServer</span><span class="p">};</span>
+<span class="k">use</span><span class="w"> </span><span class="n">services</span><span class="p">::{</span><span class="n">HydraMeshMessage</span><span class="p">};</span>
+<span class="cp">#[derive(Default)]</span>
+<span class="k">pub</span><span class="w"> </span><span class="k">struct</span><span class="w"> </span><span class="nc">Networking</span><span class="w"> </span><span class="p">{}</span>
+<span class="cp">#[tonic::async_trait]</span>
+<span class="k">impl</span><span class="w"> </span><span class="n">HydraMeshService</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">Networking</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">async</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">send_message</span><span class="p">(</span><span class="o">&amp;</span><span class="bp">self</span><span class="p">,</span><span class="w"> </span><span class="n">request</span><span class="p">:</span><span class="w"> </span><span class="nc">Request</span><span class="o">&lt;</span><span class="n">HydraMeshMessage</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="nb">Result</span><span class="o">&lt;</span><span class="n">Response</span><span class="o">&lt;</span><span class="n">HydraMeshMessage</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">Status</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="n">reply</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">HydraMeshMessage</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">data</span><span class="p">:</span><span class="w"> </span><span class="nc">format</span><span class="o">!</span><span class="p">(</span><span class="s">&quot;Echo: {}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">request</span><span class="p">.</span><span class="n">into_inner</span><span class="p">().</span><span class="n">data</span><span class="p">)</span><span class="w"> </span><span class="p">};</span>
+<span class="w">        </span><span class="nb">Ok</span><span class="p">(</span><span class="n">Response</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="n">reply</span><span class="p">))</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+<span class="cp">#[tokio::main]</span>
+<span class="k">async</span><span class="w"> </span><span class="k">fn</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="nb">Result</span><span class="o">&lt;</span><span class="p">(),</span><span class="w"> </span><span class="nb">Box</span><span class="o">&lt;</span><span class="k">dyn</span><span class="w"> </span><span class="n">std</span><span class="p">::</span><span class="n">error</span><span class="p">::</span><span class="n">Error</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">addr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;[::1]:50051&quot;</span><span class="p">.</span><span class="n">parse</span><span class="p">()</span><span class="o">?</span><span class="p">;</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">net</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Networking</span><span class="p">::</span><span class="n">default</span><span class="p">();</span>
+<span class="w">    </span><span class="n">Server</span><span class="p">::</span><span class="n">builder</span><span class="p">().</span><span class="n">add_service</span><span class="p">(</span><span class="n">HydraMeshServiceServer</span><span class="p">::</span><span class="n">new</span><span class="p">(</span><span class="n">net</span><span class="p">)).</span><span class="n">serve</span><span class="p">(</span><span class="n">addr</span><span class="p">).</span><span class="k">await</span><span class="o">?</span><span class="p">;</span>
+<span class="w">    </span><span class="nb">Ok</span><span class="p">(())</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="lisp-grpc-client-with-streamdb">
+<h3>Lisp (gRPC Client with StreamDB)<a class="headerlink" href="#lisp-grpc-client-with-streamdb" title="Link to this heading">¶</a></h3>
+<div class="highlight-lisp notranslate"><div class="highlight"><pre><span></span><span class="c1">;; lisp/src/hydramesh.lisp (excerpt)</span>
+<span class="p">(</span><span class="nb">in-package</span><span class="w"> </span><span class="ss">:hydramesh</span><span class="p">)</span>
+<span class="p">(</span><span class="nv">hydramesh-init</span><span class="w"> </span><span class="s">&quot;config.json&quot;</span><span class="w"> </span><span class="ss">:restore-state</span><span class="w"> </span><span class="no">t</span><span class="p">)</span>
+<span class="p">(</span><span class="nv">hydramesh-start</span><span class="p">)</span>
+<span class="p">(</span><span class="nv">hydramesh-quick-send</span><span class="w"> </span><span class="s">&quot;Hello from Lisp!&quot;</span><span class="w"> </span><span class="s">&quot;localhost:50052&quot;</span><span class="p">)</span>
+<span class="p">(</span><span class="nv">hydramesh-db-insert</span><span class="w"> </span><span class="s">&quot;/test/key&quot;</span><span class="w"> </span><span class="s">&quot;test data&quot;</span><span class="p">)</span><span class="w">  </span><span class="c1">; Store in StreamDB</span>
+<span class="p">(</span><span class="nb">print</span><span class="w"> </span><span class="p">(</span><span class="nv">hydramesh-db-query</span><span class="w"> </span><span class="s">&quot;/test/key&quot;</span><span class="p">))</span><span class="w">  </span><span class="c1">; Query from StreamDB</span>
+<span class="p">(</span><span class="nv">hydramesh-stop</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="android-kotlin-client">
+<h3>Android (Kotlin Client)<a class="headerlink" href="#android-kotlin-client" title="Link to this heading">¶</a></h3>
+<div class="highlight-kotlin notranslate"><div class="highlight"><pre><span></span><span class="c1">// android/app/src/main/kotlin/com/example/hydramesh/HydraMeshClient.kt</span>
+<span class="k">import</span><span class="w"> </span><span class="nn">io.grpc.ManagedChannelBuilder</span>
+<span class="k">import</span><span class="w"> </span><span class="nn">com.example.hydramesh.services.HydraMeshServiceGrpc</span>
+<span class="k">import</span><span class="w"> </span><span class="nn">com.example.hydramesh.messages.HydraMeshMessage</span>
+<span class="kd">class</span><span class="w"> </span><span class="nc">HydraMeshClient</span><span class="p">(</span><span class="n">host</span><span class="p">:</span><span class="w"> </span><span class="kt">String</span><span class="p">,</span><span class="w"> </span><span class="n">port</span><span class="p">:</span><span class="w"> </span><span class="kt">Int</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">val</span><span class="w"> </span><span class="nv">channel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ManagedChannelBuilder</span><span class="p">.</span><span class="na">forAddress</span><span class="p">(</span><span class="n">host</span><span class="p">,</span><span class="w"> </span><span class="n">port</span><span class="p">).</span><span class="na">usePlaintext</span><span class="p">().</span><span class="na">build</span><span class="p">()</span>
+<span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">val</span><span class="w"> </span><span class="nv">stub</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">HydraMeshServiceGrpc</span><span class="p">.</span><span class="na">newBlockingStub</span><span class="p">(</span><span class="n">channel</span><span class="p">)</span>
+<span class="w">    </span><span class="kd">fun</span><span class="w"> </span><span class="nf">sendMessage</span><span class="p">(</span><span class="n">data</span><span class="p">:</span><span class="w"> </span><span class="kt">String</span><span class="p">,</span><span class="w"> </span><span class="n">recipient</span><span class="p">:</span><span class="w"> </span><span class="kt">String</span><span class="p">):</span><span class="w"> </span><span class="kt">String</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">val</span><span class="w"> </span><span class="nv">request</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">HydraMeshMessage</span><span class="p">.</span><span class="na">newBuilder</span><span class="p">().</span><span class="na">setData</span><span class="p">(</span><span class="n">data</span><span class="p">).</span><span class="na">setRecipient</span><span class="p">(</span><span class="n">recipient</span><span class="p">).</span><span class="na">build</span><span class="p">()</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">stub</span><span class="p">.</span><span class="na">sendMessage</span><span class="p">(</span><span class="n">request</span><span class="p">).</span><span class="na">data</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="ios-swift-client">
+<h3>iOS (Swift Client)<a class="headerlink" href="#ios-swift-client" title="Link to this heading">¶</a></h3>
+<div class="highlight-swift notranslate"><div class="highlight"><pre><span></span><span class="c1">// ios/HydraMeshClient.swift</span>
+<span class="kd">import</span><span class="w"> </span><span class="nc">GRPC</span>
+<span class="kd">import</span><span class="w"> </span><span class="nc">NIO</span>
+<span class="kd">import</span><span class="w"> </span><span class="nc">SwiftProtobuf</span>
+<span class="kd">class</span><span class="w"> </span><span class="nc">HydraMeshClient</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nv">connection</span><span class="p">:</span><span class="w"> </span><span class="n">ClientConnection</span>
+<span class="w">    </span><span class="kd">private</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nv">client</span><span class="p">:</span><span class="w"> </span><span class="n">HydraMeshServiceClient</span>
+<span class="w">    </span><span class="kd">init</span><span class="p">(</span><span class="n">host</span><span class="p">:</span><span class="w"> </span><span class="nb">String</span><span class="p">,</span><span class="w"> </span><span class="n">port</span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="nv">group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">PlatformSupport</span><span class="p">.</span><span class="n">makeEventLoopGroup</span><span class="p">(</span><span class="n">loopCount</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">        </span><span class="n">connection</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">ClientConnection</span><span class="p">.</span><span class="n">insecure</span><span class="p">(</span><span class="n">group</span><span class="p">:</span><span class="w"> </span><span class="n">group</span><span class="p">).</span><span class="n">connect</span><span class="p">(</span><span class="n">host</span><span class="p">:</span><span class="w"> </span><span class="n">host</span><span class="p">,</span><span class="w"> </span><span class="n">port</span><span class="p">:</span><span class="w"> </span><span class="n">port</span><span class="p">)</span>
+<span class="w">        </span><span class="n">client</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">HydraMeshServiceClient</span><span class="p">(</span><span class="n">channel</span><span class="p">:</span><span class="w"> </span><span class="n">connection</span><span class="p">)</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="kd">func</span><span class="w"> </span><span class="nf">sendMessage</span><span class="p">(</span><span class="n">data</span><span class="p">:</span><span class="w"> </span><span class="nb">String</span><span class="p">,</span><span class="w"> </span><span class="n">recipient</span><span class="p">:</span><span class="w"> </span><span class="nb">String</span><span class="p">)</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="nb">String</span><span class="p">?</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">var</span><span class="w"> </span><span class="nv">request</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">HydraMeshMessage</span><span class="p">()</span>
+<span class="w">        </span><span class="n">request</span><span class="p">.</span><span class="n">data</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">data</span>
+<span class="w">        </span><span class="n">request</span><span class="p">.</span><span class="n">recipient</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">recipient</span>
+<span class="w">        </span><span class="k">do</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="kd">let</span><span class="w"> </span><span class="nv">response</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">try</span><span class="w"> </span><span class="n">client</span><span class="p">.</span><span class="n">sendMessage</span><span class="p">(</span><span class="n">request</span><span class="p">).</span><span class="n">response</span><span class="p">.</span><span class="n">wait</span><span class="p">()</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="n">response</span><span class="p">.</span><span class="n">data</span>
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="plugin-example-c-transport-for-c-sdk">
+<h3>Plugin Example (C Transport for C SDK)<a class="headerlink" href="#plugin-example-c-transport-for-c-sdk" title="Link to this heading">¶</a></h3>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="c1">// c_sdk/plugins/custom_transport.c</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;hydramesh_sdk/hydramesh_plugin_manager.h&gt;</span>
+<span class="k">typedef</span><span class="w"> </span><span class="k">struct</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* Private data */</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="n">CustomTransport</span><span class="p">;</span>
+<span class="kt">bool</span><span class="w"> </span><span class="nf">setup</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">host</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">port</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="kt">bool</span><span class="w"> </span><span class="nf">send</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">size</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="n">target</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="nf">receive</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="o">*</span><span class="w"> </span><span class="n">size</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="o">*</span><span class="n">size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nb">NULL</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="kt">void</span><span class="w"> </span><span class="nf">destroy</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="n">self</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">free</span><span class="p">(</span><span class="n">self</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
+<span class="n">ITransport</span><span class="w"> </span><span class="n">iface</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">setup</span><span class="p">,</span><span class="w"> </span><span class="n">send</span><span class="p">,</span><span class="w"> </span><span class="n">receive</span><span class="p">,</span><span class="w"> </span><span class="n">destroy</span><span class="p">};</span>
+<span class="kt">void</span><span class="o">*</span><span class="w"> </span><span class="nf">create_plugin</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">calloc</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="k">sizeof</span><span class="p">(</span><span class="n">CustomTransport</span><span class="p">));</span><span class="w"> </span><span class="p">}</span>
+<span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="o">*</span><span class="w"> </span><span class="nf">get_plugin_version</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="s">&quot;1.0&quot;</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="configuration">
+<h2>Configuration<a class="headerlink" href="#configuration" title="Link to this heading">¶</a></h2>
+<p>Create <code class="docutils literal notranslate"><span class="pre">config.json</span></code> based on <code class="docutils literal notranslate"><span class="pre">config.json.example</span></code>. HydraMesh supports various optimization levels to balance performance, reliability, and resource usage:</p>
+<ul>
+<li><p><strong>High Optimization (Performance-Focused)</strong>: Prioritizes speed with minimal overhead—uses lightweight transports (e.g., UDP), quick mode in StreamDB (skipping CRC checks for ~10x faster reads), and reduced logging. Suitable for high-throughput, low-latency applications like gaming, where data integrity is managed externally.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;framework&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hydramesh&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;transport&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;udp&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;host&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;port&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">50051</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;p2p&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;node-id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;node-1&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;peers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;localhost:50052&quot;</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;group-rtt-threshold&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">20</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;storage&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;streamdb&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;streamdb-path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;dcf.streamdb&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;log-level&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>Balanced Optimization (Default)</strong>: Combines reliability and performance—uses gRPC for reliable delivery, standard StreamDB mode (with CRC checks), and info-level logging. Ideal for general-purpose applications like distributed computing.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;framework&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hydramesh&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;transport&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;gRPC&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;host&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;port&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">50051</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;node-id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;node-1&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;peers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;localhost:50052&quot;</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;group-rtt-threshold&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">50</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;storage&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;streamdb&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;streamdb-path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;dcf.streamdb&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;log-level&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>Low Optimization (Reliability-Focused)</strong>: Emphasizes data integrity and debugging—uses reliable transports (e.g., SCTP), disables quick mode in StreamDB for full CRC checks, and enables debug logging. Best for development or critical systems like IoT with intermittent connectivity.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;framework&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hydramesh&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;transport&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;sctp&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;host&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;port&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">50051</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;master&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;node-id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;node-1&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;peers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;localhost:50052&quot;</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;group-rtt-threshold&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;storage&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;streamdb&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;streamdb-path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;dcf.streamdb&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;log-level&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</li>
+</ul>
+<p>For master node:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;framework&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hydramesh&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;transport&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;gRPC&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;host&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;port&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">50051</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;master&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;node-id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;master1&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;peers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;localhost:50052&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;localhost:50053&quot;</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;group-rtt-threshold&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">50</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;storage&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;streamdb&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;streamdb-path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;dcf.streamdb&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="testing">
+<h2>Testing<a class="headerlink" href="#testing" title="Link to this heading">¶</a></h2>
+<p>Run tests with:</p>
+<ul class="simple">
+<li><p>C SDK: <code class="docutils literal notranslate"><span class="pre">cd</span> <span class="pre">c_sdk/build</span> <span class="pre">&amp;&amp;</span> <span class="pre">make</span> <span class="pre">test_redundancy</span> <span class="pre">test_plugin</span> <span class="pre">&amp;&amp;</span> <span class="pre">valgrind</span> <span class="pre">--leak-check=full</span> <span class="pre">./p2p</span></code></p></li>
+<li><p>Perl: <code class="docutils literal notranslate"><span class="pre">prove</span> <span class="pre">-r</span> <span class="pre">tests/</span></code></p></li>
+<li><p>Python: <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">tests/</span></code></p></li>
+<li><p>Lisp: <code class="docutils literal notranslate"><span class="pre">sbcl</span> <span class="pre">--eval</span> <span class="pre">'(hydramesh:run-tests)'</span></code></p></li>
+<li><p>Others: To be implemented (e.g., <code class="docutils literal notranslate"><span class="pre">cargo</span> <span class="pre">test</span></code> for Rust).</p></li>
+<li><p>Integration: Use Docker for multi-language setups; test RTT grouping, failover, AUTO mode role assignment, and StreamDB persistence.</p></li>
+</ul>
+<section id="enhanced-benefits-of-streamdb-integration-in-hydramesh-lisp">
+<h3>Enhanced Benefits of StreamDB Integration in HydraMesh-Lisp<a class="headerlink" href="#enhanced-benefits-of-streamdb-integration-in-hydramesh-lisp" title="Link to this heading">¶</a></h3>
+<p>As we continue building out the SDKs in the HydraMesh mono repository (<a class="reference external" href="https://github.com/ALH477/DeMoD-Communication-Framework">https://github.com/ALH477/DeMoD-Communication-Framework</a>), the integration of StreamDB into the HydraMesh-Lisp SDK represents a key advancement in providing persistent, high-performance storage. StreamDB, a lightweight, embedded key-value database implemented in Rust, is currently exclusive to the HydraMesh-Lisp SDK, serving as a proof-of-concept for how HydraMesh can incorporate advanced storage solutions. This exclusivity allows us to iterate rapidly in Lisp’s expressive environment before expanding to other SDKs (e.g., C, Python), ensuring a battle-tested implementation across the repo. Below, we iterate on StreamDB’s benefits, expanding on prior discussions with new insights into its synergy with HydraMesh-Lisp’s DSL features, while emphasizing DeMoD LLC’s role in developing the only complete GPLv3 version to democratize bleeding-edge technology.</p>
+<section id="superior-persistence-for-fault-tolerant-distributed-systems">
+<h4>1. <strong>Superior Persistence for Fault-Tolerant Distributed Systems</strong><a class="headerlink" href="#superior-persistence-for-fault-tolerant-distributed-systems" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Iteration</strong>: Beyond basic state recovery, StreamDB’s paged storage (4KB pages with chaining for up to 256MB documents) and reverse trie indexing enable efficient, prefix-based queries for hierarchical data (e.g., <code class="docutils literal notranslate"><span class="pre">/state/peers/node1/rtt</span></code>). In HydraMesh-Lisp, this means nodes can persist complex structures like peer groups or message logs atomically, reducing fragmentation and supporting up to 8TB databases—ideal for scaling HydraMesh networks.</p></li>
+<li><p><strong>HydraMesh-Lisp Specific</strong>: The DSL’s macros (e.g., <code class="docutils literal notranslate"><span class="pre">def-hydramesh-plugin</span></code>) allow seamless wrapping of StreamDB operations, making persistence feel native (e.g., <code class="docutils literal notranslate"><span class="pre">hydramesh-db-insert</span> <span class="pre">&quot;/metrics/sends&quot;</span> <span class="pre">count</span></code>). This compactness (integrated in ~50 lines) enhances fault tolerance in AUTO mode, where dynamic role switches rely on quick state reloads from StreamDB.</p></li>
+<li><p><strong>Democratization Angle</strong>: DeMoD’s GPLv3-complete version ensures open access to advanced features like automatic chain repair, empowering developers to build resilient systems without proprietary dependencies.</p></li>
+</ul>
+</section>
+<section id="ultra-low-latency-data-access-for-real-time-workloads">
+<h4>2. <strong>Ultra-Low-Latency Data Access for Real-Time Workloads</strong><a class="headerlink" href="#ultra-low-latency-data-access-for-real-time-workloads" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Iteration</strong>: StreamDB’s QuickAndDirtyMode (skipping CRC for ~10x faster reads, up to 100MB/s) and LRU caching complement HydraMesh-Lisp’s sub-millisecond messaging, enabling near-instant access to cached states. New: In edge scenarios, StreamDB’s no-mmap fallback ensures consistent performance on constrained hardware, with &lt;1ms lookups for RTT metrics during peer grouping.</p></li>
+<li><p><strong>HydraMesh-Lisp Specific</strong>: Integrated directly into <code class="docutils literal notranslate"><span class="pre">hydramesh-node</span></code> (via <code class="docutils literal notranslate"><span class="pre">streamdb</span></code> slot), it caches results from <code class="docutils literal notranslate"><span class="pre">hydramesh-get-metrics</span></code> or <code class="docutils literal notranslate"><span class="pre">hydramesh-group-peers</span></code>, reducing I/O in high-frequency loops. Lisp’s dynamic typing pairs with StreamDB’s binary stream support for flexible data handling (e.g., storing serialized CLOS messages).</p></li>
+<li><p><strong>Democratization Angle</strong>: By open-sourcing the full GPLv3 implementation, DeMoD makes high-speed, embedded databases accessible, leveling the playing field for indie developers against proprietary solutions like Redis.</p></li>
+</ul>
+</section>
+<section id="modular-extensibility-and-plugin-synergy">
+<h4>3. <strong>Modular Extensibility and Plugin Synergy</strong><a class="headerlink" href="#modular-extensibility-and-plugin-synergy" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Iteration</strong>: StreamDB’s <code class="docutils literal notranslate"><span class="pre">DatabaseBackend</span></code> trait allows custom backends (e.g., in-memory for testing), extending HydraMesh-Lisp’s plugin system. New: Middleware can hook into StreamDB operations (e.g., serialize data as JSON/CBOR before insert), creating a unified extension point for transports and storage.</p></li>
+<li><p><strong>HydraMesh-Lisp Specific</strong>: As a core backend (not a plugin, for tight coupling), it enhances modularity—e.g., <code class="docutils literal notranslate"><span class="pre">save-state</span></code> uses StreamDB paths like <code class="docutils literal notranslate"><span class="pre">/state/config</span></code>, queryable via <code class="docutils literal notranslate"><span class="pre">hydramesh-db-search</span> <span class="pre">&quot;/state/&quot;</span></code>. This integrates with transports (e.g., Serial for embedded), storing IoT data locally before syncing.</p></li>
+<li><p><strong>Democratization Angle</strong>: DeMoD’s GPLv3 version includes pluggable backends, encouraging community extensions (e.g., S3 integration), fostering innovation in HydraMesh’s ecosystem.</p></li>
+</ul>
+</section>
+<section id="optimized-for-resource-constrained-deployments">
+<h4>4. <strong>Optimized for Resource-Constrained Deployments</strong><a class="headerlink" href="#optimized-for-resource-constrained-deployments" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Iteration</strong>: StreamDB’s tunable parameters (e.g., page size, cache limits) and minimal dependencies make it perfect for HydraMesh-Lisp on devices like Raspberry Pi. New: Free page management (first-fit LIFO with consolidation) minimizes fragmentation, supporting long-running edge nodes with limited storage.</p></li>
+<li><p><strong>HydraMesh-Lisp Specific</strong>: The DSL’s ~700-line efficiency pairs with StreamDB’s lightweight footprint, enabling deployments on ARM-based IoT hardware. For example, persist sensor logs in StreamDB during offline periods, syncing via LoRaWAN when connected.</p></li>
+<li><p><strong>Democratization Angle</strong>: DeMoD’s complete GPLv3 impl democratizes embedded databases, providing features like orphan collection without costly licenses, ideal for open hardware projects.</p></li>
+</ul>
+</section>
+<section id="seamless-cross-language-interoperability">
+<h4>5. <strong>Seamless Cross-Language Interoperability</strong><a class="headerlink" href="#seamless-cross-language-interoperability" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Iteration</strong>: StreamDB’s file-based storage and FFI (via <code class="docutils literal notranslate"><span class="pre">libstreamdb.so</span></code>) enable shared access across HydraMesh SDKs. New: HydraMesh-Lisp nodes can store JSON-serialized metrics in StreamDB, readable by C SDKs for hybrid networks.</p></li>
+<li><p><strong>HydraMesh-Lisp Specific</strong>: CFFI bindings in <code class="docutils literal notranslate"><span class="pre">hydramesh.lisp</span></code> expose StreamDB as DSL functions (e.g., <code class="docutils literal notranslate"><span class="pre">hydramesh-db-insert</span></code>), ensuring Lisp’s dynamic features (e.g., macros) enhance interoperability without complexity.</p></li>
+<li><p><strong>Democratization Angle</strong>: As the only complete GPLv3 version (developed from Iain Ballard’s incomplete C# repo), DeMoD’s Rust impl promotes open access to advanced FFI-capable databases.</p></li>
+</ul>
+</section>
+<section id="robust-error-handling-and-automated-recovery">
+<h4>6. <strong>Robust Error Handling and Automated Recovery</strong><a class="headerlink" href="#robust-error-handling-and-automated-recovery" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Iteration</strong>: StreamDB’s CRC32 checks, version monotonicity, and recovery (e.g., index rebuild) bolster HydraMesh-Lisp’s <code class="docutils literal notranslate"><span class="pre">hydramesh-error</span></code> handling. New: Integrates with failover (<code class="docutils literal notranslate"><span class="pre">hydramesh-heal</span></code>), recovering states from StreamDB after crashes.</p></li>
+<li><p><strong>HydraMesh-Lisp Specific</strong>: Errors from StreamDB are wrapped in <code class="docutils literal notranslate"><span class="pre">hydramesh-error</span></code>, logged via <code class="docutils literal notranslate"><span class="pre">log4cl</span></code>, and tested in FiveAM (e.g., <code class="docutils literal notranslate"><span class="pre">streamdb-integration-test</span></code>), ensuring resilience in P2P meshes.</p></li>
+<li><p><strong>Democratization Angle</strong>: GPLv3 ensures community-driven improvements to recovery, making reliable storage accessible for all.</p></li>
+</ul>
+</section>
+<section id="advanced-monitoring-and-analytics">
+<h4>7. <strong>Advanced Monitoring and Analytics</strong><a class="headerlink" href="#advanced-monitoring-and-analytics" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Iteration</strong>: StreamDB stores historical metrics (e.g., <code class="docutils literal notranslate"><span class="pre">/metrics/sends</span></code>), enabling trend analysis. New: Prefix searches (<code class="docutils literal notranslate"><span class="pre">hydramesh-db-search</span> <span class="pre">&quot;/metrics/&quot;</span></code>) support AI optimization in Master mode.</p></li>
+<li><p><strong>HydraMesh-Lisp Specific</strong>: Enhances <code class="docutils literal notranslate"><span class="pre">hydramesh-get-metrics</span></code> by querying StreamDB, visualized in TUI or Graphviz.</p></li>
+<li><p><strong>Democratization Angle</strong>: DeMoD’s open impl democratizes analytics-ready storage for edge AI.</p></li>
+</ul>
+</section>
+<section id="streamlined-testing-and-validation">
+<h4>8. <strong>Streamlined Testing and Validation</strong><a class="headerlink" href="#streamlined-testing-and-validation" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>Iteration</strong>: StreamDB’s tests integrate with FiveAM, verifying persistence in network scenarios. New: Ensures data survives restarts, critical for AUTO mode.</p></li>
+<li><p><strong>HydraMesh-Lisp Specific</strong>: <code class="docutils literal notranslate"><span class="pre">streamdb-integration-test</span></code> validates CRUD and recovery, extending HydraMesh’s testing.</p></li>
+<li><p><strong>Democratization Angle</strong>: GPLv3 fosters shared testing tools for reliable HydraMesh deployments.</p></li>
+</ul>
+</section>
+</section>
+<section id="streamdb-s-exclusivity-to-hydramesh-lisp-for-now">
+<h3>StreamDB’s Exclusivity to HydraMesh-Lisp (For Now)<a class="headerlink" href="#streamdb-s-exclusivity-to-hydramesh-lisp-for-now" title="Link to this heading">¶</a></h3>
+<p>StreamDB is currently integrated only into the HydraMesh-Lisp SDK to prototype its benefits in Lisp’s dynamic environment (e.g., macros for StreamDB wrappers). This allows rapid iteration on persistence features (e.g., message logging in <code class="docutils literal notranslate"><span class="pre">hydramesh-send</span></code>) before porting to other SDKs. Future plans include CFFI bindings for C SDK and Python wrappers, expanding StreamDB across the mono repo.</p>
+</section>
+<section id="demod-s-gplv3-complete-streamdb-democratizing-bleeding-edge-tech">
+<h3>DeMoD’s GPLv3-Complete StreamDB: Democratizing Bleeding-Edge Tech<a class="headerlink" href="#demod-s-gplv3-complete-streamdb-democratizing-bleeding-edge-tech" title="Link to this heading">¶</a></h3>
+<p>DeMoD LLC developed the only complete GPLv3 version of StreamDB from Iain Ballard’s incomplete C# repo, reimplementing it in Rust for safety and performance. This ensures bleeding-edge features (e.g., trie indexing, MVCC-like versioning) are freely available, promoting open innovation in embedded storage and aligning with HydraMesh’s FOSS ethos. By open-sourcing under GPLv3, DeMoD democratizes tech typically locked in proprietary systems, enabling developers to build advanced, cost-free solutions.</p>
+</section>
+</section>
+<section id="documentation">
+<h2>Documentation<a class="headerlink" href="#documentation" title="Link to this heading">¶</a></h2>
+<p>For comprehensive documentation on the HydraMesh Framework, including detailed SDK guides, API references, design specifications, and contribution processes, refer to the Sphinx-generated docs. These cover all SDKs in the mono repo (e.g., C SDK, Python, HydraMesh-Lisp, Rust) and are built from the Markdown/reST sources in <code class="docutils literal notranslate"><span class="pre">Documentation/</span></code>.</p>
+<section id="viewing-the-documentation">
+<h3>Viewing the Documentation<a class="headerlink" href="#viewing-the-documentation" title="Link to this heading">¶</a></h3>
+<ul>
+<li><p><strong>Online</strong>: Hosted on GitHub Pages at <a class="reference external" href="https://alh477.github.io/DeMoD-Communication-Framework/">https://alh477.github.io/DeMoD-Communication-Framework/</a> (auto-built via CI/CD on pushes to <code class="docutils literal notranslate"><span class="pre">main</span></code>).</p></li>
+<li><p><strong>Locally</strong>: Build the docs yourself (or run <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">docs</span></code> from the repo root):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>Documentation
+pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements.txt<span class="w">  </span><span class="c1"># Install Sphinx, myst-parser, etc.</span>
+make<span class="w"> </span>docs-html<span class="w">  </span><span class="c1"># Generates HTML in Documentation/_build/html/</span>
+open<span class="w"> </span>_build/html/index.html<span class="w">  </span><span class="c1"># View in browser</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>Key Sections</strong>:</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://alh477.github.io/DeMoD-Communication-Framework/specs/dcf_design_spec.html">Design Specifications</a>: Covers protocol design, AUTO mode, master node, plugins, and SDK guidelines.</p></li>
+<li><p><a class="reference external" href="https://alh477.github.io/DeMoD-Communication-Framework/guides/sdk-development.html">SDK Guides</a>: Tutorials for developing and integrating SDKs (e.g., C SDK with RTT grouping, HydraMesh-Lisp with StreamDB persistence).</p></li>
+<li><p><a class="reference external" href="https://alh477.github.io/DeMoD-Communication-Framework/api/index.html">API References</a>: Auto-generated from code comments/docstrings across languages (e.g., <code class="docutils literal notranslate"><span class="pre">hydramesh_client_send_message</span></code> in C, <code class="docutils literal notranslate"><span class="pre">hydramesh-quick-send</span></code> in Lisp).</p></li>
+<li><p><a class="reference external" href="https://alh477.github.io/DeMoD-Communication-Framework/process/CONTRIBUTING.html">Contribution Guidelines</a>: How to add new SDKs or plugins.</p></li>
+</ul>
+</li>
+</ul>
+<p>The docs support multi-format outputs (HTML, ePub) and include custom rendering for Protobuf schemas. For source, see the <code class="docutils literal notranslate"><span class="pre">Documentation/</span></code> directory in the repo. Contributions to improve docs are welcome—follow the style in <code class="docutils literal notranslate"><span class="pre">Documentation/dcf_design_spec.markdown</span></code>.</p>
+</section>
+</section>
+<section id="contributing">
+<h2>Contributing<a class="headerlink" href="#contributing" title="Link to this heading">¶</a></h2>
+<p>Contributions are welcome! See <strong><a class="reference internal" href="#CONTRIBUTING.md"><span class="xref myst">CONTRIBUTING.md</span></a></strong> for the full
+workflow and <strong><a class="reference internal" href="#ARCHITECTURE.md"><span class="xref myst">ARCHITECTURE.md</span></a></strong> for the repo map. In short:</p>
+<ol class="arabic simple">
+<li><p>Fork the repo and branch off <code class="docutils literal notranslate"><span class="pre">main</span></code> (<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">checkout</span> <span class="pre">-b</span> <span class="pre">feature/xyz</span></code>).</p></li>
+<li><p>Add tests and code (follow style: <code class="docutils literal notranslate"><span class="pre">perltidy</span></code>, <code class="docutils literal notranslate"><span class="pre">black</span></code>, <code class="docutils literal notranslate"><span class="pre">ktlint</span></code>, <code class="docutils literal notranslate"><span class="pre">swiftformat</span></code>, <code class="docutils literal notranslate"><span class="pre">clang-format</span></code> for C, Lisp conventions for HydraMesh-Lisp).</p></li>
+<li><p><strong>The certificate is the contract</strong> — if you touch any codec, regenerate the golden vectors and run the certs (<code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">certify</span></code>); CI fails on drift.</p></li>
+<li><p>Submit a PR using the <a class="reference internal" href="#.github/PULL_REQUEST_TEMPLATE.md"><span class="xref myst">pull request template</span></a>.</p></li>
+<li><p>Discuss issues via <a class="reference external" href="https://github.com/ALH477/DeMoD-Communication-Framework/issues">GitHub Issues</a>.
+New SDKs (e.g., Python, Perl) encouraged; ensure RTT grouping, plugins, AUTO mode, and LGPL-3.0 compliance.</p></li>
+</ol>
+</section>
+</section>
+<section id="demod-llc-cut-the-bullshit-cut-the-price-innovation-without-the-overhead">
+<h1><a class="reference external" href="https://DeMoD.ltd">DeMoD LLC</a> Cut the bullshit, Cut the price. Innovation without the overhead.<a class="headerlink" href="#demod-llc-cut-the-bullshit-cut-the-price-innovation-without-the-overhead" title="Link to this heading">¶</a></h1>
+<p><a class="reference external" href="https://ko-fi.com/F1F11PNYX4"><img alt="ko-fi" src="https://ko-fi.com/img/githubbutton_sm.svg" /></a></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>  <span class="n">___</span>   <span class="n">_</span>      <span class="n">_</span>   <span class="n">_</span>   <span class="n">___</span>  <span class="n">____________</span>          <span class="n">______</span>    <span class="n">___</span>  <span class="n">___</span>     <span class="n">______</span>   <span class="n">_</span>      <span class="n">_</span>     <span class="n">_____</span> 
+ <span class="o">/</span> <span class="n">_</span> \ <span class="o">|</span> <span class="o">|</span>    <span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">/</span>   <span class="o">||</span><span class="n">___</span>  <span class="o">/</span><span class="n">___</span>  <span class="o">/</span>          <span class="o">|</span>  <span class="n">_</span>  \   <span class="o">|</span>  \<span class="o">/</span>  <span class="o">|</span>     <span class="o">|</span>  <span class="n">_</span>  \ <span class="o">|</span> <span class="o">|</span>    <span class="o">|</span> <span class="o">|</span>   <span class="o">/</span>  <span class="n">__</span> \
+<span class="o">/</span> <span class="o">/</span><span class="n">_</span>\ \<span class="o">|</span> <span class="o">|</span>    <span class="o">|</span> <span class="o">|</span><span class="n">_</span><span class="o">|</span> <span class="o">|/</span> <span class="o">/|</span> <span class="o">|</span>   <span class="o">/</span> <span class="o">/</span>   <span class="o">/</span> <span class="o">/</span>   <span class="n">______</span>  <span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">|</span><span class="n">___</span><span class="o">|</span> <span class="o">.</span>  <span class="o">.</span> <span class="o">|</span> <span class="n">___</span> <span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">|</span>    <span class="o">|</span> <span class="o">|</span>   <span class="o">|</span> <span class="o">/</span>  \<span class="o">/</span>
+<span class="o">|</span>  <span class="n">_</span>  <span class="o">||</span> <span class="o">|</span>    <span class="o">|</span>  <span class="n">_</span>  <span class="o">/</span> <span class="o">/</span><span class="n">_</span><span class="o">|</span> <span class="o">|</span>  <span class="o">/</span> <span class="o">/</span>   <span class="o">/</span> <span class="o">/</span>   <span class="o">|</span><span class="n">______</span><span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">/</span> <span class="n">_</span> \ <span class="o">|</span>\<span class="o">/|</span> <span class="o">|/</span> <span class="n">_</span> \<span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">|</span>    <span class="o">|</span> <span class="o">|</span>   <span class="o">|</span> <span class="o">|</span>    
+<span class="o">|</span> <span class="o">|</span> <span class="o">|</span> <span class="o">||</span> <span class="o">|</span><span class="n">____</span><span class="o">|</span> <span class="o">|</span> <span class="o">|</span> \<span class="n">___</span>  <span class="o">|./</span> <span class="o">/</span>  <span class="o">./</span> <span class="o">/</span>             <span class="o">|</span> <span class="o">|/</span> <span class="o">/</span>  <span class="n">__</span><span class="o">/</span> <span class="o">|</span>  <span class="o">|</span> <span class="o">|</span> <span class="p">(</span><span class="n">_</span><span class="p">)</span> <span class="o">|</span> <span class="o">|/</span> <span class="o">/</span>  <span class="o">|</span> <span class="o">|</span><span class="n">____</span><span class="o">|</span> <span class="o">|</span><span class="n">___</span><span class="o">|</span> \<span class="n">__</span><span class="o">/</span>\
+\<span class="n">_</span><span class="o">|</span> <span class="o">|</span><span class="n">_</span><span class="o">/</span>\<span class="n">_____</span><span class="o">/</span>\<span class="n">_</span><span class="o">|</span> <span class="o">|</span><span class="n">_</span><span class="o">/</span>   <span class="o">|</span><span class="n">_</span><span class="o">/</span>\<span class="n">_</span><span class="o">/</span>   \<span class="n">_</span><span class="o">/</span>              <span class="o">|</span><span class="n">___</span><span class="o">/</span> \<span class="n">___</span>\<span class="n">_</span><span class="o">|</span>  <span class="o">|</span><span class="n">_</span><span class="o">/</span>\<span class="n">___</span><span class="o">/|</span><span class="n">___</span><span class="o">/</span>   \<span class="n">_____</span><span class="o">/</span>\<span class="n">_____</span><span class="o">/</span>\<span class="n">____</span><span class="o">/</span>
+</pre></div>
+</div>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="agent-to-agent.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Agent-to-agent over DCF — a teaching guide</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="../index.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Home</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, DeMoD LLC
+            </div>
+            Made with 
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">HydraMesh</a><ul>
+<li><a class="reference internal" href="#overview">Overview</a></li>
+<li><a class="reference internal" href="#quick-start">Quick start</a><ul>
+<li><a class="reference internal" href="#hydra-acronym">HYDRA Acronym</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#features">Features</a></li>
+<li><a class="reference internal" href="#architecture">Architecture</a></li>
+<li><a class="reference internal" href="#collaborative-audio-dcf-audio">Collaborative Audio (DCF-Audio)</a></li>
+<li><a class="reference internal" href="#installation">Installation</a><ul>
+<li><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
+<li><a class="reference internal" href="#generating-protobuf-grpc">Generating Protobuf/gRPC</a></li>
+<li><a class="reference internal" href="#building-sdks">Building SDKs</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#examples">Examples</a><ul>
+<li><a class="reference internal" href="#perl-grpc-client">Perl (gRPC Client)</a></li>
+<li><a class="reference internal" href="#python-grpc-client">Python (gRPC Client)</a></li>
+<li><a class="reference internal" href="#c-sdk-client">C SDK (Client)</a></li>
+<li><a class="reference internal" href="#c-grpc-server">C++ (gRPC Server)</a></li>
+<li><a class="reference internal" href="#node-js-grpc-client">Node.js (gRPC Client)</a></li>
+<li><a class="reference internal" href="#go-grpc-server">Go (gRPC Server)</a></li>
+<li><a class="reference internal" href="#rust-grpc-server">Rust (gRPC Server)</a></li>
+<li><a class="reference internal" href="#lisp-grpc-client-with-streamdb">Lisp (gRPC Client with StreamDB)</a></li>
+<li><a class="reference internal" href="#android-kotlin-client">Android (Kotlin Client)</a></li>
+<li><a class="reference internal" href="#ios-swift-client">iOS (Swift Client)</a></li>
+<li><a class="reference internal" href="#plugin-example-c-transport-for-c-sdk">Plugin Example (C Transport for C SDK)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#configuration">Configuration</a></li>
+<li><a class="reference internal" href="#testing">Testing</a><ul>
+<li><a class="reference internal" href="#enhanced-benefits-of-streamdb-integration-in-hydramesh-lisp">Enhanced Benefits of StreamDB Integration in HydraMesh-Lisp</a><ul>
+<li><a class="reference internal" href="#superior-persistence-for-fault-tolerant-distributed-systems">1. <strong>Superior Persistence for Fault-Tolerant Distributed Systems</strong></a></li>
+<li><a class="reference internal" href="#ultra-low-latency-data-access-for-real-time-workloads">2. <strong>Ultra-Low-Latency Data Access for Real-Time Workloads</strong></a></li>
+<li><a class="reference internal" href="#modular-extensibility-and-plugin-synergy">3. <strong>Modular Extensibility and Plugin Synergy</strong></a></li>
+<li><a class="reference internal" href="#optimized-for-resource-constrained-deployments">4. <strong>Optimized for Resource-Constrained Deployments</strong></a></li>
+<li><a class="reference internal" href="#seamless-cross-language-interoperability">5. <strong>Seamless Cross-Language Interoperability</strong></a></li>
+<li><a class="reference internal" href="#robust-error-handling-and-automated-recovery">6. <strong>Robust Error Handling and Automated Recovery</strong></a></li>
+<li><a class="reference internal" href="#advanced-monitoring-and-analytics">7. <strong>Advanced Monitoring and Analytics</strong></a></li>
+<li><a class="reference internal" href="#streamlined-testing-and-validation">8. <strong>Streamlined Testing and Validation</strong></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#streamdb-s-exclusivity-to-hydramesh-lisp-for-now">StreamDB’s Exclusivity to HydraMesh-Lisp (For Now)</a></li>
+<li><a class="reference internal" href="#demod-s-gplv3-complete-streamdb-democratizing-bleeding-edge-tech">DeMoD’s GPLv3-Complete StreamDB: Democratizing Bleeding-Edge Tech</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#documentation">Documentation</a><ul>
+<li><a class="reference internal" href="#viewing-the-documentation">Viewing the Documentation</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#contributing">Contributing</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#demod-llc-cut-the-bullshit-cut-the-price-innovation-without-the-overhead">DeMoD LLC Cut the bullshit, Cut the price. Innovation without the overhead.</a></li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=05a7714e"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>

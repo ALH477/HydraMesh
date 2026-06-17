@@ -1,0 +1,700 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="HydraMesh / DCF — Architecture Map" href="architecture.html"><link rel="prev" title="HydraMesh" href="readme.html">
+        <link rel="canonical" href="https://alh477.github.io/HydraMesh/_include/agent-to-agent.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Agent-to-agent over DCF — a teaching guide - DeMoD Communication Framework</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d75fae25" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=2d41b0bc" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f0f0f0;
+  --color-code-foreground: black;
+  --color-brand-primary: #0c8aa6;
+  --color-brand-content: #0c8aa6;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #282a36;
+  --color-code-foreground: #f8f8f2;
+  --color-brand-primary: #34d6e8;
+  --color-brand-content: #34d6e8;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #282a36;
+  --color-code-foreground: #f8f8f2;
+  --color-brand-primary: #34d6e8;
+  --color-brand-content: #34d6e8;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">DeMoD Communication Framework</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  
+  <span class="sidebar-brand-text">DeMoD Communication Framework</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Start here</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="readme.html">HydraMesh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="readme.html#demod-llc-cut-the-bullshit-cut-the-price-innovation-without-the-overhead">DeMoD LLC Cut the bullshit, Cut the price. Innovation without the overhead.</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Agent-to-agent over DCF — a teaching guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">HydraMesh / DCF — Architecture Map</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Specifications</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../WIRE_QUANTUM_SPEC.html">DCF Wire Quantum — Canonical Specification</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../wire_quanta_category.html">The DeMoD Wire Quantum: A Categorical Formalization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../DCF_AUDIO_SPEC.html">DCF-Audio — Collaborative Audio over the DeModFrame Wire</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../DCF_GAME_SPEC.html">DCF-Game — Low-Latency Multiplayer over the DeModFrame Wire</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../SUPERPACK_SPEC.html">DCF SuperPack — 32-byte container for two DeModFrame quanta</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../DCF_CODE_REVIEW.html">DCF / HydraMesh code review</a></li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to HydraMesh / DCF</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="https://github.com/ALH477/HydraMesh/blob/main/Documentation/_include/agent-to-agent.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/ALH477/HydraMesh/edit/main/Documentation/_include/agent-to-agent.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="agent-to-agent-over-dcf-a-teaching-guide">
+<h1>Agent-to-agent over DCF — a teaching guide<a class="headerlink" href="#agent-to-agent-over-dcf-a-teaching-guide" title="Link to this heading">¶</a></h1>
+<p>Two AI agents (Claude Code ⇄ Claude Code, Claude Code ⇄ OpenCode, or any two
+MCP-capable agents) talking <strong>directly to each other</strong> over the DeMoD
+Communication Framework — no Matrix server, no human relaying messages, and no new
+wire format. Everything an agent says crosses the wire as the same certified
+17-byte <code class="docutils literal notranslate"><span class="pre">DeModFrame</span></code> the rest of the repo is built on.</p>
+<p>This document is meant to <em>teach</em> the design, not just list commands. If you only
+want to run it, jump to <a class="reference internal" href="#quick-start-with-nix">Quick start</a>; if you want to
+understand it, read straight through.</p>
+<hr class="docutils" />
+<section id="the-mental-model-talk-on-demand-no-loops">
+<h2>1. The mental model: “talk on demand, no loops”<a class="headerlink" href="#the-mental-model-talk-on-demand-no-loops" title="Link to this heading">¶</a></h2>
+<p>A normal chatbot polls — it sits in a <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">True:</span></code> asking “anything for me yet?”
+That burns cycles and, for an LLM agent, tokens. This design is <strong>event-driven
+instead</strong>:</p>
+<ul class="simple">
+<li><p>An agent <strong>blocks</strong> in <code class="docutils literal notranslate"><span class="pre">mesh_recv()</span></code> — it is parked, costing nothing, until a
+message actually arrives.</p></li>
+<li><p>When its partner sends, <code class="docutils literal notranslate"><span class="pre">mesh_recv()</span></code> returns, the agent thinks, replies with
+<code class="docutils literal notranslate"><span class="pre">mesh_send()</span></code>, and blocks again.</p></li>
+</ul>
+<p>So you stand up two agents, point them at each other, and they exchange messages
+<strong>only when there is something to say</strong>. No timers, no busy-waiting — each agent
+“checks” exactly when woken. That’s the whole philosophy: <em>standing agents, talk
+on demand, checks when necessary.</em></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span> Agent A (MCP client)                                   Agent B (MCP client)
+  └ mesh_mcp.py  ── DeModFrame DATA frames / UDP[/VPN] ──  mesh_mcp.py ┘
+     DcfTextNode  ◀───────────  shared channel  ───────────▶ DcfTextNode
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="how-it-works-the-layer-cake">
+<h2>2. How it works: the layer cake<a class="headerlink" href="#how-it-works-the-layer-cake" title="Link to this heading">¶</a></h2>
+<p>The key idea in DCF is <strong>adapters over one invariant</strong>. There is exactly one wire
+format; everything else (audio, chat, agent messages) is a thin layer that
+serialises <em>into</em> that format. From the bottom up:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>┌─────────────────────────────────────────────────────────────┐
+│ 5. MCP tools        mesh_recv / mesh_send / mesh_status …     │  what the agent calls
+├─────────────────────────────────────────────────────────────┤
+│ 4. SuperPack        2×17B frames → 32B container (lossless)   │  optional batching
+├─────────────────────────────────────────────────────────────┤
+│ 3. DcfTextNode      UDP socket, peers, fragment/reassemble    │  the &quot;mesh node&quot;
+├─────────────────────────────────────────────────────────────┤
+│ 2. Text adapter     a UTF-8 message → many DeModFrames        │  dcf_text.py
+├─────────────────────────────────────────────────────────────┤
+│ 1. DeModFrame       the 17-byte wire quantum (the invariant)  │  the contract
+└─────────────────────────────────────────────────────────────┘
+</pre></div>
+</div>
+<section id="layer-1-the-demodframe-quantum-the-one-invariant">
+<h3>Layer 1 — the DeModFrame quantum (the one invariant)<a class="headerlink" href="#layer-1-the-demodframe-quantum-the-one-invariant" title="Link to this heading">¶</a></h3>
+<p>Every byte on the wire belongs to a 17-byte frame:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sync</span><span class="p">(</span><span class="mh">0xD3</span><span class="p">)</span> <span class="o">|</span> <span class="n">flags</span><span class="p">[</span><span class="n">ver</span><span class="o">|</span><span class="nb">type</span><span class="p">]</span> <span class="o">|</span> <span class="n">seq</span> <span class="o">|</span> <span class="n">src</span> <span class="o">|</span> <span class="n">dst</span> <span class="o">|</span> <span class="n">payload</span><span class="p">(</span><span class="mi">4</span><span class="n">B</span><span class="p">)</span> <span class="o">|</span> <span class="n">ts24</span> <span class="o">|</span> <span class="n">crc16</span>
+</pre></div>
+</div>
+<p>A frame is valid iff the sync byte is <code class="docutils literal notranslate"><span class="pre">0xD3</span></code>, the version nibble is <code class="docutils literal notranslate"><span class="pre">1</span></code>, and the
+CRC-16/CCITT-FALSE over bytes <code class="docutils literal notranslate"><span class="pre">[0..14]</span></code> matches. That’s the entire contract — a
+246-vector “golden certificate” pins it across C/Rust/Python/Lua/Haskell/Lisp.
+Because chat is just an <em>adapter</em> (below), <strong>none of this work touched that
+certificate.</strong></p>
+</section>
+<section id="layer-2-the-text-adapter-dcf-text-py">
+<h3>Layer 2 — the text adapter (<code class="docutils literal notranslate"><span class="pre">dcf_text.py</span></code>)<a class="headerlink" href="#layer-2-the-text-adapter-dcf-text-py" title="Link to this heading">¶</a></h3>
+<p>A chat message is bigger than 4 bytes, so it’s <strong>fragmented</strong> across many frames,
+each carrying 4 payload bytes. The bookkeeping is packed into the 16-bit <code class="docutils literal notranslate"><span class="pre">seq</span></code>
+field:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seq</span> <span class="o">=</span> <span class="n">packet_id</span><span class="p">[</span><span class="mi">15</span><span class="p">:</span><span class="mi">10</span><span class="p">]</span> <span class="p">(</span><span class="mi">6</span> <span class="n">bits</span><span class="p">,</span> <span class="mf">0..63</span><span class="p">)</span> <span class="o">|</span> <span class="n">frag_idx</span><span class="p">[</span><span class="mi">9</span><span class="p">:</span><span class="mi">0</span><span class="p">]</span> <span class="p">(</span><span class="mi">10</span> <span class="n">bits</span><span class="p">,</span> <span class="mf">0..1023</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">frag_idx</span> <span class="pre">==</span> <span class="pre">0</span></code> is a <strong>descriptor</strong> frame: payload = <code class="docutils literal notranslate"><span class="pre">[len_hi,</span> <span class="pre">len_lo,</span> <span class="pre">flags,</span> <span class="pre">_]</span></code>
+— it tells the receiver the true byte length so it can un-pad the last fragment.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">frag_idx</span> <span class="pre">1..N</span></code> carry the bytes, the last one zero-padded to 4.</p></li>
+<li><p>Chat rides on <strong>DATA</strong> frames (type 0), so a receiver never confuses a chat
+fragment with an audio fragment (audio uses CTRL/type 3).</p></li>
+</ul>
+<p>That 10-bit fragment index is why a single message caps at <strong>4092 bytes</strong>
+(1023 fragments × 4). The reassembler tolerates out-of-order and duplicate
+fragments and emits the message once every fragment has arrived.</p>
+</section>
+<section id="layer-3-the-node-dcf-node-py">
+<h3>Layer 3 — the node (<code class="docutils literal notranslate"><span class="pre">dcf_node.py</span></code>)<a class="headerlink" href="#layer-3-the-node-dcf-node-py" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">DcfTextNode</span></code> is a tiny UDP endpoint: it binds a port, knows its peers, and
+fragments outgoing text / reassembles incoming text. Received messages land in a
+thread-safe queue; <code class="docutils literal notranslate"><span class="pre">poll(timeout)</span></code> blocks on that queue — which is exactly the
+primitive <code class="docutils literal notranslate"><span class="pre">mesh_recv</span></code> exposes to the agent.</p>
+</section>
+<section id="layer-4-superpack-optional">
+<h3>Layer 4 — SuperPack (optional)<a class="headerlink" href="#layer-4-superpack-optional" title="Link to this heading">¶</a></h3>
+<p>When frames go out in pairs, SuperPack packs two 17-byte frames into one 32-byte
+datagram (drops the redundant second sync byte and recomputes both CRCs on
+unpack, losslessly). It saves header overhead and adds a joint CRC — and because
+unpack reconstructs the exact original frames, the wire certificate still holds.</p>
+</section>
+<section id="layer-5-the-mcp-tools-mesh-mcp-py">
+<h3>Layer 5 — the MCP tools (<code class="docutils literal notranslate"><span class="pre">mesh_mcp.py</span></code>)<a class="headerlink" href="#layer-5-the-mcp-tools-mesh-mcp-py" title="Link to this heading">¶</a></h3>
+<p>What the agent actually sees. Each is a one-line wrapper over the node:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Tool</p></th>
+<th class="head"><p>Does</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">mesh_recv(timeout_s=30)</span></code></p></td>
+<td><p><strong>block</strong> until a message arrives, then drain extras. The ping-pong primitive.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">mesh_send(text)</span></code></p></td>
+<td><p>fragment <code class="docutils literal notranslate"><span class="pre">text</span></code> and unicast it to the peer(s).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">mesh_inbox(max_messages)</span></code></p></td>
+<td><p><strong>non-blocking</strong> drain of anything already queued.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">mesh_status()</span></code></p></td>
+<td><p>node id, name, channel, peers — use it to confirm the link is wired.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">superpack_explain(a,b)</span></code></p></td>
+<td><p>diagnostic: show two frames combining into a SuperPack.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="two-concepts-that-trip-people-up">
+<h2>3. Two concepts that trip people up<a class="headerlink" href="#two-concepts-that-trip-people-up" title="Link to this heading">¶</a></h2>
+<section id="channels-are-a-rendezvous-hash-not-a-connection">
+<h3>Channels are a rendezvous hash, not a connection<a class="headerlink" href="#channels-are-a-rendezvous-hash-not-a-connection" title="Link to this heading">¶</a></h3>
+<p>There is no “connect”. An agent simply sends frames whose <code class="docutils literal notranslate"><span class="pre">dst</span></code> field is the
+<strong>channel id</strong> — and <code class="docutils literal notranslate"><span class="pre">channel_id(name)</span> <span class="pre">=</span> <span class="pre">crc16_ccitt(name)</span></code>. Any node listening on
+the same channel id accepts the frame; everything else ignores it. So two agents
+“meet” by agreeing on a channel <em>string</em> (<code class="docutils literal notranslate"><span class="pre">duet</span></code>), which both hash to the same
+16-bit <code class="docutils literal notranslate"><span class="pre">dst</span></code>. <code class="docutils literal notranslate"><span class="pre">dst</span> <span class="pre">=</span> <span class="pre">0xFFFF</span></code> is broadcast. This is the same frequency-channel
+trick the audio layer uses — think “tune to the same frequency”, not “open a
+socket to a server”.</p>
+<p><code class="docutils literal notranslate"><span class="pre">src</span></code> is the sender’s node id; give the two agents <strong>distinct</strong> ids so each can
+tell who said what.</p>
+</section>
+<section id="turn-taking-someone-must-speak-first-or-both-deadlock">
+<h3>Turn-taking: someone must speak first (or both deadlock)<a class="headerlink" href="#turn-taking-someone-must-speak-first-or-both-deadlock" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">mesh_recv</span></code> blocks. If <em>both</em> agents start by calling <code class="docutils literal notranslate"><span class="pre">mesh_recv</span></code>, they wait for
+each other forever. So you designate one <strong>initiator</strong> that calls <code class="docutils literal notranslate"><span class="pre">mesh_send</span></code>
+<em>before</em> its first <code class="docutils literal notranslate"><span class="pre">mesh_recv</span></code>; the other is the <strong>responder</strong> that starts by
+waiting. After the first message it’s a symmetric loop: <code class="docutils literal notranslate"><span class="pre">recv</span> <span class="pre">→</span> <span class="pre">think</span> <span class="pre">→</span> <span class="pre">send</span></code>.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="quick-start-with-nix">
+<h2>Quick start with Nix<a class="headerlink" href="#quick-start-with-nix" title="Link to this heading">¶</a></h2>
+<p>The feature is exposed as flake <strong>apps</strong>, so a Nix user needs nothing checked
+out and nothing installed:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>nix<span class="w"> </span>run<span class="w"> </span>github:ALH477/HydraMesh#a2a-demo<span class="w">     </span><span class="c1"># stdlib loopback smoke test -&gt; &quot;a2a demo: CERTIFIED&quot;</span>
+nix<span class="w"> </span>run<span class="w"> </span>github:ALH477/HydraMesh#a2a<span class="w">          </span><span class="c1"># guided interactive harness (setup -&gt; run -&gt; PASS/FAIL)</span>
+nix<span class="w"> </span>run<span class="w"> </span>github:ALH477/HydraMesh#mesh-agent<span class="w">   </span><span class="c1"># the DeModFrame MCP endpoint (python `mcp` bundled in)</span>
+</pre></div>
+</div>
+<p><strong>Passing arguments — the <code class="docutils literal notranslate"><span class="pre">--</span></code> separator.</strong> Everything after <code class="docutils literal notranslate"><span class="pre">--</span></code> is handed to
+the program, not to Nix. The demo accepts <code class="docutils literal notranslate"><span class="pre">--turns</span></code> and <code class="docutils literal notranslate"><span class="pre">--channel</span></code>:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>nix<span class="w"> </span>run<span class="w"> </span>github:ALH477/HydraMesh#a2a-demo<span class="w"> </span>--<span class="w"> </span>--turns<span class="w"> </span><span class="m">6</span><span class="w">              </span><span class="c1"># run 6 exchanges</span>
+nix<span class="w"> </span>run<span class="w"> </span>github:ALH477/HydraMesh#a2a-demo<span class="w"> </span>--<span class="w"> </span>--turns<span class="w"> </span><span class="m">2</span><span class="w"> </span>--channel<span class="w"> </span>lab
+nix<span class="w"> </span>run<span class="w"> </span>.#a2a-demo<span class="w"> </span>--<span class="w"> </span>--turns<span class="w"> </span><span class="m">10</span><span class="w"> </span>--channel<span class="w"> </span>duet<span class="w">                    </span><span class="c1"># from a local checkout</span>
+</pre></div>
+</div>
+<p>(<code class="docutils literal notranslate"><span class="pre">#a2a-demo</span></code> is wired to the stdlib loopback, so it ignores <code class="docutils literal notranslate"><span class="pre">--llm</span></code>; for a live
+two-model run use <code class="docutils literal notranslate"><span class="pre">#a2a</span></code> and choose <code class="docutils literal notranslate"><span class="pre">llm</span></code> in the prompts, or the runner script
+below.) <code class="docutils literal notranslate"><span class="pre">#a2a</span></code> / <code class="docutils literal notranslate"><span class="pre">#a2a-demo</span></code> run on a plain <code class="docutils literal notranslate"><span class="pre">python3</span></code>; <code class="docutils literal notranslate"><span class="pre">#mesh-agent</span></code> ships its own
+<code class="docutils literal notranslate"><span class="pre">python3.withPackages</span> <span class="pre">[</span> <span class="pre">mcp</span> <span class="pre">]</span></code>, so it’s fully self-contained.</p>
+</section>
+<hr class="docutils" />
+<section id="dependencies-without-nix-mesh-mcp-py">
+<h2>Dependencies without Nix (<code class="docutils literal notranslate"><span class="pre">mesh_mcp.py</span></code>)<a class="headerlink" href="#dependencies-without-nix-mesh-mcp-py" title="Link to this heading">¶</a></h2>
+<p>The wire path is <strong>pure stdlib</strong> — <code class="docutils literal notranslate"><span class="pre">a2a_runner.py</span></code>, <code class="docutils literal notranslate"><span class="pre">a2a_interactive.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">dcf_node.py</span></code>, and the tests need nothing installed. Only <code class="docutils literal notranslate"><span class="pre">mesh_mcp.py</span></code> (the MCP
+server) needs the <code class="docutils literal notranslate"><span class="pre">mcp</span></code> package (the Matrix <code class="docutils literal notranslate"><span class="pre">bridge.py</span></code> also needs <code class="docutils literal notranslate"><span class="pre">aiohttp</span></code>).
+<strong><code class="docutils literal notranslate"><span class="pre">anthropic</span></code> is not required</strong> — it’s a lazily-imported convenience for the
+<code class="docutils literal notranslate"><span class="pre">--llm</span></code> runner only.</p>
+<p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-r</span> <span class="pre">matrix-bridge/requirements.txt</span></code> is enough on a normal box. On
+NixOS / any PEP-668 “externally managed” Python, system pip is blocked — use a
+virtualenv (or just use the Nix apps above):</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>/path/to/HydraMesh
+python3<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv
+./.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>matrix-bridge/requirements.txt<span class="w">   </span><span class="c1"># mcp, aiohttp, pytest</span>
+<span class="c1"># optional, only for the --llm runner:  ./.venv/bin/python -m pip install anthropic</span>
+</pre></div>
+</div>
+<p>Then point each agent’s MCP server <code class="docutils literal notranslate"><span class="pre">command</span></code> at the venv interpreter so <code class="docutils literal notranslate"><span class="pre">mcp</span></code>
+imports (the <code class="docutils literal notranslate"><span class="pre">a2a.mcp.example.json</span></code> snippets show <code class="docutils literal notranslate"><span class="pre">python3</span></code> — swap it):</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/path/to/HydraMesh/.venv/bin/python&quot;</span><span class="p">,</span>
+<span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;/path/to/HydraMesh/matrix-bridge/mesh_mcp.py&quot;</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Sanity check: <code class="docutils literal notranslate"><span class="pre">./.venv/bin/python</span> <span class="pre">matrix-bridge/a2a_runner.py</span> <span class="pre">--demo</span></code> should print
+<code class="docutils literal notranslate"><span class="pre">a2a</span> <span class="pre">demo:</span> <span class="pre">CERTIFIED</span></code>. (<code class="docutils literal notranslate"><span class="pre">.venv/</span></code> is local and untracked — recreate per machine.)</p>
+</section>
+<hr class="docutils" />
+<section id="configure-the-two-agents">
+<h2>4. Configure the two agents<a class="headerlink" href="#configure-the-two-agents" title="Link to this heading">¶</a></h2>
+<p>Copy the two blocks from <a class="reference internal" href="#a2a.mcp.example.json"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">a2a.mcp.example.json</span></code></span></a> into each
+agent’s MCP config (fix the <code class="docutils literal notranslate"><span class="pre">args</span></code>/<code class="docutils literal notranslate"><span class="pre">command</span></code> path). The pair:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>env</p></th>
+<th class="head"><p>Agent A</p></th>
+<th class="head"><p>Agent B</p></th>
+<th class="head"><p>why</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DCF_AGENT_NAME</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">agent-a</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">agent-b</span></code></p></td>
+<td><p>label shown in <code class="docutils literal notranslate"><span class="pre">mesh_status</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DCF_AGENT_NODE_ID</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x00A1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x00B2</span></code></p></td>
+<td><p><strong>must differ</strong> — this is <code class="docutils literal notranslate"><span class="pre">src</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DCF_AGENT_UDP_PORT</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">7801</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">7802</span></code></p></td>
+<td><p>the local socket to bind</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DCF_PEERS</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">127.0.0.1:7802</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">127.0.0.1:7801</span></code></p></td>
+<td><p>the <em>partner’s</em> host:port</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DCF_CHANNEL</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">duet</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">duet</span></code></p></td>
+<td><p><strong>must match</strong> — the rendezvous</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<ul class="simple">
+<li><p><strong>Same host:</strong> use the <code class="docutils literal notranslate"><span class="pre">127.0.0.1</span></code> values above (two ports, one machine).</p></li>
+<li><p><strong>Two machines over a VPN:</strong> install Tailscale/WireGuard on both and set each
+<code class="docutils literal notranslate"><span class="pre">DCF_PEERS</span></code> to the partner’s VPN IP (e.g. <code class="docutils literal notranslate"><span class="pre">100.64.0.7:7802</span></code>). DCF is
+encryption-free by design (EAR/ITAR export compliance); the VPN provides
+confidentiality. <strong>Always run over the VPN — never expose the plaintext mesh.</strong></p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="kick-off-the-conversation">
+<h2>5. Kick off the conversation<a class="headerlink" href="#kick-off-the-conversation" title="Link to this heading">¶</a></h2>
+<p>Confirm the link first: have each agent call <code class="docutils literal notranslate"><span class="pre">mesh_status</span></code> and check the partner
+appears under <code class="docutils literal notranslate"><span class="pre">peers</span></code>. Then designate an initiator and paste an instruction like:</p>
+<blockquote>
+<div><p>You are on a DCF mesh with one peer agent. To talk to it: call <code class="docutils literal notranslate"><span class="pre">mesh_recv</span></code> to
+wait for its next message, then reply with <code class="docutils literal notranslate"><span class="pre">mesh_send</span></code>. Loop that — read, think,
+reply. (<strong>Initiator only:</strong> send the first message with <code class="docutils literal notranslate"><span class="pre">mesh_send</span></code> before your
+first <code class="docutils literal notranslate"><span class="pre">mesh_recv</span></code>.)</p>
+</div></blockquote>
+<p>Ready-made, role-specific prompts (initiator and responder) live alongside this
+guide; the only difference is that line about who speaks first.</p>
+</section>
+<hr class="docutils" />
+<section id="driving-it-yourself-runner-interactive-harness">
+<h2>6. Driving it yourself — runner &amp; interactive harness<a class="headerlink" href="#driving-it-yourself-runner-interactive-harness" title="Link to this heading">¶</a></h2>
+<p>You don’t need two live agents to exercise the mesh.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">a2a_runner.py</span></code></strong> wires both ends in one process:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>matrix-bridge/a2a_runner.py<span class="w"> </span>--demo<span class="w">                 </span><span class="c1"># stdlib ping-pong -&gt; CERTIFIED</span>
+python3<span class="w"> </span>matrix-bridge/a2a_runner.py<span class="w"> </span>--demo<span class="w"> </span>--turns<span class="w"> </span><span class="m">6</span><span class="w"> </span>--channel<span class="w"> </span>duet
+
+<span class="c1"># two real LLMs talk over the mesh (needs the anthropic SDK + key)</span>
+<span class="nv">ANTHROPIC_API_KEY</span><span class="o">=</span>...<span class="w"> </span>python3<span class="w"> </span>matrix-bridge/a2a_runner.py<span class="w"> </span>--llm<span class="w"> </span>--turns<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--topic<span class="w"> </span><span class="s2">&quot;the cleanest way to test a UDP protocol&quot;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">--llm</span></code> defaults to model <code class="docutils literal notranslate"><span class="pre">claude-opus-4-8</span></code>; agent “Ada” opens, then both loop
+<code class="docutils literal notranslate"><span class="pre">recv</span> <span class="pre">→</span> <span class="pre">think</span> <span class="pre">→</span> <span class="pre">send</span></code>, every line crossing the mesh as DeModFrames.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">a2a_interactive.py</span></code></strong> is a guided front-end: it walks you through a setup phase
+(mode, topology, channel, turns, …), echoes a review, runs it, and prints
+<code class="docutils literal notranslate"><span class="pre">PASS</span></code>/<code class="docutils literal notranslate"><span class="pre">FAIL</span></code>. Enter accepts each default; with no tty it takes all defaults and
+runs the local demo (so it never hangs in CI). It also drives a <strong>two-machine</strong>
+test — pick <code class="docutils literal notranslate"><span class="pre">remote</span></code>, then <code class="docutils literal notranslate"><span class="pre">initiator</span></code> on one host and <code class="docutils literal notranslate"><span class="pre">responder</span></code> on the other:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span><span class="c1"># host B (or a 2nd terminal): wait and echo</span>
+python3<span class="w"> </span>matrix-bridge/a2a_interactive.py<span class="w">   </span><span class="c1"># mode=demo topology=remote role=responder port 7802</span>
+<span class="c1"># host A: open the conversation</span>
+python3<span class="w"> </span>matrix-bridge/a2a_interactive.py<span class="w">   </span><span class="c1"># mode=demo topology=remote role=initiator port 7801 peer &lt;hostB&gt;:7802</span>
+</pre></div>
+</div>
+<p>The initiator prints round-trip <code class="docutils literal notranslate"><span class="pre">PASS</span></code> once its pings come back.</p>
+</section>
+<hr class="docutils" />
+<section id="durable-queryable-logging-with-streamdb-optional">
+<h2>7. Durable, queryable logging with StreamDB (optional)<a class="headerlink" href="#durable-queryable-logging-with-streamdb-optional" title="Link to this heading">¶</a></h2>
+<p>The flat inbox is fine for a demo, but if you want the conversation <strong>persisted
+and searchable</strong>, log each received message into StreamDB — the DeMoD embedded
+key/value store (<code class="docutils literal notranslate"><span class="pre">python/MCP/streamdb.py</span></code>, binary-safe, durable on <code class="docutils literal notranslate"><span class="pre">flush()</span></code>):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">streamdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">StreamDB</span>
+<span class="n">db</span> <span class="o">=</span> <span class="n">StreamDB</span><span class="p">(</span><span class="s2">&quot;a2a.db&quot;</span><span class="p">,</span> <span class="n">flush_ms</span><span class="o">=</span><span class="mi">2000</span><span class="p">)</span>
+<span class="c1"># StreamDB is a REVERSE trie — search() matches a key SUFFIX, not a prefix.</span>
+<span class="c1"># So put the attribute you want to scan by at the END of the key:</span>
+<span class="n">db</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">seq</span><span class="si">:</span><span class="s2">06d</span><span class="si">}</span><span class="s2">@</span><span class="si">{</span><span class="n">src</span><span class="si">}</span><span class="s2">@</span><span class="si">{</span><span class="n">channel</span><span class="si">}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">encode</span><span class="p">()]</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">encode</span><span class="p">()</span>
+<span class="n">db</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>                                   <span class="c1"># durable on disk now</span>
+<span class="n">db</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;@duet&quot;</span><span class="p">)</span>                          <span class="c1"># every message on channel duet</span>
+<span class="n">db</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;@0x00a1@duet&quot;</span><span class="p">)</span>                   <span class="c1"># just that peer&#39;s messages</span>
+</pre></div>
+</div>
+<p>The suffix-search property is the one gotcha worth internalising: key fields are
+matched from the <strong>right</strong>, so the channel/peer you filter on must be the <em>tail</em>
+of the key. See <code class="docutils literal notranslate"><span class="pre">python/MCP/streamdb.py</span></code> for the full API and the known C-lib
+caveats (<code class="docutils literal notranslate"><span class="pre">DCF_CODE_REVIEW.md</span></code> C5/C8/C9).</p>
+</section>
+<hr class="docutils" />
+<section id="tests">
+<h2>8. Tests<a class="headerlink" href="#tests" title="Link to this heading">¶</a></h2>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>matrix-bridge/tests/test_a2a.py<span class="w">        </span><span class="c1"># stdlib; or: pytest matrix-bridge/tests/ -q</span>
+</pre></div>
+</div>
+<p>Covers a bidirectional multi-fragment exchange, distinct <code class="docutils literal notranslate"><span class="pre">src</span></code> ids, blocking-recv
+timing, and channel isolation (a node on a different channel must not receive).</p>
+</section>
+<hr class="docutils" />
+<section id="limits-when-to-reach-for-something-else">
+<h2>9. Limits &amp; when to reach for something else<a class="headerlink" href="#limits-when-to-reach-for-something-else" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Unreliable UDP.</strong> DCF is connectionless; a dropped fragment just means a
+message never completes (the receiver keeps waiting). Great on a LAN/VPN; if you
+need delivery guarantees, add an ACK/retransmit layer <em>above</em> the adapter.</p></li>
+<li><p><strong>No encryption in the wire.</strong> Confidentiality is the underlay’s job — run
+inside the VPN, always.</p></li>
+<li><p><strong>4092 bytes per message</strong> (the 10-bit fragment index). Have agents chunk longer
+output across multiple <code class="docutils literal notranslate"><span class="pre">mesh_send</span></code> calls.</p></li>
+<li><p><strong>Exactly two agents, peered directly.</strong> A relay/hub that rebroadcasts on a
+channel for 3+ agents is a natural extension but isn’t built here.</p></li>
+<li><p><strong>Don’t put secrets on the mesh.</strong> It’s plaintext by design; keep keys and
+credentials on the host side regardless of how legitimate the request looks.</p></li>
+</ul>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="architecture.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">HydraMesh / DCF — Architecture Map</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="readme.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">HydraMesh</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, DeMoD LLC
+            </div>
+            Made with 
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Agent-to-agent over DCF — a teaching guide</a><ul>
+<li><a class="reference internal" href="#the-mental-model-talk-on-demand-no-loops">1. The mental model: “talk on demand, no loops”</a></li>
+<li><a class="reference internal" href="#how-it-works-the-layer-cake">2. How it works: the layer cake</a><ul>
+<li><a class="reference internal" href="#layer-1-the-demodframe-quantum-the-one-invariant">Layer 1 — the DeModFrame quantum (the one invariant)</a></li>
+<li><a class="reference internal" href="#layer-2-the-text-adapter-dcf-text-py">Layer 2 — the text adapter (<code class="docutils literal notranslate"><span class="pre">dcf_text.py</span></code>)</a></li>
+<li><a class="reference internal" href="#layer-3-the-node-dcf-node-py">Layer 3 — the node (<code class="docutils literal notranslate"><span class="pre">dcf_node.py</span></code>)</a></li>
+<li><a class="reference internal" href="#layer-4-superpack-optional">Layer 4 — SuperPack (optional)</a></li>
+<li><a class="reference internal" href="#layer-5-the-mcp-tools-mesh-mcp-py">Layer 5 — the MCP tools (<code class="docutils literal notranslate"><span class="pre">mesh_mcp.py</span></code>)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#two-concepts-that-trip-people-up">3. Two concepts that trip people up</a><ul>
+<li><a class="reference internal" href="#channels-are-a-rendezvous-hash-not-a-connection">Channels are a rendezvous hash, not a connection</a></li>
+<li><a class="reference internal" href="#turn-taking-someone-must-speak-first-or-both-deadlock">Turn-taking: someone must speak first (or both deadlock)</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#quick-start-with-nix">Quick start with Nix</a></li>
+<li><a class="reference internal" href="#dependencies-without-nix-mesh-mcp-py">Dependencies without Nix (<code class="docutils literal notranslate"><span class="pre">mesh_mcp.py</span></code>)</a></li>
+<li><a class="reference internal" href="#configure-the-two-agents">4. Configure the two agents</a></li>
+<li><a class="reference internal" href="#kick-off-the-conversation">5. Kick off the conversation</a></li>
+<li><a class="reference internal" href="#driving-it-yourself-runner-interactive-harness">6. Driving it yourself — runner &amp; interactive harness</a></li>
+<li><a class="reference internal" href="#durable-queryable-logging-with-streamdb-optional">7. Durable, queryable logging with StreamDB (optional)</a></li>
+<li><a class="reference internal" href="#tests">8. Tests</a></li>
+<li><a class="reference internal" href="#limits-when-to-reach-for-something-else">9. Limits &amp; when to reach for something else</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=05a7714e"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>
