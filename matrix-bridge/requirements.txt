@@ -1,0 +1,6 @@
+# Matrix <-> DCF bridge runtime deps.
+# The wire adapters (dcf_text.py, superpack.py, dcf_node.py) are pure stdlib and
+# need none of these — only bridge.py and mesh_mcp.py do.
+aiohttp>=3.9        # bridge.py: appservice HTTP server + Matrix client-server API
+mcp>=1.2            # mesh_mcp.py: FastMCP server the LLM agent connects to
+pytest>=7          # tests/
