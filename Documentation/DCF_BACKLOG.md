@@ -11,18 +11,8 @@ references live in [`DCF_CODE_REVIEW.md`](DCF_CODE_REVIEW.md).
   buffer; large frames are silently cut. Needs a length-prefixed or MTU-sized buffer.
 - **C SDK — connection-pool race.** Health/eviction interaction has a window flagged in the
   review; audit under TSan and tighten the locking.
-- **Lisp SDK — HIGH fixes still living only in `lisp/hydramesh-hotfix.lisp`** (the criticals
-  C7–C9 are folded into source; these are not yet):
-  - **F2** RTT pong restamping — a pong stamped the responder's clock, so cross-process RTT was
-    garbage. Pong must echo the ping's timestamp.
-  - **F3** `stop-udp-endpoint` shutdown-hang — it joined a receiver parked in `socket-receive`
-    *before* closing the socket. Close first.
-  - **F5** `load-config` used `GETF` on the alist `cl-json` returns, so every config key was
-    silently ignored and defaults always used.
-  - **F6** `save-state`/`restore-state` peer-persistence shape.
-  - **F7** `dcf-db-insert` input hardening (string | octet-vector | JSON-encoded).
-  - **F9** `dcf-benchmark` `0`-is-truthy RTT guard.
-  Until folded, load `hydramesh-hotfix.lisp` after the SDK to pick these up.
+- **Lisp SDK — HIGH fixes F2 / F3 / F5 / F6 / F7 / F9: DONE.** Folded from the hotfix into
+  `lisp/src/hydramesh.lisp` (v0.3.x); `hydramesh-hotfix.lisp` is now a thin compatibility shim.
 
 ## MEDIUM (portability)
 

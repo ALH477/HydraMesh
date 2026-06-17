@@ -595,22 +595,25 @@
                (setf (gethash seq (udp-endpoint-ack-received endpoint)) t)
                (remhash seq (udp-endpoint-reliable-packets endpoint)))))
           (#.+msg-type-ping+
-           (send-udp-pong endpoint (proto-message-sequence msg) 
-                         remote-host remote-port))
+           (send-udp-pong endpoint
+                          (proto-message-sequence msg)
+                          (proto-message-timestamp msg)   ; F2: echo sender's ts
+                          remote-host remote-port))
           (#.+msg-type-pong+
            (let* ((now (get-internal-real-time))
-                  (sent-time (proto-message-timestamp msg))
+                  (sent-time (proto-message-timestamp msg))  ; our own clock, echoed
                   (rtt (/ (- now sent-time) internal-time-units-per-second 0.001)))
-             (update-rtt-stats (udp-endpoint-stats endpoint) rtt)))
+             (when (plusp rtt)
+               (update-rtt-stats (udp-endpoint-stats endpoint) rtt))))
           (#.+msg-type-reliable+
            (send-ack endpoint (proto-message-sequence msg) remote-host remote-port)
            (when (udp-endpoint-receive-callback endpoint)
-             (funcall (udp-endpoint-receive-callback endpoint) 
-                     msg remote-host remote-port)))
+             (funcall (udp-endpoint-receive-callback endpoint)
+                      msg remote-host remote-port)))
           (otherwise
            (when (udp-endpoint-receive-callback endpoint)
-             (funcall (udp-endpoint-receive-callback endpoint) 
-                     msg remote-host remote-port)))))
+             (funcall (udp-endpoint-receive-callback endpoint)
+                      msg remote-host remote-port)))))
     (error (e)
       (log:warn *dcf-logger* "Error handling UDP message: ~A" e))))
 
@@ -637,11 +640,11 @@
     (write-u32 seq payload 0)
     (send-udp-raw endpoint (serialize-proto-message msg) remote-host remote-port)))
 
-(defun send-udp-pong (endpoint seq remote-host remote-port)
+(defun send-udp-pong (endpoint seq echo-ts remote-host remote-port)
   (let ((msg (make-proto-message
               :type +msg-type-pong+
               :sequence seq
-              :timestamp (get-internal-real-time)
+              :timestamp echo-ts          ; F2: echo the ping's ts, do not restamp
               :payload #())))
     (send-udp-raw endpoint (serialize-proto-message msg) remote-host remote-port)))
 
@@ -713,10 +716,13 @@
                        (udp-endpoint-reliable-packets endpoint))))))
        :name "udp-reliable"))))
 (defun stop-udp-endpoint (endpoint)
+  ;; F3: close the socket FIRST — socket-receive blocks with no timeout, so
+  ;; closing is what unblocks the receiver; joining before closing hangs.
   (setf (udp-endpoint-running endpoint) nil)
+  (ignore-errors (usocket:socket-close (udp-endpoint-socket endpoint)))
   (when (udp-endpoint-thread endpoint)
-    (bt:join-thread (udp-endpoint-thread endpoint)))
-  (usocket:socket-close (udp-endpoint-socket endpoint)))
+    (ignore-errors (bt:join-thread (udp-endpoint-thread endpoint))))
+  t)
 
 ;; dcf-node structure (updated)
 (defstruct (dcf-node (:conc-name dcf-node-))
@@ -785,31 +791,41 @@
     (flexi-streams:octets-to-string octets :external-format :utf-8)))
 
 ;; StreamDB Operations (updated bindings)
+;; F7: accept string | octet vector | any Lisp object (JSON-encoded). The old code
+;; AREF'd whatever it was given, so a list (e.g. peers) crashed.
 (defun dcf-db-insert (node path data &key (schema nil))
   (unless (dcf-node-streamdb node)
     (return-from dcf-db-insert nil))
-  (when schema
-    (validate-streamdb-data (cl-json:encode-json-to-string data) schema))
-  (multiple-value-bind (key-ptr key-len) (string-to-byte-array path)
-    (unwind-protect
-        (let* ((value-octets (if (stringp data)
-                                (flexi-streams:string-to-octets data :external-format :utf-8)
-                                data))
-               (value-len (length value-octets))
-               (value-ptr (cffi:foreign-alloc :uint8 :count value-len)))
-          (unwind-protect
-              (progn
-                (loop for i from 0 below value-len
-                      do (setf (cffi:mem-aref value-ptr :uint8 i) (aref value-octets i)))
-                (let ((result (streamdb_insert (dcf-node-streamdb node)
-                                              key-ptr key-len value-ptr value-len)))
-                  (if (= result +success+)
-                      (progn
-                        (lru-put node path data)
-                        t)
-                      (map-streamdb-error result))))
-            (cffi:foreign-free value-ptr)))
-      (cffi:foreign-free key-ptr))))
+  (let* ((value-octets
+           (cond ((stringp data)
+                  (flexi-streams:string-to-octets data :external-format :utf-8))
+                 ((and (vectorp data) (every (lambda (x) (typep x '(unsigned-byte 8))) data))
+                  (coerce data '(vector (unsigned-byte 8))))
+                 (t
+                  (flexi-streams:string-to-octets
+                   (cl-json:encode-json-to-string data) :external-format :utf-8))))
+         (cache-form (if (stringp data)
+                         data
+                         (handler-case
+                             (flexi-streams:octets-to-string value-octets :external-format :utf-8)
+                           (error () data)))))
+    (when (and schema (stringp cache-form))
+      (validate-streamdb-data cache-form schema))
+    (multiple-value-bind (key-ptr key-len) (string-to-byte-array path)
+      (unwind-protect
+          (let* ((value-len (length value-octets))
+                 (value-ptr (cffi:foreign-alloc :uint8 :count value-len)))
+            (unwind-protect
+                (progn
+                  (loop for i from 0 below value-len
+                        do (setf (cffi:mem-aref value-ptr :uint8 i) (aref value-octets i)))
+                  (let ((result (streamdb_insert (dcf-node-streamdb node)
+                                                 key-ptr key-len value-ptr value-len)))
+                    (if (= result +success+)
+                        (progn (lru-put node path cache-form) t)
+                        (map-streamdb-error result))))
+              (cffi:foreign-free value-ptr)))
+        (cffi:foreign-free key-ptr)))))
 
 (defun dcf-db-query (node path &key (schema nil))
   (unless (dcf-node-streamdb node)
@@ -894,19 +910,26 @@
   '(:object (:required "peers")
     :properties (("peers" :array))))
 
-(defun jref (alist key &optional default)
-  "Tolerant alist accessor for cl-json output. cl-json:decode-json returns
-alists, not plists, so getf never matches. This walks the alist."
-  (let ((entry (assoc key alist :test #'equal)))
-    (if entry (cdr entry) default)))
+;; F5: cl-json:decode-json returns an ALIST with mangled keyword keys; matching
+;; must be case- and punctuation-insensitive, or every key lookup misses.
+(defun jkey-norm (s)
+  (remove-if-not #'alphanumericp (string-upcase (string s))))
 
+(defun jref (alist key &optional default)
+  "Tolerant alist accessor for cl-json output. KEY is a keyword or string;
+matching is case- and punctuation-insensitive (immune to cl-json key mangling)."
+  (let ((hit (assoc key alist
+                    :test (lambda (want have)
+                            (string= (jkey-norm want) (jkey-norm have))))))
+    (if hit (cdr hit) default)))
+
+;; F5: well-formedness check that replaces the cl-json-schema dependency.
 (defun validate-streamdb-data (data schema)
-  "Manual validation replacing cl-json-schema (not in Quicklisp)."
   (declare (ignore schema))
-  (let ((decoded (handler-case (cl-json:decode-json-from-string data)
-                   (error () (signal-dcf-error :schema-validation "Invalid JSON")))))
-    (unless (assoc "peers" decoded :test #'equal)
-      (signal-dcf-error :schema-validation "Missing required key: peers"))))
+  (handler-case (progn (cl-json:decode-json-from-string data) t)
+    (error (e)
+      (signal-dcf-error :schema-validation
+                        (format nil "Stored value is not well-formed JSON: ~A" e)))))
 
 ;; Gaming API
 (defun dcf-send-position (player-id x y z)
@@ -1035,16 +1058,25 @@ alists, not plists, so getf never matches. This walks the alist."
           (when (and (dcf-node-streamdb node)
                      (not (cffi:null-pointer-p (dcf-node-streamdb node))))
             (streamdb_free (dcf-node-streamdb node)))))))
+;; F6: peers are persisted as the JSON object {"peers":[...]} and restored
+;; symmetrically; first boot (no key yet) is not an error.
 (defun restore-state (node)
   (when (dcf-node-streamdb node)
-    (let ((peers-data (dcf-db-query node "/state/peers" :schema *streamdb-state-schema*)))
-      (when peers-data
-        (setf (dcf-node-peers node) (cl-json:decode-json-from-string peers-data))))))
+    (handler-case
+        (let ((peers-json (dcf-db-query node "/state/peers")))
+          (when (stringp peers-json)
+            (setf (dcf-node-peers node)
+                  (jref (cl-json:decode-json-from-string peers-json) :peers '()))))
+      (dcf-error (e)
+        (unless (eq (dcf-error-code e) :not-found)
+          (log:warn *dcf-logger* "restore-state: ~A" e))))))
 
 (defun save-state (node)
   (when (dcf-node-streamdb node)
-    (dcf-db-insert node "/state/peers" (dcf-node-peers node) :schema *streamdb-state-schema*)
-    (dcf-db-flush node)))
+    (let ((json (cl-json:encode-json-to-string
+                 (list (cons :peers (or (dcf-node-peers node) '()))))))
+      (dcf-db-insert node "/state/peers" json)
+      (dcf-db-flush node))))
 
 (defun handle-game-message (node msg remote-host remote-port)
   (case (proto-message-type msg)
@@ -1135,23 +1167,24 @@ alists, not plists, so getf never matches. This walks the alist."
     (unless peer-info
       (signal-dcf-error :peer-not-found (format nil "Peer ~A not found" peer-id)))
     (dotimes (i count)
-      (let* ((start (get-internal-real-time))
-             (msg (make-proto-message
-                   :type +msg-type-ping+
-                   :sequence (next-sequence)
-                   :timestamp start
-                   :payload #())))
+      (let ((msg (make-proto-message
+                  :type +msg-type-ping+
+                  :sequence (next-sequence)
+                  :timestamp (get-internal-real-time)
+                  :payload #())))
         (send-udp-message (dcf-node-udp-endpoint *node*) msg
-                         (car peer-info) (cdr peer-info) :reliable nil)
+                          (car peer-info) (cdr peer-info) :reliable nil)
         (sleep 0.01))
       (let ((stats (udp-endpoint-stats (dcf-node-udp-endpoint *node*))))
-        (when (network-stats-last-rtt stats)
+        ;; F9: 0 is truthy in CL, so the old `when last-rtt` pushed zeros before any
+        ;; pong arrived and min-rtt was always 0. Only record strictly positive RTTs.
+        (when (plusp (network-stats-last-rtt stats))
           (push (network-stats-last-rtt stats) rtts))))
     (let ((avg (if rtts (/ (reduce #'+ rtts) (length rtts)) 0))
           (min-rtt (if rtts (reduce #'min rtts) 0))
           (max-rtt (if rtts (reduce #'max rtts) 0)))
-      `(:peer ,peer-id :count ,count :avg-rtt ,avg 
-        :min-rtt ,min-rtt :max-rtt ,max-rtt))))
+      `(:peer ,peer-id :count ,count :avg-rtt ,avg
+        :min-rtt ,min-rtt :max-rtt ,max-rtt :samples ,(length rtts)))))
 
 ;; Transactions
 (defun dcf-begin-transaction (tx-id)

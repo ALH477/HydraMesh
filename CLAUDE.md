@@ -37,7 +37,7 @@ Reference codecs (must stay byte-identical):
 | Python | `python/MCP/wirelab_core.py` | `encode`/`decode`/`crc16_ccitt`/`syndrome` |
 | Lua | `GUI/wirelab.lua` | `encode`/`decode`/`crc16` (self-certs on load) |
 | Haskell | `haskell/src/DCF/Transport/FrameSpec.hs` | `encodeFrame`/`decodeFrame` |
-| Lisp | `lisp/src/hydramesh.lisp` (+ `lisp/hydramesh-hotfix.lisp`) | `encode-dcf-frame` |
+| Lisp | `lisp/src/hydramesh.lisp`, `lisp/src/wire.lisp` | `encode-dcf-frame` |
 
 ### Certification is the contract
 
@@ -161,12 +161,13 @@ cd C_SDK && make            # minimal/embedded (no CMake)
 | `python/` | `pip install -r python/requirements.txt` | `pytest python/tests/` |
 | `python/modem/` (FSK acoustic modem) | — | `python3 main.py --help` (uses `faust_jit.py`) |
 | `go/` | `go build ./...` | `go test ./...` |
-| `lisp/` | load `lisp/src/hydramesh.lisp` then `lisp/hydramesh-hotfix.lisp` in SBCL | hotfix prints `:CERTIFIED` |
+| `lisp/` | load `lisp/src/hydramesh.lisp` in SBCL (self-certifies on load) | `sbcl --non-interactive --load lisp/src/wire.lisp` |
 | `Documentation/` (Sphinx) | `cd Documentation && pip install -r requirements.txt && make html` | — |
 
-Lisp: before loading, remove `:cl-json-schema` from the `ql:quickload` list and
-`defpackage` in `hydramesh.lisp` (not in Quicklisp). StreamDB (`lisp/streamdb/`,
-Rust via CFFI) is Lisp-SDK-only.
+Lisp: `hydramesh.lisp` self-certifies the wire codec on load — all fixes F1–F9 are
+folded into source (`hydramesh-hotfix.lisp` is now a thin shim), and `:cl-json-schema`
+(not in Quicklisp) is already gone. `lisp/src/wire.lisp` is the dependency-free codec
+the `certify-lisp` CI loads. StreamDB (`lisp/streamdb/`, Rust via CFFI) is Lisp-SDK-only.
 
 ## Nix / Docker
 

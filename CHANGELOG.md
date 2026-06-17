@@ -7,6 +7,16 @@ reserved for when the full advertised language set is green in CI.
 
 ## [Unreleased]
 
+### Fixed
+- Folded the remaining Lisp **HIGH-severity** fixes from `hydramesh-hotfix.lisp` into
+  `lisp/src/hydramesh.lisp`: **F2** RTT pong now echoes the ping timestamp (cross-process RTT was
+  garbage), **F3** `stop-udp-endpoint` closes the socket before joining the receiver (no shutdown
+  hang), **F5** `jref` matches cl-json's mangled keys case/punctuation-insensitively, **F6**
+  `save-state`/`restore-state` persist peers as `{"peers":[...]}`, **F7** `dcf-db-insert` accepts
+  string | octet-vector | any object (no more `aref` on a list), **F9** `dcf-benchmark` records
+  only strictly-positive RTT samples. `hydramesh-hotfix.lisp` is now a thin compatibility shim —
+  every fix lives in source, which self-certifies on load.
+
 ## [0.3.0] - 2026-06-17
 
 First tagged release — the repository legitimacy program. Every advertised language now has a
