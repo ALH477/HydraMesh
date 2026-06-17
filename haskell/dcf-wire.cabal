@@ -1,0 +1,32 @@
+cabal-version:      2.4
+name:               dcf-wire
+version:            0.3.0
+synopsis:           DeMoD DCF 17-byte DeModFrame wire codec (Haskell reference binding)
+description:        Pure-Haskell implementation of the DCF "wire quantum" (the 17-byte
+                    DeModFrame v1), certified byte-for-byte against the cross-language
+                    golden vectors in Documentation/golden_vectors.json.
+license:            LGPL-3.0-only
+author:             DeMoD LLC
+maintainer:         alh477@demod.ltd
+build-type:         Simple
+
+library
+    exposed-modules:  DCF.Transport.FrameSpec
+    hs-source-dirs:   src
+    build-depends:    base >=4.11 && <5
+    default-language: Haskell2010
+    ghc-options:      -Wall
+
+test-suite certify
+    type:             exitcode-stdio-1.0
+    main-is:          Certify.hs
+    hs-source-dirs:   test
+    build-depends:    base
+                    , dcf-wire
+                    , aeson      >=2.0
+                    , bytestring
+                    , text
+                    , scientific
+                    , directory
+    default-language: Haskell2010
+    ghc-options:      -Wall

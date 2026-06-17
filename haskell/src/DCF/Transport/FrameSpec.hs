@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: LGPL-3.0-only
 {-|
 Module      : DCF.Transport.FrameSpec
 Description : DeMoD 17-byte transport frame codec — Haskell reference implementation
@@ -48,7 +49,8 @@ module DCF.Transport.FrameSpec
   , exampleFrameBytes
   ) where
 
-import Data.Bits (shiftL, shiftR, (.|.), (.&.))
+import Prelude hiding (seq)
+import Data.Bits (Bits, shiftL, shiftR, (.|.), (.&.), xor)
 import Data.Word (Word8, Word16, Word32)
 
 -- ── Constants ──────────────────────────────────────────────────────────────
@@ -143,7 +145,7 @@ encodeFrame f = take frameSize $ buf ++ [hi crc, lo crc]
     (a, b, c, d) = payload f
     crc = crc16ccitt (take crcCover buf)
 
-hi, lo :: (Bits a, Bits b, Num b) => a -> b
+hi, lo :: (Integral a, Bits a, Num b) => a -> b
 hi w = fromIntegral (w `shiftR` 8)
 lo w = fromIntegral (w .&. 0xFF)
 
