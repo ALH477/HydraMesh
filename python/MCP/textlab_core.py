@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-only
 """DCF TextLab core — reference for the DCF-Text L2 framing (the certified layer).
 
 DCF-Text is an *adapter* over the 17-byte DeModFrame wire quantum, exactly like

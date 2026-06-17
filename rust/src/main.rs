@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 //! DCF Rust Server - HydraMesh Compatible
 //! 
 //! This is the main entry point for the DCF Rust server, providing:

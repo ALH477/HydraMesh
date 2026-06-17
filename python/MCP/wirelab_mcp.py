@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: LGPL-3.0-only
 """DCF WireLab — MCP server for the DeMoD 17-byte wire quantum.
 
 Run as MCP (stdio):     python3 wirelab_mcp.py

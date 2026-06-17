@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 /**
  * @file dcf_client.h
  * @brief DCF Client API - Main Entry Point

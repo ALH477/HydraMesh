@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 // c_sdk/plugins/dcf_udp_transport.c
 //
 // Optimized UDP transport plugin for DCF.

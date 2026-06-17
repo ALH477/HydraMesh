@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-only
 """DCF WireLab core — reference codec for the 17-byte DeModFrame (wire quantum).
 Layout (big-endian):
   [0]    sync = 0xD3

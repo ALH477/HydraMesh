@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 //! jam_loopback — a headless 2-peer collaborative-audio jam over the DCF wire.
 //!
 //! Node A captures audio (here, a deterministic tone), runs it through the selected

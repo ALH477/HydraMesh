@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 /**
  * @file dcf_platform.c
  * @brief Platform Abstraction Layer Implementation

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 /**
  * @file dcf_config.h
  * @brief Thread-Safe Configuration System with Validation

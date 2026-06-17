@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 use dcf_rust_sdk::{Position, ProtoMessage, msg_type};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};

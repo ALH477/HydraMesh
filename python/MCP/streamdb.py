@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-only
 """Python bindings for StreamDB — the DeMoD embedded reverse-trie key/value store.
 
 Thin ctypes wrapper over the C edition (``lisp/streamdb/streamdb.c``): an

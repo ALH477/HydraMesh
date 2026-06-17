@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 //! DCF Rust SDK - HydraMesh Compatible
 //! Version 2.2.1 | Production Grade with Enhanced Shim Visibility
 //! 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 //! DCF-Audio: collaborative audio over the DeModFrame wire.
 //!
 //! Audio is an *adapter* over the 17-byte DeModFrame quantum (`frame.rs`), not a new

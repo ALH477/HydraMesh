@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 /*
  * transport/demod_text.h — DCF-Text: chat / agent-to-agent text transport over DeModFrame
  * DeMoD LLC | LGPL-3.0

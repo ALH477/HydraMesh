@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 // dcf/rust/src/frame.rs — DeMoD 17-byte transport frame codec
 // DeMoD LLC | GPL-3.0
 //

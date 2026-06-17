@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 /*
  * transport/dcf_frame.h — DeMoD 17-byte transport frame codec
  * DeMoD LLC | GPL-3.0

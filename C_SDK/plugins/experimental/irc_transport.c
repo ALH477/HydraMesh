@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 // c_sdk/plugins/irc_transport.c
 // IRC Transport Plugin for DCF C SDK
 // This plugin implements IRC as a custom transport. It connects to an IRC server specified by host:port,

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 /**
  * @file dcf_redundancy.h
  * @brief Redundancy and Health Monitoring for DCF

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 /**
  * @file dcf_networking.h
  * @brief DCF Networking - Thread-safe network communication layer

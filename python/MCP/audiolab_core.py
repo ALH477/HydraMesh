@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-only
 """DCF AudioLab core — reference for the DCF-Audio L2 framing (the certified layer).
 
 Audio is an *adapter* over the 17-byte DeModFrame wire quantum: a 20 ms codec block

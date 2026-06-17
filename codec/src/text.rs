@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 //! DCF-Text: chat / agent-to-agent text transport over the DeModFrame wire.
 //!
 //! Text traffic is an *adapter* over the 17-byte DeModFrame quantum (`frame.rs`), not a

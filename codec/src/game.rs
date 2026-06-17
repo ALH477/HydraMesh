@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 //! DCF-Game: low-latency multiplayer state/event transport over the DeModFrame wire.
 //!
 //! Game traffic is an *adapter* over the 17-byte DeModFrame quantum (`frame.rs`), not a

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 /**
  * @file dcf_error.h
  * @brief Production Error Handling and Logging Infrastructure

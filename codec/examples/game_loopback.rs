@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 //! game_loopback — a headless 2-peer multiplayer demo over the DCF wire.
 //!
 //! Node A drives a player along a deterministic circular path. Each tick it sends an

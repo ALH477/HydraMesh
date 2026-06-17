@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 /*
  * transport/demod_audio.h — DCF-Audio: collaborative audio over the DeModFrame wire
  * DeMoD LLC | LGPL-3.0

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 /*
  * transport/demod_game.h — DCF-Game: low-latency multiplayer transport over DeModFrame
  * DeMoD LLC | LGPL-3.0

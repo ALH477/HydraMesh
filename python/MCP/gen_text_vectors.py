@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-only
 """Executable laws + golden-vector generator for the DCF-Text L2 framing.
 
 Mirrors gen_game_vectors.py: it first asserts the framing/reassembly laws hold, then

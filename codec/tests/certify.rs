@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 use dcf_wire_codec::{
     crc16_ccitt, Frame, FrameError, FrameType,
     BROADCAST, FRAME_SIZE,

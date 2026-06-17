@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-only
 """Executable laws + golden-vector generator for the DCF-Audio L2 framing.
 
 Mirrors verify_laws.py: it first asserts the framing/codec laws hold, then emits the

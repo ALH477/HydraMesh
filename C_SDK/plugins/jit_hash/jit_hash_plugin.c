@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 #include <dcf_sdk/dcf_plugin_manager.h>
 #include <dcf_sdk/dcf_jit_hash.h>
 #include <pthread.h>

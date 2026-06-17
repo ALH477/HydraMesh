@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 #ifndef DCF_PLUGIN_MANAGER_H
 #define DCF_PLUGIN_MANAGER_H
 #include "dcf_config.h"

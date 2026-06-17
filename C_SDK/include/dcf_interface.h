@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 #ifndef DCF_INTERFACE_H
 #define DCF_INTERFACE_H
 #include "dcf_types.h"   /* canonical DCFCmd (DCF_CMD_UNKNOWN=0 ...) lives here */

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 //! Rust certification for the DCF-Audio L2 framing — diffs the Rust implementation
 //! against the cross-language golden vectors (Documentation/audio_vectors.json and
 //! pm_param_vectors.json). Passing this == byte-agreement with the C and Python refs.

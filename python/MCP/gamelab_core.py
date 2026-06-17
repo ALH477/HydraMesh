@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-only
 """DCF GameLab core — reference for the DCF-Game L2 framing (the certified layer).
 
 DCF-Game is an *adapter* over the 17-byte DeModFrame wire quantum, exactly like

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: LGPL-3.0-only
 """Standalone SDK certification harness for the DeMoD 17-byte wire quantum.
 
 Usage:

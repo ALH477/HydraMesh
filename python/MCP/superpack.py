@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-only
 """DCF SuperPack — a 32-byte container that losslessly carries TWO 17-byte
 DeModFrame quanta (reference codec).
 

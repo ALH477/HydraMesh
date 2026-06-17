@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 /**
  * @file dcf_ringbuf.h
  * @brief Lock-free Ring Buffer for High-Performance Message Queuing

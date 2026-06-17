@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 /**
  * @file dcf_connpool.c
  * @brief Connection Pool with Circuit Breaker Implementation

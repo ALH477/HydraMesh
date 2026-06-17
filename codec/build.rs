@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 // Build script for the DCF wire/audio codec.
 //
 // With the `pm` feature, compile the committed Faust→C phase-mod synthesis

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 /**
  * @file dcf_serialization.h
  * @brief DCF Serialization - Message serialization and deserialization

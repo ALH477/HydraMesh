@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LGPL-3.0-only
 """Executable laws for the wire quantum. Exit 0 iff every law holds."""
 import json, os, random, sys
 from wirelab_core import crc16_ccitt, encode, decode, syndrome, FRAME_LEN
