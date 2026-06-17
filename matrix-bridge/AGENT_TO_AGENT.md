@@ -355,6 +355,41 @@ caveats (`DCF_CODE_REVIEW.md` C5/C8/C9).
 
 ---
 
+## Mesh visualizer — a live GUI of the agents
+
+`matrix-bridge/mesh_viz.py` is a standalone host that **shows the agents on the
+mesh in real time**: a web dashboard with a force-directed graph of every node, the
+channels in play, animated pulses on each message, and a live traffic feed. Pure
+stdlib — no install, no GUI toolkit.
+
+```sh
+python3 matrix-bridge/mesh_viz.py                 # hub on udp/7800, dashboard on :8088
+nix run github:ALH477/HydraMesh#mesh-viz          # same, via Nix
+nix run github:ALH477/HydraMesh#mesh-viz -- --mode monitor --port 7802 --http 8088
+```
+
+Open **http://127.0.0.1:8088/**. Every frame is decoded with the certified codec
+(`wirelab_core.decode`) and reassembled with `dcf_text`, so the picture is exactly
+what's on the wire.
+
+**Two roles** (`--mode`):
+
+- **`hub`** (default) — agents point `DCF_PEERS` at the host (`…:7800`); it **relays**
+  each datagram to the other peers it has learned *and* visualizes. This gives full
+  visibility and turns two-agent direct peering into an **N-agent hub** (3+ agents on
+  one channel). Example: run the hub, then start agents with `DCF_PEERS=127.0.0.1:7800`.
+- **`monitor`** — observe-only, no relay. Add the host as an extra peer (or tap its
+  port) so it receives copies; it never forwards.
+
+Useful flags: `--names 0x00a1=Hermes,0x00b2=HydraMesh` (label nodes; defaults to the
+agreed registry), `--channels duet,agent` (map `crc16` channel ids back to names),
+`--peers host:port,…` (hub: seed relay targets), `--http`/`--port`/`--bind`.
+
+Endpoints (for embedding or a native client): `GET /` (the page), `GET /state`
+(JSON snapshot), `GET /events` (SSE live stream of `node`/`frame`/`message` events).
+A desktop GUI can consume `/state` + `/events` instead of re-implementing the mesh
+listener.
+
 ## 8. Tests
 
 ```sh

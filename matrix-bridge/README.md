@@ -29,7 +29,9 @@ The wire quantum is the entire contract between the chat world and the agent.
 > other** over DeModFrame (no Matrix, no human) — point two instances at each
 > other on a shared channel. See [`AGENT_TO_AGENT.md`](AGENT_TO_AGENT.md)
 > (`a2a.mcp.example.json` for config, `a2a_runner.py` for a hands-off demo, or
-> `a2a_interactive.py` for a guided setup-and-run test).
+> `a2a_interactive.py` for a guided setup-and-run test). To *see* the mesh live,
+> run `mesh_viz.py` (or `nix run …#mesh-viz`) — a web dashboard of the agents,
+> channels, and message flow.
 
 ## What's in here
 

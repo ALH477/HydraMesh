@@ -143,6 +143,7 @@
         #   nix run github:ALH477/HydraMesh#a2a        guided setup + run
         #   nix run github:ALH477/HydraMesh#a2a-demo   stdlib loopback smoke test
         #   nix run github:ALH477/HydraMesh#mesh-agent the DeModFrame MCP endpoint
+        #   nix run github:ALH477/HydraMesh#mesh-viz   live web dashboard of mesh agents
         apps =
           let
             # The matrix-bridge/*.py scripts self-locate their imports (they add
@@ -155,6 +156,7 @@
             };
             interactive = mkA2A "dcf-a2a" "a2a_interactive.py";
             demo = mkA2A "dcf-a2a-demo" "a2a_runner.py --demo";
+            viz = mkA2A "dcf-mesh-viz" "mesh_viz.py";   # stdlib web dashboard
             # mesh_mcp.py is the MCP server an agent connects to; it needs `mcp`.
             meshPython = pkgs.python3.withPackages (ps: [ ps.mcp ]);
             meshAgent = pkgs.writeShellApplication {
@@ -167,6 +169,7 @@
             a2a = mkApp interactive "dcf-a2a";
             a2a-demo = mkApp demo "dcf-a2a-demo";
             mesh-agent = mkApp meshAgent "dcf-mesh-agent";
+            mesh-viz = mkApp viz "dcf-mesh-viz";
             default = mkApp interactive "dcf-a2a";
           };
 
