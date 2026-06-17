@@ -265,6 +265,12 @@ Sanity check: `./.venv/bin/python matrix-bridge/a2a_runner.py --demo` should pri
 Copy the two blocks from [`a2a.mcp.example.json`](a2a.mcp.example.json) into each
 agent's MCP config (fix the `args`/`command` path). The pair:
 
+> **Other agents (OpenClaw, OpenCode, Goose, Cursor, Cline, Continue, …):** don't hand-edit —
+> run `python3 matrix-bridge/a2a.py config --agent <key>` (or `--pair`) to generate the right
+> block *and* its config-file path for your client. See
+> [`Documentation/AGENT_CLIENTS.md`](../Documentation/AGENT_CLIENTS.md) for the full per-agent
+> matrix, the OpenClaw skill, and the non-MCP `a2a send`/`a2a recv` CLI.
+
 | env | Agent A | Agent B | why |
 |-----|---------|---------|-----|
 | `DCF_AGENT_NAME` | `agent-a` | `agent-b` | label shown in `mesh_status` |

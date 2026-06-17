@@ -40,6 +40,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "python", "MCP"))
 from dcf_node import DcfTextNode
+import a2a_endpoint
 import superpack
 from wirelab_core import decode
 
@@ -155,8 +156,40 @@ def superpack_explain(frame_a_hex: str, frame_b_hex: str) -> dict:
     }
 
 
+def _run_remote(mode, host, port):
+    """Run the streamable-HTTP (default) or SSE transport for the shared mesh service.
+
+    Streamable HTTP is the supported remote path (clients reach it via `mcp-remote
+    http://host:port/mcp`).  Host is best-effort (FastMCP reads it from settings).  SSE
+    is *guarded* — if the pinned `mcp` lacks it we fail loudly instead of binding nothing
+    (see plan R-SSE: confirm SSE against your installed `mcp` version).
+    """
+    for attr, val in (("host", host), ("port", port)):
+        try:
+            setattr(mcp.settings, attr, val)
+        except Exception:
+            pass
+    if mode == "sse":
+        run = getattr(mcp, "run", None)
+        if run is not None:
+            try:
+                return run(transport="sse")
+            except TypeError:
+                pass
+        fn = getattr(mcp, "run_sse_async", None)
+        if fn is not None:
+            import anyio
+            return anyio.run(fn)
+        sys.exit("SSE transport not available in this `mcp` version; use `http` (streamable).")
+    return mcp.run_streamable_http(port=port)
+
+
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "http":
-        mcp.run_streamable_http(port=8765)
+    mode = a2a_endpoint.resolve_mode(sys.argv)
+    if mode in a2a_endpoint.HTTP_MODES:
+        # Port: positional `http PORT` / `--port N` / env DCF_MCP_HTTP_PORT / default 8765.
+        # Host: env DCF_MCP_HTTP_HOST / default 127.0.0.1 (VPN-only; never bind public).
+        _run_remote(mode, a2a_endpoint.resolve_http_host(os.environ),
+                    a2a_endpoint.resolve_http_port(sys.argv, os.environ))
     else:
         mcp.run_stdio()

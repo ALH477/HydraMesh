@@ -140,10 +140,14 @@
         };
 
         # Runnable entry points for the agent-to-agent mesh feature.
-        #   nix run github:ALH477/HydraMesh#a2a        guided setup + run
-        #   nix run github:ALH477/HydraMesh#a2a-demo   stdlib loopback smoke test
-        #   nix run github:ALH477/HydraMesh#mesh-agent the DeModFrame MCP endpoint
-        #   nix run github:ALH477/HydraMesh#mesh-viz   live web dashboard of mesh agents
+        #   nix run github:ALH477/HydraMesh#a2a         guided setup + run
+        #   nix run github:ALH477/HydraMesh#a2a-demo    stdlib loopback smoke test
+        #   nix run github:ALH477/HydraMesh#a2a-config  generate an MCP config for any agent client
+        #   nix run github:ALH477/HydraMesh#a2a-send    send a message onto the mesh (no MCP)
+        #   nix run github:ALH477/HydraMesh#a2a-recv    receive mesh text (no MCP)
+        #   nix run github:ALH477/HydraMesh#mesh-agent  the DeModFrame MCP endpoint (stdio)
+        #   nix run github:ALH477/HydraMesh#mesh-http   shared HTTP mesh service (mesh_mcp.py http)
+        #   nix run github:ALH477/HydraMesh#mesh-viz    live web dashboard of mesh agents
         apps =
           let
             # The matrix-bridge/*.py scripts self-locate their imports (they add
@@ -164,11 +168,25 @@
               runtimeInputs = [ meshPython ];
               text = ''exec ${meshPython}/bin/python ${self}/matrix-bridge/mesh_mcp.py "$@"'';
             };
+            # Multi-agent client integration: the a2a.py umbrella (config/send/recv are
+            # stdlib) and a shared HTTP mesh service (mesh_mcp.py http, needs `mcp`).
+            a2aConfig = mkA2A "dcf-a2a-config" "a2a.py config";
+            a2aSend = mkA2A "dcf-a2a-send" "a2a.py send";
+            a2aRecv = mkA2A "dcf-a2a-recv" "a2a.py recv";
+            meshHttp = pkgs.writeShellApplication {
+              name = "dcf-mesh-http";
+              runtimeInputs = [ meshPython ];
+              text = ''exec ${meshPython}/bin/python ${self}/matrix-bridge/mesh_mcp.py http "$@"'';
+            };
             mkApp = drv: bin: { type = "app"; program = "${drv}/bin/${bin}"; };
           in {
             a2a = mkApp interactive "dcf-a2a";
             a2a-demo = mkApp demo "dcf-a2a-demo";
+            a2a-config = mkApp a2aConfig "dcf-a2a-config";
+            a2a-send = mkApp a2aSend "dcf-a2a-send";
+            a2a-recv = mkApp a2aRecv "dcf-a2a-recv";
             mesh-agent = mkApp meshAgent "dcf-mesh-agent";
+            mesh-http = mkApp meshHttp "dcf-mesh-http";
             mesh-viz = mkApp viz "dcf-mesh-viz";
             default = mkApp interactive "dcf-a2a";
           };

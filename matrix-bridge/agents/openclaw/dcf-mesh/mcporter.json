@@ -1,0 +1,25 @@
+{
+  "_comment": [
+    "OpenClaw (MCPorter) registration for the DCF mesh agent skill. Merge the",
+    "'dcf-mesh' entry into ~/.openclaw/workspace/config/mcporter.json. Fix the args",
+    "path to where this repo lives, give a distinct DCF_AGENT_NODE_ID, point DCF_PEERS",
+    "at your partner agent's host:port, and share DCF_CHANNEL. This is the exact shape",
+    "`python3 matrix-bridge/a2a.py config --agent openclaw` generates (with auto-picked",
+    "port/id); for the shared HTTP service use `--transport http` (npx mcp-remote URL)."
+  ],
+  "mcpServers": {
+    "dcf-mesh": {
+      "command": "python3",
+      "args": [
+        "/path/to/HydraMesh/matrix-bridge/mesh_mcp.py"
+      ],
+      "env": {
+        "DCF_AGENT_NAME": "openclaw",
+        "DCF_AGENT_NODE_ID": "0x00c1",
+        "DCF_AGENT_UDP_PORT": "7811",
+        "DCF_PEERS": "127.0.0.1:7801",
+        "DCF_CHANNEL": "duet"
+      }
+    }
+  }
+}

@@ -42,7 +42,12 @@ The wire quantum is the entire contract between the chat world and the agent.
 | `dcf_node.py` | UDP endpoint: send/recv text as frames, optional SuperPack batching. | stdlib |
 | `bridge.py` | Matrix **application service** ↔ mesh. | `aiohttp` |
 | `mesh_mcp.py` | **MCP server** the LLM agent connects to (`mesh_inbox`, `mesh_send`, …). | `mcp` |
-| `tests/` | Wire-level certification (text adapter, SuperPack, UDP loopback). | `pytest` |
+| `a2a.py` | Umbrella CLI: `config` (per-agent MCP configs), `send`/`recv` (non-MCP bridge), delegators. | stdlib |
+| `a2a_config.py` | Multi-agent config generator (Claude/OpenClaw/OpenCode/Goose/Cursor/Cline/Continue). See `../Documentation/AGENT_CLIENTS.md`. | stdlib |
+| `a2a_cli.py` | `a2a send` / `a2a recv` over `DcfTextNode` — join the mesh without MCP (Aider, scripts). | stdlib |
+| `a2a_endpoint.py` | HTTP/SSE transport (host/port/mode) resolution for `mesh_mcp.py`. | stdlib |
+| `agents/openclaw/` | OpenClaw ClawHub skill (`dcf-mesh/`) + native-channel design note. | — |
+| `tests/` | Wire-level certification (text adapter, SuperPack, UDP loopback, CLI/config). | `pytest` |
 
 The wire code is pure stdlib — only the bridge and the MCP server pull deps:
 
