@@ -34,7 +34,7 @@ dependencies = [
 
 [[package]]
 name = "dcf-wire-codec"
-version = "1.0.0"
+version = "0.3.0"
 dependencies = [
  "cc",
  "opus",

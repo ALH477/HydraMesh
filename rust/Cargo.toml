@@ -1,6 +1,6 @@
 [package]
 name = "dcf-rust-sdk"
-version = "2.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["DeMoD LLC <info@demodllc.example>"]
 description = "DeMoD Communications Framework - Rust SDK compatible with HydraMesh"

@@ -2,7 +2,7 @@
 # Copyright (c) 2026 DeMoD LLC.
 [package]
 name = "hydramesh-client"
-version = "0.1.0"
+version = "0.3.0"
 description = "HydraMesh — dedicated communications client (mesh, messaging, DCF-Audio)"
 authors = ["DeMoD LLC"]
 edition = "2021"

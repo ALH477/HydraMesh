@@ -24,8 +24,8 @@
           # C SDK
           dcf-c = pkgs.stdenv.mkDerivation {
             pname = "dcf-c";
-            version = "0.1.0";
-            src = self + "/c_sdk";
+            version = "0.3.0";
+            src = self + "/C_SDK";
             nativeBuildInputs = [ pkgs.cmake pkgs.pkg-config ];
             buildInputs = [ pkgs.libprotobufc pkgs.libuuid pkgs.cjson pkgs.ncurses ];
             configurePhase = "cmakeConfigurePhase";
@@ -37,7 +37,7 @@
           # C++ SDK (assumes proto gen in build)
           dcf-cpp = pkgs.stdenv.mkDerivation {
             pname = "dcf-cpp";
-            version = "0.1.0";
+            version = "0.3.0";
             src = self + "/cpp";
             nativeBuildInputs = [ protobuf pkgs.grpc pkgs.cmake ];
             preBuild = ''
@@ -51,7 +51,7 @@
           # Go SDK
           dcf-go = pkgs.buildGoModule {
             pname = "dcf-go";
-            version = "0.1.0";
+            version = "0.3.0";
             src = self + "/go";
             vendorHash = "sha256-0000000000000000000000000000000000000000000="; # Update with actual
             preBuild = ''
@@ -64,7 +64,7 @@
           # For package, perhaps build StreamDB and provide loader
           streamdb = pkgs.rustPlatform.buildRustPackage {
             pname = "streamdb";
-            version = "0.1.0";
+            version = "0.3.0";
             src = self + "/streamdb";
             cargoHash = "sha256-0000000000000000000000000000000000000000000="; # Update with actual
             buildType = "release";
@@ -74,7 +74,7 @@
           # Python SDK
           dcf-python = pkgs.python3Packages.buildPythonPackage {
             pname = "dcf-python";
-            version = "0.1.0";
+            version = "0.3.0";
             src = self + "/python";
             propagatedBuildInputs = with pkgs.python3Packages; [ protobuf grpcio grpcio-tools ];
             preBuild = ''
@@ -86,7 +86,7 @@
           # Rust SDK
           dcf-rust = pkgs.rustPlatform.buildRustPackage {
             pname = "dcf-rust";
-            version = "0.1.0";
+            version = "0.3.0";
             src = self + "/rust";
             cargoHash = "sha256-0000000000000000000000000000000000000000000="; # Update with actual
             nativeBuildInputs = [ protobuf ];
@@ -100,7 +100,7 @@
           # Node.js SDK
           dcf-nodejs = pkgs.nodePackages.buildNpmPackage {
             pname = "dcf-nodejs";
-            version = "0.1.0";
+            version = "0.3.0";
             src = self + "/nodejs";
             npmDepsHash = "sha256-0000000000000000000000000000000000000000000="; # Update with actual
             nativeBuildInputs = [ protobuf pkgs.grpc-tools.grpc_tools_node_protoc_ts ];
@@ -113,7 +113,7 @@
           # Perl SDK (wrapper for modules)
           dcf-perl = pkgs.stdenv.mkDerivation {
             pname = "dcf-perl";
-            version = "0.1.0";
+            version = "0.3.0";
             src = self + "/perl";
             nativeBuildInputs = [ protobuf pkgs.perl pkgs.perlPackages.GrpcXs ];
             buildInputs = with pkgs.perlPackages; [ JSON IOSocketINET GetoptLong CursesUI GoogleProtocolBuffersDynamic ModulePluggable ];
@@ -127,7 +127,7 @@
           # Docs
           dcf-docs = pkgs.stdenv.mkDerivation {
             pname = "dcf-docs";
-            version = "0.1.0";
+            version = "0.3.0";
             src = self + "/docs";
             nativeBuildInputs = pkgs.python3.withPackages (ps: with ps; [ sphinx myst-parser ]);
             buildPhase = "make html";

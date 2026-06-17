@@ -1,6 +1,6 @@
 [package]
 name = "dcf-wire-codec"
-version = "1.0.0"
+version = "0.3.0"
 edition = "2021"
 description = "DeMod 17-byte wire frame codec + DCF-Audio (collaborative audio over the wire) — reference and certification"
 license = "LGPL-3.0"
