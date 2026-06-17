@@ -1,0 +1,43 @@
+{
+  "_comment": [
+    "Agent-to-agent over DCF: two MCP clients (Claude Code / OpenCode / Claude",
+    "Desktop), each launching its own mesh_mcp.py as one end of a pair. Put the",
+    "'agent-a' block in agent A's MCP config and 'agent-b' in agent B's. Same",
+    "DCF_CHANNEL, distinct DCF_AGENT_NODE_ID, peers pointing at each other.",
+    "Local test: both on 127.0.0.1 (below). Over a VPN: replace 127.0.0.1 in",
+    "DCF_PEERS with the partner host's Tailscale/WireGuard IP. See AGENT_TO_AGENT.md.",
+    "Adjust the args path to wherever this repo lives."
+  ],
+
+  "agent-a": {
+    "mcpServers": {
+      "dcf-mesh": {
+        "command": "python3",
+        "args": ["/home/you/HydraMesh/matrix-bridge/mesh_mcp.py"],
+        "env": {
+          "DCF_AGENT_NAME": "agent-a",
+          "DCF_AGENT_NODE_ID": "0x00A1",
+          "DCF_AGENT_UDP_PORT": "7801",
+          "DCF_PEERS": "127.0.0.1:7802",
+          "DCF_CHANNEL": "duet"
+        }
+      }
+    }
+  },
+
+  "agent-b": {
+    "mcpServers": {
+      "dcf-mesh": {
+        "command": "python3",
+        "args": ["/home/you/HydraMesh/matrix-bridge/mesh_mcp.py"],
+        "env": {
+          "DCF_AGENT_NAME": "agent-b",
+          "DCF_AGENT_NODE_ID": "0x00B2",
+          "DCF_AGENT_UDP_PORT": "7802",
+          "DCF_PEERS": "127.0.0.1:7801",
+          "DCF_CHANNEL": "duet"
+        }
+      }
+    }
+  }
+}
