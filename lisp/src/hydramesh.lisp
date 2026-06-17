@@ -269,14 +269,12 @@
 (defun crc16-ccitt (vec &optional (start 0) (end (length vec)))
   "CRC-CCITT over VEC[START..END). Returns uint16."
   (let ((crc #xFFFF))
-    (loop for i from start below end
-          do (let* ((b   (aref vec i))
-                    (crc (logxor crc (ash b 8))))
-               (loop repeat 8
-                     do (setf crc
-                              (if (logbitp 15 crc)
-                                  (logand (logxor (ash crc 1) #x1021) #xFFFF)
-                                  (logand (ash crc 1) #xFFFF))))))
+    (loop for i from start below end do
+      (setf crc (logand #xFFFF (logxor crc (ash (aref vec i) 8))))
+      (loop repeat 8 do
+        (setf crc (if (logbitp 15 crc)
+                      (logand (logxor (ash crc 1) #x1021) #xFFFF)
+                      (logand (ash crc 1) #xFFFF)))))
     crc))
 
 ;; --- Frame codec -------------------------------------------------------------
@@ -865,12 +863,24 @@
                 (streamdb_free_results results-ptr))))
       (cffi:foreign-free prefix-ptr))))
 
-;; Walk the null-terminated C string array from streamdb_prefix_search.
+;; F8/C9: streamdb_prefix_search returns a Result* LINKED LIST (streamdb.h), not a
+;; pointer array. struct Result { unsigned char* key; size_t key_len; void* value;
+;; size_t value_size; struct Result* next; }.
+(cffi:defcstruct streamdb-result
+  (key        :pointer)
+  (key-len    :size)
+  (value      :pointer)
+  (value-size :size)
+  (next       :pointer))
+
 (defun collect-streamdb-results (results-ptr)
-  (loop for i from 0
-        for str-ptr = (cffi:mem-aref results-ptr :pointer i)
-        until (cffi:null-pointer-p str-ptr)
-        collect (cffi:foreign-string-to-lisp str-ptr)))
+  "Walk the Result* linked list from streamdb_prefix_search; collect keys."
+  (loop for ptr = results-ptr
+          then (cffi:foreign-slot-value ptr '(:struct streamdb-result) 'next)
+        until (cffi:null-pointer-p ptr)
+        collect (byte-array-to-string
+                 (cffi:foreign-slot-value ptr '(:struct streamdb-result) 'key)
+                 (cffi:foreign-slot-value ptr '(:struct streamdb-result) 'key-len))))
 (defun dcf-db-flush (node)
   (when (dcf-node-streamdb node)
     (streamdb_flush (dcf-node-streamdb node))))
@@ -1063,11 +1073,17 @@ alists, not plists, so getf never matches. This walks the alist."
 
 (defun dcf-stop ()
   (when *node*
+    ;; F4/C8: persist while the DB is still alive, THEN tear down (the old order
+    ;; freed StreamDB and then called save-state on the dangling pointer).
+    (handler-case (save-state *node*)
+      (error (e) (log:warn *dcf-logger* "save-state failed during stop: ~A" e)))
     (when (dcf-node-udp-endpoint *node*)
       (stop-udp-endpoint (dcf-node-udp-endpoint *node*)))
-    (when (dcf-node-streamdb *node*)
-      (streamdb_free (dcf-node-streamdb *node*)))
-    (save-state *node*)
+    (when (and (dcf-node-streamdb *node*)
+               (not (cffi:null-pointer-p (dcf-node-streamdb *node*))))
+      (streamdb_flush (dcf-node-streamdb *node*))
+      (streamdb_free (dcf-node-streamdb *node*))
+      (setf (dcf-node-streamdb *node*) nil))
     (setf *node* nil)
     `(:status "stopped")))
 
@@ -1280,5 +1296,31 @@ Repo: https://github.com/ALH477/DeMoD-Communication-Framework"))
 ;; Deployment
 (defun dcf-deploy (&optional output-file)
   (sb-ext:save-lisp-and-die (or output-file "hydramesh") :executable t :toplevel #'main))
+
+;; C7 regression guard: self-certify the wire codec against the cross-language
+;; anchors when this file loads. A broken crc16-ccitt now fails the load loudly
+;; (this is exactly the check the hotfix performed; folded in so the SDK file
+;; self-certifies standalone).
+(defun certify-wire-codec ()
+  (let ((anchor (map '(vector (unsigned-byte 8)) #'char-code "123456789"))
+        (ex (coerce #(#xD3 #x10 #x12 #x34 #x00 #x01 #xFF #xFF
+                      #xDE #xAD #xBE #xEF #xAB #x12 #xCD #xA9 #x63)
+                    '(vector (unsigned-byte 8)))))
+    (assert (= (crc16-ccitt anchor) #x29B1) ()
+            "crc16-ccitt anchor failed: got #x~4,'0X, want #x29B1" (crc16-ccitt anchor))
+    (assert (= (crc16-ccitt ex 0 15) #xA963) ()
+            "exampleFrame body CRC failed: got #x~4,'0X, want #xA963" (crc16-ccitt ex 0 15))
+    (let ((msg (decode-dcf-frame ex)))
+      (assert msg () "exampleFrame failed to decode")
+      (assert (= (proto-message-sequence msg) #x1234) () "exampleFrame seq mismatch")
+      (assert (equalp (proto-message-payload msg) #(#xDE #xAD #xBE #xEF)) ()
+              "exampleFrame payload mismatch"))
+    (let ((bad (copy-seq ex)))
+      (setf (aref bad 9) (logxor (aref bad 9) #x01))
+      (assert (null (decode-dcf-frame bad)) () "corrupted frame was ACCEPTED"))
+    :certified))
+
+(eval-when (:load-toplevel :execute)
+  (certify-wire-codec))
 
 ;; End

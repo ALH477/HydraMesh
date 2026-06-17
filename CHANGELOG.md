@@ -27,5 +27,11 @@ All notable changes to this project are documented here. The format is based on
 - An offensive line in `lisp/README.md` acknowledgements.
 
 ### Fixed
-- (tracked) Lisp wire-codec criticals are being folded from `lisp/hydramesh-hotfix.lisp` into
-  source; see the repo legitimacy program.
+- Lisp wire-codec criticals folded from `lisp/hydramesh-hotfix.lisp` into source
+  (`lisp/src/hydramesh.lisp`): **C7** the vacuous `crc16-ccitt` (a shadowing inner `let*`
+  discarded every iteration, so it returned `#xFFFF` for all input and wire validity was
+  vacuous), **C8** the `dcf-stop` use-after-free (it freed StreamDB then called `save-state`
+  on the dangling pointer), and **C9** the `collect-streamdb-results` ABI (it walked a
+  pointer array, but `streamdb_prefix_search` returns a `Result*` linked list). Added a
+  dependency-free `lisp/src/wire.lisp`, a load-time self-cert in `hydramesh.lisp`, and the
+  `certify-lisp` CI job so the CRC can never silently regress.
