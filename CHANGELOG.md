@@ -7,6 +7,23 @@ reserved for when the full advertised language set is green in CI.
 
 ## [Unreleased]
 
+### Added
+- **Go SDK graduation** (`go/`). The Go binding goes from a certified wire codec to a full
+  **stdlib-only** SDK mirroring the working Rust subset:
+  - Certified **game** (`go/game`), **audio** (`go/audio`), and **text** (`go/text`) adapters,
+    byte-checked against `Documentation/{game,audio,text}_vectors.json` + `pm_param_vectors.json`
+    with the existing golden-vector loader; each self-certifies its framing anchor on import.
+  - A UDP **`DcfNode`** (`go/node`): a `ProtoMessage` transport byte-identical to Rust's, a peer
+    table with per-peer EMA RTT, PING/PONG, reliable-ARQ retransmit, a `MessageHandler` interface,
+    and `SendGameDCF`/`SendAudioDCF`/`SendTextDCF` + `Reassemble{Game,Audio,Text}Payload` hookups.
+    `TEXT_DCF=10` is a Go extension ahead of the Rust SDK (game+audio are wired there, text is not);
+    flagged in source for back-port.
+  - Tests: a two-node ephemeral-port UDP loopback (game + text reassembly, PING→PONG RTT) and a
+    hand-computed `ProtoMessage` golden byte-vector. `certify-go` now runs `go vet ./...`,
+    `go test ./...`, and `go test -race ./node/` — still stdlib-only and no-network.
+  - Removed `go/src/dcf.go`, a broken gRPC stub (unbuildable; gRPC is out of scope for the
+    stdlib-only Go SDK), which had made `go test ./...` fail with `[setup failed]`.
+
 ### Fixed
 - Folded the remaining Lisp **HIGH-severity** fixes from `hydramesh-hotfix.lisp` into
   `lisp/src/hydramesh.lisp`: **F2** RTT pong now echoes the ping timestamp (cross-process RTT was

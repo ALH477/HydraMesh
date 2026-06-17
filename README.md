@@ -207,7 +207,7 @@ cd DeMoD-Communication-Framework
 - **C SDK**: `libprotobuf-c`, `libuuid`, `libdl`, `libcjson`, `cmake`, `ncurses`.
 - **C++**: `grpc`, `protobuf`.
 - **Node.js**: `grpc`, `protobufjs`.
-- **Go**: `go get google.golang.org/grpc`, `go get google.golang.org/protobuf`.
+- **Go**: none — the Go SDK (`go/`) is **stdlib-only** (no `go get`, no `go.sum`).
 - **Rust**: `tonic`, `prost` (for gRPC/Protobuf).
 - **Java/Kotlin (Android)**: `io.grpc:grpc-okhttp`, `com.google.protobuf:protobuf-java`.
 - **Swift (iOS)**: `GRPC-Swift`, `SwiftProtobuf`.
@@ -333,24 +333,50 @@ client.sendMessage(request, (err, response) => {
 });
 ```
 
-### Go (gRPC Server)
+### Go (DCF node — real, stdlib-only)
+The Go SDK (`go/`) is a working, certified, **stdlib-only** node — no gRPC, no codegen.
+One `SendTextDCF` call fragments a message into certified 17-byte `DeModFrame` frames and
+ships them over UDP; the receiver reassembles them. See `go/README.md`.
 ```go
-// go/src/hydramesh.go
 package main
+
 import (
+    "log"
     "net"
-    "google.golang.org/grpc"
-    pb "hydramesh"  // Generated package
+    "time"
+
+    "github.com/ALH477/HydraMesh/go/node"
+    "github.com/ALH477/HydraMesh/go/text"
 )
-type server struct { pb.UnimplementedHydraMeshServiceServer }
-func (s *server) SendMessage(ctx context.Context, in *pb.HydraMeshMessage) (*pb.HydraMeshMessage, error) {
-    return &pb.HydraMeshMessage{Data: "Echo: " + in.Data}, nil
+
+// Embed DefaultMessageHandler; override only the arms you care about.
+type app struct {
+    node.DefaultMessageHandler
+    n     *node.DcfNode
+    reasm *text.TextReassembler
 }
+
+func (a *app) HandleText(payload []byte, from *net.UDPAddr) {
+    if pkt := a.n.ReassembleTextPayload(a.reasm, payload); pkt != nil {
+        log.Printf("text from %s on ch %d: %q", from, pkt.Dst, pkt.Text)
+    }
+}
+
 func main() {
-    lis, _ := net.Listen("tcp", ":50051")
-    s := grpc.NewServer()
-    pb.RegisterHydraMeshServiceServer(s, &server{})
-    s.Serve(lis)
+    cfg := node.DefaultConfig() // UDP, p2p, 0.0.0.0:7777
+    n, err := node.New(&cfg)
+    if err != nil {
+        log.Fatal(err)
+    }
+    if err := n.Start(&app{n: n, reasm: text.NewTextReassembler()}); err != nil {
+        log.Fatal(err) // launches the receiver + ping + ARQ goroutines
+    }
+    defer n.Stop()
+
+    n.AddPeer("peer1", "192.168.1.50", 7777)
+    ch := text.ChannelID("lobby") // crc16 of the channel name
+    n.SendTextDCF([]byte("hello over DeModFrame"), 1, uint32(time.Now().UnixMicro()), 1, ch, 0, true)
+    time.Sleep(2 * time.Second)
 }
 ```
 
@@ -532,7 +558,9 @@ Per-language unit tests (where they exist):
 - **C SDK**: `cd C_SDK && mkdir build && cd build && cmake .. && make && ctest` (the wire cert is `C_SDK/tests/test_wire_certify.c`; `tests/legacy/` is quarantined and not built).
 - **Python**: `pytest python/tests/`.
 - **Lisp**: `sbcl --non-interactive --load lisp/src/wire.lisp` certifies the wire codec (CI-gated via `certify-lisp`); the full SDK (`lisp/src/hydramesh.lisp`) self-certifies on load.
-- **Go**: `cd go && go test ./dcf/` — certifies the wire codec against all 246 golden vectors.
+- **Go**: `cd go && go test ./...` — certifies the wire codec (246 golden vectors) plus the
+  game/audio/text adapters, and exercises the stdlib-only UDP `DcfNode` SDK (ProtoMessage
+  transport, peer RTT, reliable-ARQ) via a two-node loopback integration test.
 - **Java**: `javac -d /tmp/jout java/com/demod/dcf/Frame.java java/com/demod/dcf/Certify.java && java -cp /tmp/jout com.demod.dcf.Certify` — certifies all 246 vectors.
 - **Kotlin**: `cd kotlin && gradle run` (or the `certify-kotlin` CI job) — certifies the codec; CI-gated (no local kotlinc in the dev env).
 - **Node.js**: `node JS/nodejs/test/certify.js` (or `npm --prefix JS/nodejs run certify`) — certifies all 246 vectors.

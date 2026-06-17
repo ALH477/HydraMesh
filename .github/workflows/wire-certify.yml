@@ -199,9 +199,17 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Certify the Go DeModFrame codec against the golden vectors
+      - name: Vet the Go SDK
         working-directory: go
-        run: go test ./dcf/ -v
+        run: go vet ./...
+
+      - name: Certify the Go SDK (wire codec + game/audio/text adapters + UDP node)
+        working-directory: go
+        run: go test ./... -v
+
+      - name: Race-check the UDP node
+        working-directory: go
+        run: go test -race ./node/
 
   certify-haskell:
     runs-on: ubuntu-latest
