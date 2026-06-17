@@ -12,6 +12,9 @@ __pycache__/
 *.a
 *.so
 build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
 
 # Node.js
 node_modules/

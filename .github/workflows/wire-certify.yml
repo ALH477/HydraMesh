@@ -281,3 +281,13 @@ jobs:
         run: |
           perl Makefile.PL
           make test
+
+  certify-cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Certify the C++ DeModFrame codec against the golden vectors
+        run: |
+          g++ -std=c++17 -Wall -Wextra -I cpp/include -o /tmp/cpp_certify cpp/tests/certify.cpp
+          /tmp/cpp_certify Documentation/golden_vectors.json
