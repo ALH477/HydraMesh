@@ -217,3 +217,19 @@ jobs:
       - name: Certify the Haskell DeModFrame codec against the golden vectors
         working-directory: haskell
         run: cabal test --test-show-details=direct
+
+  certify-java:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Certify the Java DeModFrame codec against the golden vectors
+        run: |
+          javac -d /tmp/jout java/com/demod/dcf/Frame.java java/com/demod/dcf/Certify.java
+          java -cp /tmp/jout com.demod.dcf.Certify Documentation/golden_vectors.json
