@@ -41,6 +41,12 @@ review. Below, severity-ordered.
 
 ## CRITICAL — compile breakers, memory safety, wire correctness
 
+> **Status (v0.3.0): all CRITICAL items below are RESOLVED.** C1–C6 are applied in
+> source (the C SDK builds and the wire cert passes); C7–C9 were folded from
+> `lisp/hydramesh-hotfix.lisp` into `lisp/src/hydramesh.lisp` with a load-time
+> self-cert and the `certify-lisp` CI job. Descriptions are retained for history;
+> see `CHANGELOG.md` and `Documentation/DCF_BACKLOG.md`.
+
 **C1. Duplicate `DCFCmd` enum (compile breaker).** `dcf_types.h` and
 `dcf_interface.h` both define `DCFCmd`, with different numeric values — one
 starts at `DCF_CMD_UNKNOWN=0`, the other at `DCF_CMD_INIT=0`. `dcf_interface.h`
@@ -59,8 +65,9 @@ legacy 4-fn struct to `DCFTransportV1` (the v1 plugin ABI), keep the rich
 The good UDP plugin is migrated in the patch as the exemplar; the loader casts on
 `dlsym`.
 
-**C3. `messages.pb-c.h` literal typo (compile breaker).** The token `the uint8_t`
-appears where `uint8_t` is meant. *Fix:* one-line; `sed -i 's/\bthe uint8_t\b/uint8_t/'`.
+**C3. `messages.pb-c.h` literal typo (compile breaker). (RESOLVED)** A stray article
+once preceded a `uint8_t` parameter type in the committed protobuf header; the
+shipping header now reads `const uint8_t *data` correctly.
 
 **C4. Connection-pool health thread use-after-free.** With `test_on_idle` (the
 default) the health thread is created in `start`, but `stop` joins only
