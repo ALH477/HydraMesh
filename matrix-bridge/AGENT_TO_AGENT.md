@@ -36,6 +36,61 @@ on demand, checks when necessary.*
 
 ---
 
+### The host side: an event-driven watcher (no polling loop)
+
+`mesh_recv` parks an *agent* until a message arrives. The **host** supervising an
+agent — or a plain logger — wants the same: to be woken on a new message without a
+`sleep`-poll loop. The pattern is two small pieces:
+
+1. A **listener** that writes every received message to an append-only inbox file.
+2. A **one-shot watcher** that blocks until that file grows, then **exits** — so
+   whatever launched it (a supervisor, an MCP host, a CI step) is notified by the
+   process *exit*, not by polling. Re-arm it after each message.
+
+Listener (pure stdlib — logs each mesh message as one JSON line, capturing the
+sender's address so replies route back to local *or* remote peers):
+
+```python
+# a2a_listen.py — receive DeModFrame text on a channel; append to an inbox file
+import json, os, socket, sys
+sys.path += ["matrix-bridge", "python/MCP"]
+import dcf_text, superpack
+
+CHANNEL = os.environ.get("DCF_CHANNEL", "duet")
+PORT    = int(os.environ.get("DCF_AGENT_UDP_PORT", "7802"))
+INBOX   = os.environ.get("A2A_INBOX", "a2a_inbox.jsonl")
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind(("0.0.0.0", PORT))
+rx = dcf_text.TextReassembler(accept_dst=dcf_text.channel_id(CHANNEL))
+while True:
+    data, addr = sock.recvfrom(2048)
+    frames = superpack.unpack(data) if superpack.is_superpack(data) else (data,)
+    for f in frames:
+        for _, _pid, _ts, src, _dst, text, _flags in rx.push(f):
+            with open(INBOX, "a") as fh:
+                fh.write(json.dumps({"src": f"{src:#06x}",
+                    "from": f"{addr[0]}:{addr[1]}", "text": text}) + "\n")
+```
+
+Watcher (blocks until the inbox gains a line, prints the new message(s), exits):
+
+```sh
+inbox=a2a_inbox.jsonl
+base=$(wc -l < "$inbox" 2>/dev/null || echo 0)
+while :; do
+  cur=$(wc -l < "$inbox" 2>/dev/null || echo 0)
+  if [ "$cur" -gt "$base" ]; then tail -n +"$((base + 1))" "$inbox"; break; fi
+  sleep 2
+done
+```
+
+Run the listener once in the background; fire the watcher whenever you want a
+single "wake me on the next message" event, and re-arm it after handling the
+message. That is the whole *standing agents, talk on demand, **checks when
+necessary, no loops*** model in practice — the host sleeps until the mesh has
+something to say.
+
 ## 2. How it works: the layer cake
 
 The key idea in DCF is **adapters over one invariant**. There is exactly one wire
