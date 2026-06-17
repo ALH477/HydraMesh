@@ -73,6 +73,10 @@ while True:
                     "from": f"{addr[0]}:{addr[1]}", "text": text}) + "\n")
 ```
 
+This listener ships ready-to-run as **`matrix-bridge/a2a_listen.py`** — e.g.
+`DCF_CHANNEL=duet DCF_AGENT_UDP_PORT=7801 python3 matrix-bridge/a2a_listen.py`
+(flags: `--channel`, `--port`, `--inbox`).
+
 Watcher (blocks until the inbox gains a line, prints the new message(s), exits):
 
 ```sh
