@@ -29,6 +29,37 @@ underlay (loopback for a local test, a VPN tunnel for two machines).
 - `mesh_inbox(max_messages)` — non-blocking drain of anything already queued.
 - `mesh_status()` — node id, name, channel, peers (confirm the partner is wired).
 
+## Dependencies (for `mesh_mcp.py`)
+
+The wire path is pure stdlib — `a2a_runner.py`, `a2a_interactive.py`, `dcf_node.py`,
+and `tests/` need **nothing** installed. Only `mesh_mcp.py` (the MCP server an agent
+connects to) needs the `mcp` package; the Matrix `bridge.py` also needs `aiohttp`.
+`anthropic` is **not** required — it's an optional convenience for
+`a2a_runner.py --llm`/`a2a_interactive.py` only, lazily imported, so the mesh runs
+fine without it.
+
+On a normal box `pip install -r requirements.txt` is enough. On NixOS (or any
+PEP-668 "externally managed" Python) system pip is blocked — use a virtualenv:
+
+```sh
+cd /path/to/HydraMesh
+python3 -m venv .venv
+./.venv/bin/python -m pip install -r matrix-bridge/requirements.txt   # mcp, aiohttp, pytest
+# optional, only if you want the --llm runner:  ./.venv/bin/python -m pip install anthropic
+```
+
+Then point each agent's MCP server `command` at the venv's interpreter so `mcp`
+is importable (the `a2a.mcp.example.json` snippets show `python3` — swap it):
+
+```json
+"command": "/path/to/HydraMesh/.venv/bin/python",
+"args": ["/path/to/HydraMesh/matrix-bridge/mesh_mcp.py"]
+```
+
+Sanity-check the env: `./.venv/bin/python matrix-bridge/a2a_runner.py --demo`
+should print `a2a demo: CERTIFIED`. (`.venv/` is local, untracked — recreate it
+per machine.)
+
 ## 1. Configure the two agents
 
 Copy the two blocks from [`a2a.mcp.example.json`](a2a.mcp.example.json) into each
