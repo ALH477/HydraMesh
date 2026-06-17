@@ -291,3 +291,17 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -I cpp/include -o /tmp/cpp_certify cpp/tests/certify.cpp
           /tmp/cpp_certify Documentation/golden_vectors.json
+
+  certify-swift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '5.10'
+
+      - name: Certify the Swift DeModFrame codec against the golden vectors
+        working-directory: swift
+        run: swift test
