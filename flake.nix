@@ -139,6 +139,37 @@
           default = dcf-c; # Or a collection
         };
 
+        # Runnable entry points for the agent-to-agent mesh feature.
+        #   nix run github:ALH477/HydraMesh#a2a        guided setup + run
+        #   nix run github:ALH477/HydraMesh#a2a-demo   stdlib loopback smoke test
+        #   nix run github:ALH477/HydraMesh#mesh-agent the DeModFrame MCP endpoint
+        apps =
+          let
+            # The matrix-bridge/*.py scripts self-locate their imports (they add
+            # matrix-bridge/ and python/MCP/ to sys.path), so they only need a
+            # Python interpreter on PATH — no install/build step.
+            mkA2A = name: tail: pkgs.writeShellApplication {
+              inherit name;
+              runtimeInputs = [ pkgs.python3 ];
+              text = ''exec python3 ${self}/matrix-bridge/${tail} "$@"'';
+            };
+            interactive = mkA2A "dcf-a2a" "a2a_interactive.py";
+            demo = mkA2A "dcf-a2a-demo" "a2a_runner.py --demo";
+            # mesh_mcp.py is the MCP server an agent connects to; it needs `mcp`.
+            meshPython = pkgs.python3.withPackages (ps: [ ps.mcp ]);
+            meshAgent = pkgs.writeShellApplication {
+              name = "dcf-mesh-agent";
+              runtimeInputs = [ meshPython ];
+              text = ''exec ${meshPython}/bin/python ${self}/matrix-bridge/mesh_mcp.py "$@"'';
+            };
+            mkApp = drv: bin: { type = "app"; program = "${drv}/bin/${bin}"; };
+          in {
+            a2a = mkApp interactive "dcf-a2a";
+            a2a-demo = mkApp demo "dcf-a2a-demo";
+            mesh-agent = mkApp meshAgent "dcf-mesh-agent";
+            default = mkApp interactive "dcf-a2a";
+          };
+
         devShells = {
           default = pkgs.mkShell {
             packages = [ protobuf pkgs.cmake pkgs.grpc pkgs.rustc pkgs.cargo pkgs.go pkgs.nodejs pkgs.python3 pkgs.perl pkgs.sbcl ];

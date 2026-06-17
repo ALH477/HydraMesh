@@ -60,6 +60,22 @@ Sanity-check the env: `./.venv/bin/python matrix-bridge/a2a_runner.py --demo`
 should print `a2a demo: CERTIFIED`. (`.venv/` is local, untracked — recreate it
 per machine.)
 
+## Run it with Nix (no install)
+
+The feature is exposed as flake apps, so a Nix user needs nothing checked out:
+
+```sh
+nix run github:ALH477/HydraMesh#a2a-demo     # stdlib loopback smoke test -> CERTIFIED
+nix run github:ALH477/HydraMesh#a2a          # guided setup + run (the interactive harness)
+nix run github:ALH477/HydraMesh#mesh-agent   # the DeModFrame MCP endpoint (mcp bundled in)
+```
+
+`#a2a` / `#a2a-demo` use a plain stdlib Python; `#mesh-agent` ships its own
+`python3.withPackages [ mcp ]`, so the venv recipe below is only needed when you're
+running `mesh_mcp.py` outside Nix. For two agents over Nix, point each agent's MCP
+server `command` at `nix run github:ALH477/HydraMesh#mesh-agent` (pass the
+`DCF_*` env as usual).
+
 ## 1. Configure the two agents
 
 Copy the two blocks from [`a2a.mcp.example.json`](a2a.mcp.example.json) into each
