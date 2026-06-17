@@ -1,0 +1,18 @@
+# DCF<->Matrix appservice registration.
+# Copy to dcf-registration.yaml, replace the tokens with long random strings
+# (must match as_token/hs_token in config.json), and register it with your
+# homeserver (Synapse: add the file path to `app_service_config_files` in
+# homeserver.yaml, then restart).  Generate tokens with e.g.:
+#   python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+id: dcf-mesh-bridge
+url: http://127.0.0.1:9000          # where bridge.py listens (listen_host:listen_port)
+as_token: REPLACE_WITH_LONG_RANDOM_AS_TOKEN
+hs_token: REPLACE_WITH_LONG_RANDOM_HS_TOKEN
+sender_localpart: dcf_bot           # produces @dcf_bot:<your-server>
+rate_limited: false
+namespaces:
+  users:
+    - exclusive: true
+      regex: "@dcf_.*"              # the bridge owns the @dcf_* user namespace
+  aliases: []
+  rooms: []

@@ -1,0 +1,24 @@
+{
+  "name": "HydraMesh / DCF",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-22.04",
+  "features": {
+    "ghcr.io/devcontainers/features/rust:1": {},
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.11" },
+    "ghcr.io/devcontainers/features/node:1": {},
+    "ghcr.io/devcontainers/features/go:1": {}
+  },
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y protobuf-compiler libopus-dev pkg-config build-essential && pip install -r python/requirements.txt || true",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "ms-python.python",
+        "golang.go",
+        "vue.volar",
+        "tamasfe.even-better-toml",
+        "editorconfig.editorconfig"
+      ]
+    }
+  },
+  "remoteUser": "vscode"
+}

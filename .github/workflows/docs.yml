@@ -2,30 +2,24 @@ name: Build and Deploy Docs
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 jobs:
   documentation:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
       - name: Install dependencies
-        run: pip install -r docs/requirements.txt
-      - name: Install LaTeX
-        run: sudo apt-get update && sudo apt-get install -y texlive-full
+        run: pip install -r Documentation/requirements.txt
       - name: Build HTML
-        run: cd docs && make docs-html
-      - name: Build PDF
-        run: cd docs && make docs-pdf
+        run: cd Documentation && make docs-html
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: docs/_build/html
-      - name: Archive PDF
-        uses: actions/upload-artifact@v3
-        with:
-          name: dcf-docs-pdf
-          path: docs/_build/latex/*.pdf
+          publish_dir: Documentation/_build/html

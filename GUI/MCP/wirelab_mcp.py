@@ -1,1 +1,0 @@
-/home/asher/Documents/HydraMesh/python/MCP/wirelab_mcp.py

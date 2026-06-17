@@ -1,0 +1,22 @@
+{
+  "_comment": "Copy to config.json and edit. homeserver_url is reachable over the VPN.",
+
+  "homeserver_url": "http://100.x.y.z:8008",
+  "as_token": "REPLACE_WITH_LONG_RANDOM_AS_TOKEN",
+  "hs_token": "REPLACE_WITH_LONG_RANDOM_HS_TOKEN",
+  "bot_user_id": "@dcf_bot:home.lan",
+  "room_id": "!yourRoomId:home.lan",
+
+  "listen_host": "0.0.0.0",
+  "listen_port": 9000,
+
+  "node_id": 177,
+  "bind_host": "0.0.0.0",
+  "udp_port": 7777,
+  "channel": "agent",
+  "use_superpack": true,
+
+  "peers": [
+    { "name": "agent", "host": "127.0.0.1", "port": 7788 }
+  ]
+}

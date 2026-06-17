@@ -13,11 +13,38 @@
 ## Overview
 HydraMesh is a free and open-source software (FOSS) framework evolved from the DeMoD Secure Protocol, designed for low-latency, modular, and interoperable data exchange. It supports applications like IoT messaging, real-time gaming synchronization, distributed computing, and edge networking. HydraMesh features a handshakeless design, efficient Protocol Buffers serialization, and a compatibility layer for UDP, TCP, WebSocket, and gRPC transports, enabling seamless peer-to-peer (P2P) networking with self-healing redundancy.
 
-HydraMesh is hardware and language agnostic, supporting embedded devices (e.g., Raspberry Pi), cloud servers, and mobile platforms (Android/iOS) with bindings in Perl, Python, C, C++, JavaScript (Node.js), Go, Rust, Java/Kotlin, Swift, and Lisp. Version 5.0.0 introduces a plugin system for custom modules and transports, an AUTO mode for dynamic role assignment managed by a master node, and enhanced extensibility. Licensed under GPL-3.0, HydraMesh ensures open-source derivatives. It includes CLI, TUI, server/client logic, P2P, and AUTO modes, making it versatile for standalone tools, libraries, or networked services. SDKs (e.g., C SDK, HydraMesh-Lisp SDK) are developed as submodules for streamlined integration.
-
-The bash scripts are there to help you set up your environment. There are Nix and Docker presets. You're welcome.
+HydraMesh is hardware and language agnostic, supporting embedded devices (e.g., Raspberry Pi), cloud servers, and mobile platforms (Android/iOS) with bindings in Perl, Python, C, C++, JavaScript (Node.js), Go, Rust, Java/Kotlin, Swift, and Lisp. Version 5.0.0 introduces a plugin system for custom modules and transports, an AUTO mode for dynamic role assignment managed by a master node, and enhanced extensibility. The linkable library is **LGPL-3.0**; GPL-3.0 is scoped to the bundled DOOM example only. It includes CLI, TUI, server/client logic, P2P, and AUTO modes, making it versatile for standalone tools, libraries, or networked services. SDKs (e.g., C SDK, HydraMesh-Lisp SDK) are developed as submodules for streamlined integration.
 
 <img width="3888" height="2208" alt="image" src="https://github.com/user-attachments/assets/1294e4e6-906c-42ef-af0d-c192056803ea" />
+
+## Quick start
+
+**New here?** HydraMesh has one invariant — the 17-byte `DeModFrame` wire quantum —
+and everything else (audio, game, transports) is an *adapter* over it, kept honest
+by a cross-language **certificate**. The fastest "it works" is a green cert run:
+
+```bash
+git clone --recurse-submodules https://github.com/ALH477/DeMoD-Communication-Framework.git
+cd DeMoD-Communication-Framework
+
+# 1. Get a toolchain — pick ONE:
+nix develop                  # all toolchains in one shell (recommended); or
+./install_deps.sh            # distro-aware native install (Debian/Arch/Fedora); or
+docker build -t hydramesh .  # everything in a container
+
+# 2. First success — certify the wire codec across Python + Rust + C:
+make certify                 # see `make help` for setup / test / docs / client
+```
+
+`make help` lists every task. Read these first — they are normative:
+
+- [`Documentation/WIRE_QUANTUM_SPEC.md`](Documentation/WIRE_QUANTUM_SPEC.md) — the 17-byte frame format.
+- [`Documentation/DCF_AUDIO_SPEC.md`](Documentation/DCF_AUDIO_SPEC.md) — collaborative audio as an adapter over it.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — the map of the repo (what ships, what's experimental).
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to build, test, and open a PR (the certificate is the contract).
+
+The bash scripts (`install_deps.sh`, `*-edit-gen.sh`) and `flake.nix` / `Dockerfile`
+bootstrap your environment. See **Installation** below for per-language prerequisites.
 
 
 ### HYDRA Acronym
@@ -42,7 +69,7 @@ The name **HydraMesh** reflects its core strengths: a self-healing, decentralize
 - **Usability**: CLI for automation, TUI for monitoring; server, client, P2P, and AUTO modes with logging; master node commands for role and config management.
 - **Self-Healing P2P**: Redundant paths, failure detection, RTT-based grouping (clusters by <50ms threshold), and optimized routing (Dijkstra with RTT weights).
 - **Persistence**: Integrated StreamDB for state, metrics, and message logging in HydraMesh-Lisp SDK, with potential extensions to other SDKs.
-- **Open Source**: GPL-3.0 ensures transparency and community contributions.
+- **Open Source**: LGPL-3.0 (library) ensures transparency and community contributions.
 
 ## Architecture
 ```mermaid
@@ -491,17 +518,16 @@ DeMoD LLC developed the only complete GPLv3 version of StreamDB from Iain Ballar
 
 ## Documentation
 
-For comprehensive documentation on the HydraMesh Framework, including detailed SDK guides, API references, design specifications, and contribution processes, refer to the Sphinx-generated docs. These cover all SDKs in the mono repo (e.g., C SDK, Python, HydraMesh-Lisp, Rust) and are built from Markdown files like `README.markdown` and `dcf_design_spec.markdown`.
+For comprehensive documentation on the HydraMesh Framework, including detailed SDK guides, API references, design specifications, and contribution processes, refer to the Sphinx-generated docs. These cover all SDKs in the mono repo (e.g., C SDK, Python, HydraMesh-Lisp, Rust) and are built from the Markdown/reST sources in `Documentation/`.
 
 ### Viewing the Documentation
 - **Online**: Hosted on GitHub Pages at [https://alh477.github.io/DeMoD-Communication-Framework/](https://alh477.github.io/DeMoD-Communication-Framework/) (auto-built via CI/CD on pushes to `main`).
-- **Locally**: Build the docs yourself:
+- **Locally**: Build the docs yourself (or run `make docs` from the repo root):
   ```bash
-  cd docs
+  cd Documentation
   pip install -r requirements.txt  # Install Sphinx, myst-parser, etc.
-  make docs-html  # Generates HTML in docs/_build/html/
+  make docs-html  # Generates HTML in Documentation/_build/html/
   open _build/html/index.html  # View in browser
-  make docs-pdf   # Generates PDF in docs/_build/latex/
   ```
 - **Key Sections**:
   - [Design Specifications](https://alh477.github.io/DeMoD-Communication-Framework/specs/dcf_design_spec.html): Covers protocol design, AUTO mode, master node, plugins, and SDK guidelines.
@@ -509,16 +535,17 @@ For comprehensive documentation on the HydraMesh Framework, including detailed S
   - [API References](https://alh477.github.io/DeMoD-Communication-Framework/api/index.html): Auto-generated from code comments/docstrings across languages (e.g., `hydramesh_client_send_message` in C, `hydramesh-quick-send` in Lisp).
   - [Contribution Guidelines](https://alh477.github.io/DeMoD-Communication-Framework/process/CONTRIBUTING.html): How to add new SDKs or plugins.
 
-The docs support multi-format outputs (HTML, PDF, ePub) and include custom rendering for Protobuf schemas. For source, see the `docs/` directory in the repo. Contributions to improve docs are welcome—follow the style in `dcf_design_spec.markdown`.
+The docs support multi-format outputs (HTML, ePub) and include custom rendering for Protobuf schemas. For source, see the `Documentation/` directory in the repo. Contributions to improve docs are welcome—follow the style in `Documentation/dcf_design_spec.markdown`.
 
 ## Contributing
-Contributions are welcome! Follow these steps:
-1. Fork the repo.
-2. Create a feature branch (`git checkout -b feature/xyz`).
-3. Add tests and code (follow style: `perltidy`, `black`, `ktlint`, `swiftformat`, `clang-format` for C, Lisp conventions for HydraMesh-Lisp).
-4. Submit a PR with a clear description using the [PR template](docs/PR_TEMPLATE.md).
+Contributions are welcome! See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full
+workflow and **[ARCHITECTURE.md](ARCHITECTURE.md)** for the repo map. In short:
+1. Fork the repo and branch off `main` (`git checkout -b feature/xyz`).
+2. Add tests and code (follow style: `perltidy`, `black`, `ktlint`, `swiftformat`, `clang-format` for C, Lisp conventions for HydraMesh-Lisp).
+3. **The certificate is the contract** — if you touch any codec, regenerate the golden vectors and run the certs (`make certify`); CI fails on drift.
+4. Submit a PR using the [pull request template](.github/PULL_REQUEST_TEMPLATE.md).
 5. Discuss issues via [GitHub Issues](https://github.com/ALH477/DeMoD-Communication-Framework/issues).
-New SDKs (e.g., Python, Perl) encouraged; ensure RTT grouping, plugins, AUTO mode, and GPL-3.0 compliance.
+New SDKs (e.g., Python, Perl) encouraged; ensure RTT grouping, plugins, AUTO mode, and LGPL-3.0 compliance.
 
 # [DeMoD LLC](https://DeMoD.ltd) Cut the bullshit, Cut the price. Innovation without the overhead.
 
