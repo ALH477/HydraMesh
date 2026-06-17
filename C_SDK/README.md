@@ -1,10 +1,20 @@
-# DCF - Distributed Communication Framework
+# DCF - DeMoD Communication Framework (C SDK)
 
-**Version 5.2.0 - Battle Tested Edition**
+**0.x — pre-release, in active development**
 
-A production-ready C SDK for distributed communication with comprehensive reliability patterns, cross-platform support, and extensive testing infrastructure.
+The C SDK is one of the **Certified** wire-codec implementations (golden-vector
+verified in CI via the `certify-c` job). The shipping build is deliberately
+narrow: only **four modules compile and install** — `dcf_platform`, `dcf_error`,
+`dcf_ringbuf`, `dcf_connpool` (the `DCF_SOURCES` list in `CMakeLists.txt`). These
+provide the low-level primitives below.
 
-## Features
+> **What ships vs. what is declared.** The public headers and the source tree
+> declare more than the build delivers. Anything under `include/experimental/`,
+> `plugins/experimental/`, and `tests/legacy/` is **quarantined and does not
+> build** — including the high-level client API (`dcf_client_*`). Do not rely on
+> those symbols; the examples below use only the four compiled modules.
+
+## Features (shipping modules)
 
 - **Thread-Safe Memory Management** - Tracked allocations with leak detection
 - **Lock-Free Ring Buffers** - SPSC and MPMC modes with backpressure support  
@@ -13,7 +23,9 @@ A production-ready C SDK for distributed communication with comprehensive reliab
 - **Retry Logic** - Exponential backoff with jitter
 - **Comprehensive Error Handling** - Error chaining, stack traces, categorization
 - **Cross-Platform** - Linux, macOS, Windows, FreeBSD
-- **Production Logging** - File rotation, syslog, custom callbacks
+- **Wire-quantum certification** - `tests/test_wire_certify.c` certifies the
+  17-byte `DeModFrame` codec (`dcf_frame_t` / `dcf_crc16`) against the
+  cross-language golden vectors.
 
 ## Quick Start
 
@@ -45,11 +57,22 @@ docker compose run --rm dev
 ### Using CMake
 
 ```bash
-mkdir build && cd build
+cd C_SDK && mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
 ctest --output-on-failure
 sudo make install
+```
+
+### Wire-quantum certification
+
+The wire codec is certified against the cross-language golden vectors with a
+dependency-free test (this is what the `certify-c` CI job runs). From the repo
+root:
+
+```bash
+gcc -std=c11 -Wall -Wextra -I codec C_SDK/tests/test_wire_certify.c -lm -o /tmp/wire_certify
+/tmp/wire_certify
 ```
 
 ## Build Options
@@ -128,4 +151,5 @@ nix develop                # Enter dev shell
 
 ## License
 
-LGPL License
+**LGPL-3.0** for the linkable library. (GPL-3.0 in the wider monorepo is scoped
+to the bundled DOOM example only.)

@@ -61,9 +61,11 @@ CI: `.github/workflows/wire-certify.yml` runs Python/C/Rust certs on push/PR to
 ## DCF-Audio (collaborative audio over the wire)
 
 A 20 ms codec block is an **adapter** over `DeModFrame`, serialised into
-`1 + ceil(payload_len/4)` ordinary `CTRL` (type 3) frames. The L2 framing is
-**codec-agnostic and byte-certified across C/Rust/Python**; `codec_id` lives in
-the descriptor, so adding codecs never changes the vectors.
+`1 + ceil(payload_len/4)` ordinary `CTRL` (type 3) frames. The **L2 framing**
+is **codec-agnostic and byte-certified across C/Rust/Python**; `codec_id` lives
+in the descriptor, so adding codecs never changes the vectors. Precisely: the L2
+framing, the PCM-diag codec bytes, and the PM param layout are byte-certified;
+**Opus output and PM synthesis audio are NOT byte-certified**.
 
 - `seq = packet_id[15:5] | frag_idx[4:0]`; `frag_idx 0` = `[len, frag_total, codec_id, flags]`; payload ≤ **124 B/block**.
 - Codecs: Opus (id 0), PCM-diag (id 1, byte-certified), Faust phase-mod (id 2).
@@ -83,10 +85,10 @@ cd codec && cargo run --example jam_loopback -- --codec pcm   # 2-peer jam demo 
 ```
 
 Opus is behind `--features opus` / `-DDCF_AUDIO_OPUS` (needs libopus); PM behind
-`--features pm` / `-DDCF_AUDIO_PM`. Opus output and PM *synthesis audio* are
-**not** byte-certified — only L2 framing, PCM-diag bytes, and the PM param layout
-are. Rust SDK hookup: `DcfNode::send_audio_dcf` + `reassemble_audio_payload`
-(`rust/src/lib.rs`).
+`--features pm` / `-DDCF_AUDIO_PM`. Only **L2 framing, PCM-diag bytes, and the PM
+param layout are byte-certified; Opus output and PM synthesis audio are NOT
+byte-certified**. Rust SDK hookup: `DcfNode::send_audio_dcf` +
+`reassemble_audio_payload` (`rust/src/lib.rs`).
 
 ## DCF-Game (multiplayer game state/events over the wire)
 

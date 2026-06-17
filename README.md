@@ -3,19 +3,48 @@
 ![logo](hydramesh.svg)
 
 
-**Version 5.2.0 | Jun 10, 2026**
+**0.x — pre-release, in active development**
 **Developed by DeMoD LLC**  
 **Contact:** alh477@demod.ltd 
 
-**License:** [![License: LGPL v3](https://img.shields.io/badge/License-LGPLv3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)  
+[![Wire certification](https://github.com/ALH477/HydraMesh/actions/workflows/wire-certify.yml/badge.svg)](https://github.com/ALH477/HydraMesh/actions/workflows/wire-certify.yml)
+[![License: LGPL v3](https://img.shields.io/badge/License-LGPLv3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
+
 ![gpl](https://www.gnu.org/graphics/lgplv3-with-text-154x68.png)
 
-## Overview
-HydraMesh is a free and open-source software (FOSS) framework evolved from the DeMoD Secure Protocol, designed for low-latency, modular, and interoperable data exchange. It supports applications like IoT messaging, real-time gaming synchronization, distributed computing, and edge networking. HydraMesh features a handshakeless design, efficient Protocol Buffers serialization, and a compatibility layer for UDP, TCP, WebSocket, and gRPC transports, enabling seamless peer-to-peer (P2P) networking with self-healing redundancy.
+> **Status, honestly.** HydraMesh is **pre-1.0**. The project does not yet ship
+> "11 production-ready language bindings." What is real today is the **wire
+> quantum** and its cross-language **certificate**, green in CI for a small set of
+> implementations. See the [language status tiers](#language-status) below for
+> exactly what is certified, what is design-complete, and what is still an
+> experimental stub. Version 1.0.0 is reserved for when the advertised set is
+> green in CI.
 
-HydraMesh is hardware and language agnostic, supporting embedded devices (e.g., Raspberry Pi), cloud servers, and mobile platforms (Android/iOS) with bindings in Perl, Python, C, C++, JavaScript (Node.js), Go, Rust, Java/Kotlin, Swift, and Lisp. Version 5.0.0 introduces a plugin system for custom modules and transports, an AUTO mode for dynamic role assignment managed by a master node, and enhanced extensibility. The linkable library is **LGPL-3.0**; GPL-3.0 is scoped to the bundled DOOM example only. It includes CLI, TUI, server/client logic, P2P, and AUTO modes, making it versatile for standalone tools, libraries, or networked services. SDKs (e.g., C SDK, HydraMesh-Lisp SDK) are developed as submodules for streamlined integration.
+## Overview
+HydraMesh is a free and open-source software (FOSS) framework evolved from the DeMoD Secure Protocol, designed for low-latency, modular, and interoperable data exchange. It targets applications like IoT messaging, real-time gaming synchronization, distributed computing, and edge networking. HydraMesh features a handshakeless design and a compatibility layer for UDP, TCP, WebSocket, and gRPC transports, aiming at peer-to-peer (P2P) networking with self-healing redundancy.
+
+The one invariant that is real and certified today is the **wire quantum**: the 17-byte `DeModFrame`. Everything else — audio, game state, transports — is an *adapter* over it, and the cross-language **certificate** (`Documentation/golden_vectors.json`) is the contract that keeps the implementations byte-identical. The linkable library is **LGPL-3.0**; GPL-3.0 is scoped to the bundled DOOM example only.
+
+The framework is intended to be hardware- and language-agnostic across embedded devices (e.g., Raspberry Pi), cloud servers, and mobile platforms. The breadth of that intent is not the breadth of what ships today — see the status tiers immediately below for the truthful, per-language state. Higher-level features (CLI, TUI, AUTO mode, master-node role assignment, Dijkstra routing, AI-driven topology) are **planned**, not present in the current release (see [`Documentation/DCF_CODE_REVIEW.md`](Documentation/DCF_CODE_REVIEW.md), item D1).
 
 <img width="3888" height="2208" alt="image" src="https://github.com/user-attachments/assets/1294e4e6-906c-42ef-af0d-c192056803ea" />
+
+## Language status
+
+HydraMesh is implemented across many languages, but they are at very different
+levels of maturity. A language is only an **advertisable binding** once its
+wire codec is golden-vector-verified in CI. Each language **graduates to
+"Certified" when its `certify-<lang>` CI job goes green** ([`wire-certify.yml`](.github/workflows/wire-certify.yml)).
+
+| Tier | Languages | What it means |
+|------|-----------|---------------|
+| **Certified** | **C** (`C_SDK/`), **Rust** (`codec/`), **Python** (`python/MCP/`, the reference), **Lua** (`GUI/wirelab.lua` + `lua/`) | Golden-vector wire codec, **green in CI today**. These are the only implementations you should treat as bindings. Lua additionally certifies the audio L2 framing. |
+| **Design** | **Haskell** (`haskell/src/DCF/Transport/FrameSpec.hs`), **Lisp** (`lisp/`) | Correct codec code that is **not yet wired into CI** (Lisp self-tests on load; Haskell has no build/test job yet). Promising, but not certified. |
+| **Experimental — building** | **Go**, **Node.js**, **Perl**, **Swift**, **Java**, **Kotlin**, **C++** | gRPC / transport **sketches and stubs** (roughly 1–100 LOC each). A certified wire codec is in progress; these are **not yet advertisable bindings**. |
+
+> The C SDK is intentionally narrow: only four modules compile and ship
+> (`dcf_platform`, `dcf_error`, `dcf_ringbuf`, `dcf_connpool`). See
+> [`C_SDK/README.md`](C_SDK/README.md).
 
 ## Quick start
 
@@ -48,28 +77,33 @@ bootstrap your environment. See **Installation** below for per-language prerequi
 
 
 ### HYDRA Acronym
-The name **HydraMesh** reflects its core strengths: a self-healing, decentralized mesh with proxy-like adaptability. The acronym **HYDRA** stands for:
+The name **HydraMesh** expresses the **design goals**: a self-healing, decentralized mesh with proxy-like adaptability. The acronym **HYDRA** stands for the target architecture — several rows below are **planned**, not present in the current release (see [`Documentation/DCF_CODE_REVIEW.md`](Documentation/DCF_CODE_REVIEW.md), item D1):
 
-| Letter | Meaning | Feature | Description |
-|--------|---------|---------|-------------|
-| **H** | **Highly** | Performance | Sub-millisecond latency with <1% overhead, ideal for gaming and real-time apps. |
-| **Y** | **Yielding** | Adaptive Routing | AI-driven topology optimization using Dijkstra and RTT-based grouping. |
-| **D** | **Decentralized** | P2P Mesh | No single point of failure, with AUTO mode for dynamic role switching. |
-| **R** | **Resilient** | Self-Healing | Automatic failover and redundancy, recovering peers in <50ms. |
-| **A** | **Adaptive** | Proxy Middleware | Plugin system and transport switching (e.g., gRPC, LoRaWAN) for flexible data relay. |
+| Letter | Meaning | Feature | Description | Status |
+|--------|---------|---------|-------------|--------|
+| **H** | **Highly** | Performance | Low overhead handshakeless wire quantum, aimed at gaming and real-time apps. | wire codec certified |
+| **Y** | **Yielding** | Adaptive Routing | AI-driven topology optimization using Dijkstra and RTT-based grouping. | **planned** |
+| **D** | **Decentralized** | P2P Mesh | No single point of failure; AUTO mode for dynamic role switching. | P2P present; AUTO mode **planned** |
+| **R** | **Resilient** | Self-Healing | Automatic failover and redundancy. | **planned** |
+| **A** | **Adaptive** | Proxy Middleware | Plugin system and transport switching (e.g., gRPC, LoRaWAN) for flexible data relay. | partial / in progress |
 
 > **Important**: HydraMesh complies with U.S. export regulations (EAR and ITAR). It avoids encryption to remain export-control-free. Users must ensure custom extensions comply; consult legal experts for specific use cases. DeMoD LLC disclaims liability for non-compliant modifications.
 
 ## Features
-- **Modularity**: Independent components with standardized APIs; plugin system for custom extensions.
-- **Interoperability**: Protocol Buffers and gRPC ensure cross-language (Perl, Python, C, C++, JS, Go, Rust, Java, Swift, Lisp) and cross-platform compatibility.
-- **Low Latency**: Sub-millisecond exchanges with <1% overhead; handshakeless design for real-time applications.
-- **Flexibility**: Compatibility layer for UDP, TCP, WebSocket, gRPC, and custom transports via plugins; supports mobile bindings.
-- **Dynamic Role Assignment**: AUTO mode allows nodes to switch between client, server, or P2P roles under master node control, enabling AI-driven network optimization.
-- **Usability**: CLI for automation, TUI for monitoring; server, client, P2P, and AUTO modes with logging; master node commands for role and config management.
-- **Self-Healing P2P**: Redundant paths, failure detection, RTT-based grouping (clusters by <50ms threshold), and optimized routing (Dijkstra with RTT weights).
-- **Persistence**: Integrated StreamDB for state, metrics, and message logging in HydraMesh-Lisp SDK, with potential extensions to other SDKs.
+
+Present today (certified or shipping):
+- **Certified wire quantum**: the 17-byte `DeModFrame`, byte-identical across the [Certified-tier languages](#language-status) and pinned by a 246-vector golden certificate that CI diffs on every push.
+- **Adapters over the quantum**: DCF-Audio (collaborative audio) and DCF-Game (game state/events), both fragmented over ordinary frames. For audio, **only the L2 framing, the PCM-diag codec bytes, and the PM parameter layout are byte-certified — Opus output and PM synthesis audio are NOT byte-certified.**
+- **Handshakeless, encryption-free design**: low-overhead framing for real-time use; encryption-free by design for EAR/ITAR export compliance.
 - **Open Source**: LGPL-3.0 (library) ensures transparency and community contributions.
+
+Planned / in progress (design goals, not the current release):
+- **Modularity & plugins**: standardized APIs and a plugin system for custom extensions — *partial / in progress*.
+- **Transport flexibility**: a compatibility layer for UDP, TCP, WebSocket, gRPC, and custom transports — *in progress*; full cross-language interoperability tracks the [language tiers](#language-status).
+- **Dynamic Role Assignment**: AUTO mode and master-node control with AI-driven network optimization — **planned**.
+- **Usability**: CLI for automation and TUI for monitoring — **planned**.
+- **Self-Healing P2P**: redundant paths, failure detection, RTT-based grouping, and Dijkstra routing with RTT weights — **planned** (see `Documentation/DCF_CODE_REVIEW.md`, item D1).
+- **Persistence**: **StreamDB** is **Lisp-SDK-only and experimental** (a Rust embedded key-value store via CFFI); extensions to other SDKs are aspirational, not shipping.
 
 ## Architecture
 ```mermaid
@@ -132,15 +166,18 @@ HydraMesh carries real-time, collaborative audio (jamming, talkback) over the me
 **without a new wire format**: a 20 ms codec block is an adapter over the 17-byte
 `DeModFrame`, serialised into a short burst of ordinary `CTRL` frames. The framing
 layer (L2) is codec-agnostic and **byte-certified across C, Rust, and Python** — the
-same way the wire quantum is. See [`Documentation/DCF_AUDIO_SPEC.md`](Documentation/DCF_AUDIO_SPEC.md).
+same way the wire quantum is. **Scope of "certified" here is exact: only the L2
+framing, the PCM-diag codec bytes, and the PM parameter layout are byte-certified.
+Opus output and PM (phase-mod) synthesis audio are NOT byte-certified.** See
+[`Documentation/DCF_AUDIO_SPEC.md`](Documentation/DCF_AUDIO_SPEC.md).
 
-Three codecs ship behind a `codec_id` registry:
+Three codecs sit behind a `codec_id` registry:
 
 | id | Codec | Use | Notes |
 |----|-------|-----|-------|
-| 0 | **Opus** | broadband collaboration | ~24 kbps; needs libopus |
-| 1 | **PCM-diag** | LAN / debug reference | 6 kHz 8-bit; byte-deterministic |
-| 2 | **Faust phase-mod** | musical / instrument | resynthesises timbre from an 8-byte param block |
+| 0 | **Opus** | broadband collaboration | ~24 kbps; needs libopus (gated behind `--features opus`); output not byte-certified |
+| 1 | **PCM-diag** | LAN / debug reference | 6 kHz 8-bit; byte-deterministic and byte-certified |
+| 2 | **Faust phase-mod** | musical / instrument | resynthesises timbre from an 8-byte param block (gated behind `--features pm`); param layout certified, synthesis audio not |
 
 Run the headless 2-peer loopback jam (latency / packet-loss / SNR report):
 
@@ -199,7 +236,15 @@ Use `protoc` to generate bindings for each language:
 
 ## Examples
 
-### Perl (gRPC Client)
+> **These snippets illustrate the *intended* gRPC API surface, not the certified
+> reality.** For the **Experimental — building** languages (Perl, Node.js, Go,
+> C++, Java/Kotlin, Swift — see [Language status](#language-status)) the gRPC
+> bindings are sketches and depend on generated code that does not ship today;
+> treat them as design intent. Only the [Certified-tier](#language-status)
+> wire-codec entry points are guaranteed. The C example below is corrected to use
+> the modules that actually compile.
+
+### Perl (gRPC Client, illustrative / experimental)
 ```perl
 # perl/hydramesh.pl
 use Grpc::XS;
@@ -224,17 +269,32 @@ response = stub.SendMessage(request)
 print(response.data)
 ```
 
-### C SDK (Client)
+### C SDK (shipping modules)
+
+> The high-level client API (`hydramesh_client_*` / `dcf_client_*`) lives under
+> `C_SDK/include/experimental/` and **does not compile or ship**. The C SDK that
+> builds today is the four-module spine (`dcf_platform`, `dcf_error`,
+> `dcf_ringbuf`, `dcf_connpool`). The example below uses only shipping symbols;
+> see [`C_SDK/README.md`](C_SDK/README.md) for more.
+
 ```c
-// c_sdk/examples/client.c
-#include <hydramesh_sdk/hydramesh_client.h>
-int main() {
-    HydraMeshClient* client = hydramesh_client_init("config.json");
-    hydramesh_client_start(client);
-    hydramesh_client_send(client, "Hello", "peer1");
-    hydramesh_client_stop(client);
-    return 0;
+// Connection pool with circuit breaker (shipping API)
+#include <dcf/dcf_connpool.h>
+
+DCFConnPoolConfig cfg = DCF_CONNPOOL_CONFIG_DEFAULT;
+cfg.factory = my_connection_factory;
+cfg.max_connections = 100;
+cfg.circuit.failure_threshold = 5;
+
+DCFConnPool* pool = dcf_connpool_create(&cfg);
+dcf_connpool_start(pool);
+
+DCFPooledConn* conn = dcf_connpool_acquire(pool, "server1", 5000);
+if (conn) {
+    /* use connection... */
+    dcf_connpool_release(pool, conn, true);
 }
+dcf_connpool_destroy(pool, true);
 ```
 
 ### C++ (gRPC Server)
@@ -458,17 +518,32 @@ For master node:
 ```
 
 ## Testing
-Run tests with:
-- C SDK: `cd c_sdk/build && make test_redundancy test_plugin && valgrind --leak-check=full ./p2p`
-- Perl: `prove -r tests/`
-- Python: `pytest tests/`
-- Lisp: `sbcl --eval '(hydramesh:run-tests)'`
-- Others: To be implemented (e.g., `cargo test` for Rust).
-- Integration: Use Docker for multi-language setups; test RTT grouping, failover, AUTO mode role assignment, and StreamDB persistence.
+
+**The certificate is the test that matters.** The cross-language wire/audio/game
+certs are what gate every push (`.github/workflows/wire-certify.yml`); run them
+locally with `make certify` or directly:
+
+```bash
+python3 python/MCP/verify_laws.py /tmp/gv.json   # Python (reference) — regenerate + verify
+cd codec && cargo test --test certify            # Rust
+gcc -std=c11 -Wall -Wextra -I codec C_SDK/tests/test_wire_certify.c -lm -o /tmp/wc && /tmp/wc   # C
+```
+
+Per-language unit tests (where they exist):
+- **C SDK**: `cd C_SDK && mkdir build && cd build && cmake .. && make && ctest` (the wire cert is `C_SDK/tests/test_wire_certify.c`; `tests/legacy/` is quarantined and not built).
+- **Python**: `pytest python/tests/`.
+- **Lisp**: load `lisp/src/hydramesh.lisp` then `lisp/hydramesh-hotfix.lisp` in SBCL — the hotfix prints `:CERTIFIED` (not yet in CI).
+- **Others (Perl, Go, Node.js, etc.)**: experimental — no certified test suite yet.
+- **Integration** (RTT grouping, failover, AUTO-mode role assignment, StreamDB persistence): **planned**, not implemented in the current release.
 
 ### Enhanced Benefits of StreamDB Integration in HydraMesh-Lisp
 
-As we continue building out the SDKs in the HydraMesh mono repository (https://github.com/ALH477/DeMoD-Communication-Framework), the integration of StreamDB into the HydraMesh-Lisp SDK represents a key advancement in providing persistent, high-performance storage. StreamDB, a lightweight, embedded key-value database implemented in Rust, is currently exclusive to the HydraMesh-Lisp SDK, serving as a proof-of-concept for how HydraMesh can incorporate advanced storage solutions. This exclusivity allows us to iterate rapidly in Lisp's expressive environment before expanding to other SDKs (e.g., C, Python), ensuring a battle-tested implementation across the repo. Below, we iterate on StreamDB's benefits, expanding on prior discussions with new insights into its synergy with HydraMesh-Lisp's DSL features, while emphasizing DeMoD LLC's role in developing the only complete GPLv3 version to democratize bleeding-edge technology.
+> **Status:** StreamDB is **Lisp-SDK-only and experimental**. It is not
+> battle-tested, not shipping in any other SDK, and not part of the certified
+> wire path. The sections below describe its *intended* benefits and design, not
+> a production guarantee.
+
+As we continue building out the SDKs in the HydraMesh mono repository (https://github.com/ALH477/DeMoD-Communication-Framework), the integration of StreamDB into the HydraMesh-Lisp SDK is an experimental step toward persistent, embedded storage. StreamDB, a lightweight, embedded key-value database implemented in Rust, is currently exclusive to the HydraMesh-Lisp SDK, serving as a proof-of-concept for how HydraMesh can incorporate storage. This exclusivity lets us iterate in Lisp's expressive environment before any expansion to other SDKs (e.g., C, Python). Below, we iterate on StreamDB's design goals and benefits, with notes on its synergy with HydraMesh-Lisp's DSL features, while emphasizing DeMoD LLC's role in developing the only complete GPLv3 version to democratize bleeding-edge technology.
 
 #### 1. **Superior Persistence for Fault-Tolerant Distributed Systems**
    - **Iteration**: Beyond basic state recovery, StreamDB's paged storage (4KB pages with chaining for up to 256MB documents) and reverse trie indexing enable efficient, prefix-based queries for hierarchical data (e.g., `/state/peers/node1/rtt`). In HydraMesh-Lisp, this means nodes can persist complex structures like peer groups or message logs atomically, reducing fragmentation and supporting up to 8TB databases—ideal for scaling HydraMesh networks.
@@ -545,7 +620,10 @@ workflow and **[ARCHITECTURE.md](ARCHITECTURE.md)** for the repo map. In short:
 3. **The certificate is the contract** — if you touch any codec, regenerate the golden vectors and run the certs (`make certify`); CI fails on drift.
 4. Submit a PR using the [pull request template](.github/PULL_REQUEST_TEMPLATE.md).
 5. Discuss issues via [GitHub Issues](https://github.com/ALH477/DeMoD-Communication-Framework/issues).
-New SDKs (e.g., Python, Perl) encouraged; ensure RTT grouping, plugins, AUTO mode, and LGPL-3.0 compliance.
+New and improved SDKs are encouraged. The bar for a language to graduate from
+**Experimental** to **Certified** is concrete: its `certify-<lang>` CI job passes
+the golden vectors. Higher-level features (RTT grouping, plugins, AUTO mode) are
+planned and additive; LGPL-3.0 compliance is required.
 
 # [DeMoD LLC](https://DeMoD.ltd) Cut the bullshit, Cut the price. Innovation without the overhead.
 
