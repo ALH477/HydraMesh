@@ -1,0 +1,22 @@
+{
+  "name": "@demod/dcf-wire",
+  "version": "0.3.0",
+  "description": "DeMoD DCF 17-byte DeModFrame wire codec — certified Node.js binding",
+  "license": "LGPL-3.0-only",
+  "author": "DeMoD LLC",
+  "main": "src/frame.js",
+  "files": [
+    "src/frame.js"
+  ],
+  "scripts": {
+    "certify": "node test/certify.js",
+    "test": "node test/certify.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ALH477/HydraMesh.git"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}

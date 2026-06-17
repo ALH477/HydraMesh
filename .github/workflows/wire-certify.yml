@@ -252,3 +252,16 @@ jobs:
         run: |
           kotlinc kotlin/src/main/kotlin/dcf/Frame.kt kotlin/src/main/kotlin/dcf/Certify.kt -include-runtime -d /tmp/kcert.jar
           java -cp /tmp/kcert.jar dcf.CertifyKt Documentation/golden_vectors.json
+
+  certify-node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Certify the Node.js DeModFrame codec against the golden vectors
+        run: node JS/nodejs/test/certify.js

@@ -38,9 +38,9 @@ wire codec is golden-vector-verified in CI. Each language **graduates to
 
 | Tier | Languages | What it means |
 |------|-----------|---------------|
-| **Certified** | **C** (`C_SDK/`), **Rust** (`codec/`), **Python** (`python/MCP/`, the reference), **Lua** (`GUI/wirelab.lua` + `lua/`), **Go** (`go/dcf/`), **Java** (`java/com/demod/dcf/`) | Golden-vector wire codec. C/Rust/Python/Lua are **green in CI today**; Go and Java add `certify-go`/`certify-java` (this change — each certifies all 246 vectors locally, green on the next push). These are the only implementations you should treat as bindings. Lua additionally certifies the audio L2 framing. |
+| **Certified** | **C** (`C_SDK/`), **Rust** (`codec/`), **Python** (`python/MCP/`, the reference), **Lua** (`GUI/wirelab.lua` + `lua/`), **Go** (`go/dcf/`), **Java** (`java/com/demod/dcf/`), **Node.js** (`JS/nodejs/`) | Golden-vector wire codec. C/Rust/Python/Lua are **green in CI today**; Go, Java, and Node.js add `certify-go`/`certify-java`/`certify-node` (this change — each certifies all 246 vectors locally, green on the next push). These are the only implementations you should treat as bindings. Lua additionally certifies the audio L2 framing. |
 | **Design** | **Haskell** (`haskell/`), **Kotlin** (`kotlin/`), **Lisp** (`lisp/`) | Full codec + cert written with a CI job, but **not yet proven green** (no GHC/kotlinc in the dev env to pre-verify): Haskell has `certify-haskell` (`dcf-wire.cabal` + `test/Certify.hs`); Kotlin has `certify-kotlin` — a Gradle/Kotlin module (`Frame.kt` + `Certify.kt` + a UDP `DcfNode.kt` replacing the old gRPC stub); Lisp self-tests on load but isn't wired into CI. Promising, not yet certified. |
-| **Experimental — building** | **Node.js**, **Perl**, **Swift**, **C++** | gRPC / transport **sketches and stubs** (roughly 1–100 LOC each). A certified wire codec is in progress; these are **not yet advertisable bindings**. |
+| **Experimental — building** | **Perl**, **Swift**, **C++** | gRPC / transport **sketches and stubs** (roughly 1–100 LOC each). A certified wire codec is in progress; these are **not yet advertisable bindings**. |
 
 > The C SDK is intentionally narrow: only four modules compile and ship
 > (`dcf_platform`, `dcf_error`, `dcf_ringbuf`, `dcf_connpool`). See
@@ -237,7 +237,7 @@ Use `protoc` to generate bindings for each language:
 ## Examples
 
 > **These snippets illustrate the *intended* gRPC API surface, not the certified
-> reality.** For the **Experimental — building** languages (Perl, Node.js,
+> reality.** For the **Experimental — building** languages (Perl,
 > C++, Swift — see [Language status](#language-status)) the gRPC
 > bindings are sketches and depend on generated code that does not ship today;
 > treat them as design intent. Only the [Certified-tier](#language-status)
@@ -536,7 +536,8 @@ Per-language unit tests (where they exist):
 - **Go**: `cd go && go test ./dcf/` — certifies the wire codec against all 246 golden vectors.
 - **Java**: `javac -d /tmp/jout java/com/demod/dcf/Frame.java java/com/demod/dcf/Certify.java && java -cp /tmp/jout com.demod.dcf.Certify` — certifies all 246 vectors.
 - **Kotlin**: `cd kotlin && gradle run` (or the `certify-kotlin` CI job) — certifies the codec; CI-gated (no local kotlinc in the dev env).
-- **Others (Perl, Node.js, etc.)**: experimental — no certified test suite yet.
+- **Node.js**: `node JS/nodejs/test/certify.js` (or `npm --prefix JS/nodejs run certify`) — certifies all 246 vectors.
+- **Others (Perl, etc.)**: experimental — no certified test suite yet.
 - **Integration** (RTT grouping, failover, AUTO-mode role assignment, StreamDB persistence): **planned**, not implemented in the current release.
 
 ### Enhanced Benefits of StreamDB Integration in HydraMesh-Lisp
