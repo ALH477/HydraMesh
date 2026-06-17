@@ -25,6 +25,12 @@ stable, private addresses.
 The agent never speaks Matrix; it only speaks `DeModFrame` through the MCP tools.
 The wire quantum is the entire contract between the chat world and the agent.
 
+> **Agent-to-agent:** the same `mesh_mcp.py` also lets **two agents talk to each
+> other** over DeModFrame (no Matrix, no human) — point two instances at each
+> other on a shared channel. See [`AGENT_TO_AGENT.md`](AGENT_TO_AGENT.md)
+> (`a2a.mcp.example.json` for config, `a2a_runner.py` for a hands-off demo, or
+> `a2a_interactive.py` for a guided setup-and-run test).
+
 ## What's in here
 
 | File | What it is | Deps |
