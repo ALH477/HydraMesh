@@ -1,0 +1,42 @@
+name: CI
+
+# Lightweight build/test smoke for the most-used SDKs. The certification gate lives
+# in wire-certify.yml; this just keeps the codec, Rust SDK, and Python from rotting.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  codec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test the wire+audio codec crate
+        working-directory: codec
+        run: cargo test
+
+  rust-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install protoc (tonic-build needs it)
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Build + compile tests for the Rust SDK
+        working-directory: rust
+        run: |
+          cargo build
+          cargo test --no-run
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Byte-compile smoke (catches syntax errors without service deps)
+        run: python3 -m compileall python/MCP python/tests

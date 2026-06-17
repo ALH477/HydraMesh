@@ -1,0 +1,31 @@
+# EditorConfig — consistent formatting across the polyglot tree.
+# https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# 2-space: web, config, and data files
+[*.{js,ts,jsx,tsx,vue,json,yml,yaml,html,css,scss,toml}]
+indent_size = 2
+
+# Lisp idiom
+[*.{lisp,asd,el}]
+indent_size = 2
+
+# Go uses tabs
+[*.go]
+indent_style = tab
+
+# Makefiles REQUIRE real tabs
+[{Makefile,makefile,*.mk}]
+indent_style = tab
+
+# Markdown: keep trailing whitespace (two spaces = hard line break)
+[*.{md,markdown}]
+trim_trailing_whitespace = false

@@ -21,14 +21,14 @@ jobs:
         run: pip install mcp
 
       - name: Verify wire laws and regenerate golden vectors
-        run: python3 GUI/MCP/verify_laws.py GUI/MCP/golden_vectors.json
+        run: python3 python/MCP/verify_laws.py /tmp/golden_vectors.json
 
       - name: Diff regenerated golden vectors against committed
         run: |
           python3 -c "
           import json
           committed = json.loads(open('Documentation/golden_vectors.json').read())
-          regenerated = json.loads(open('GUI/MCP/golden_vectors.json').read())
+          regenerated = json.loads(open('/tmp/golden_vectors.json').read())
           assert committed['anchors'] == regenerated['anchors'], 'anchors mismatch'
           assert len(committed['encode_basis']) == len(regenerated['encode_basis']), 'encode_basis length mismatch'
           assert len(committed['syndrome_basis']) == len(regenerated['syndrome_basis']), 'syndrome_basis length mismatch'
@@ -40,10 +40,10 @@ jobs:
           "
 
       - name: Run certify_sdk self-test
-        run: python3 GUI/MCP/certify_sdk.py --selftest
+        run: python3 python/MCP/certify_sdk.py --selftest
 
       - name: Run MCP self-test
-        run: python3 GUI/MCP/wirelab_mcp.py --selftest
+        run: python3 python/MCP/wirelab_mcp.py --selftest
 
   certify-c:
     runs-on: ubuntu-latest

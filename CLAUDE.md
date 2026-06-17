@@ -52,9 +52,9 @@ cd codec && cargo test --test certify              # Rust
 CI: `.github/workflows/wire-certify.yml` runs Python/C/Rust certs on push/PR to
 `main` and diffs regenerated vs committed vectors.
 
-> Caveat: `GUI/MCP/*` are **dangling symlinks** into `python/MCP/` (broken in a
-> fresh clone/CI) — use `python/MCP/` paths. `C_SDK/tests/test_wire_certify.c` is
-> pre-existingly broken (calls `dcf_frame_crc`; the header exports `dcf_crc16`).
+> Canonical Python lives in `python/MCP/` (the old `GUI/MCP/*` dangling symlinks
+> were removed). `C_SDK/tests/test_wire_certify.c` is fixed and certifies against
+> the current `dcf_frame_t` / `dcf_crc16` API.
 
 ## DCF-Audio (collaborative audio over the wire)
 

@@ -1,0 +1,46 @@
+# HydraMesh / DCF — top-level task runner.
+# Run `make` or `make help` to list targets. This is the single discoverable entry
+# point for setup, certification, tests, docs, and the client (see README.md).
+
+.DEFAULT_GOAL := help
+.PHONY: help setup certify test docs client clean
+
+help: ## List the available tasks
+	@echo "HydraMesh / DCF — make targets:"
+	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
+		| awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n",$$1,$$2}'
+	@echo ""
+	@echo "Toolchain: 'nix develop' (all langs) or './install_deps.sh' (native) — see README.md."
+
+setup: ## Install native dependencies (distro-aware; prompts before installing)
+	./install_deps.sh
+
+certify: ## Regenerate golden vectors + run the wire & audio certs (Python/Rust/C)
+	@echo "== wire: verify laws + reference codec selftest =="
+	python3 python/MCP/verify_laws.py /tmp/dcf_gv.json
+	python3 python/MCP/certify_sdk.py --selftest
+	@echo "== audio: regenerate vectors + diff against committed =="
+	python3 python/MCP/gen_audio_vectors.py /tmp/dcf_av.json
+	diff /tmp/dcf_av.json Documentation/audio_vectors.json
+	@echo "== Rust certs =="
+	cd codec && cargo test --test certify --test certify_audio
+	@echo "== C certs (L2 + wire) =="
+	gcc -std=c11 -I codec C_SDK/tests/test_wire_certify.c -lm -o /tmp/dcf_wc && /tmp/dcf_wc
+	gcc -std=c11 -I codec C_SDK/tests/test_audio_certify.c -lm -o /tmp/dcf_ac && /tmp/dcf_ac
+	@echo "ALL CERTS PASS"
+
+test: ## Run per-language tests (codec + rust + python; best-effort)
+	cd codec && cargo test
+	cd rust && cargo test
+	pytest python/tests/ || echo "(python tests skipped/failed — see output)"
+
+docs: ## Build the Sphinx HTML docs into Documentation/_build/html
+	cd Documentation && pip install -r requirements.txt && make docs-html
+
+client: ## Print how to run the Tauri comms client (needs the .#comms devshell)
+	@echo "nix develop .#comms"
+	@echo "cd client && npm install && cargo tauri dev"
+
+clean: ## Remove Rust build artifacts
+	cd codec && cargo clean
+	cd rust && cargo clean

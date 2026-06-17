@@ -1,0 +1,24 @@
+# Code owners — auto-requested for review on matching paths.
+# See https://docs.github.com/articles/about-code-owners
+
+# Default owner for everything not matched below.
+*                       @ALH477
+
+# The certified core — changes here ripple across every language binding.
+/codec/                 @ALH477
+/C_SDK/                 @ALH477
+/rust/                  @ALH477
+/python/MCP/            @ALH477
+/Documentation/         @ALH477
+
+# Normative specs and golden vectors — review with extra care.
+/Documentation/WIRE_QUANTUM_SPEC.md   @ALH477
+/Documentation/DCF_AUDIO_SPEC.md      @ALH477
+/Documentation/golden_vectors.json    @ALH477
+/Documentation/audio_vectors.json     @ALH477
+
+# The end-user client.
+/client/                @ALH477
+
+# CI, scaffolding, and onboarding.
+/.github/               @ALH477
