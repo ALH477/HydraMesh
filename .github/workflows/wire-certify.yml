@@ -188,3 +188,32 @@ jobs:
 
       - name: Smoke the rendezvous CLI
         run: lua5.4 lua/dcf_jam.lua --passphrase ci-jam --codec pcm --blocks 20
+
+  certify-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Certify the Go DeModFrame codec against the golden vectors
+        working-directory: go
+        run: go test ./dcf/ -v
+
+  certify-haskell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up GHC and Cabal
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.4'
+          cabal-version: '3.10'
+
+      - name: Certify the Haskell DeModFrame codec against the golden vectors
+        working-directory: haskell
+        run: cabal test --test-show-details=direct
