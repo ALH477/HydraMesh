@@ -233,3 +233,22 @@ jobs:
         run: |
           javac -d /tmp/jout java/com/demod/dcf/Frame.java java/com/demod/dcf/Certify.java
           java -cp /tmp/jout com.demod.dcf.Certify Documentation/golden_vectors.json
+
+  certify-kotlin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Kotlin
+        uses: fwilhe2/setup-kotlin@main
+
+      - name: Certify the Kotlin DeModFrame codec against the golden vectors
+        run: |
+          kotlinc kotlin/src/main/kotlin/dcf/Frame.kt kotlin/src/main/kotlin/dcf/Certify.kt -include-runtime -d /tmp/kcert.jar
+          java -cp /tmp/kcert.jar dcf.CertifyKt Documentation/golden_vectors.json
