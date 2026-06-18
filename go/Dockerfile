@@ -27,6 +27,7 @@ COPY Documentation/golden_vectors.json \
      Documentation/audio_vectors.json \
      Documentation/pm_param_vectors.json \
      Documentation/text_vectors.json \
+     Documentation/superpack_vectors.json \
      ./Documentation/
 
 # The SDK itself.
