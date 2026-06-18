@@ -154,6 +154,25 @@
             };
           };
 
+          # Node.js node: a stdlib `dgram` UDP node (JS/nodejs/src/node.js) in the
+          # same bare-DeModFrame + SuperPack dialect as the Python node — they mesh.
+          dcf-nodejs-node = pkgs.writeShellApplication {
+            name = "dcf-node-js";
+            runtimeInputs = [ pkgs.nodejs ];
+            text = ''exec node ${self}/JS/nodejs/src/node.js "$@"'';
+          };
+          docker-dcf-nodejs = pkgs.dockerTools.buildLayeredImage {
+            name = "alh477/dcf-nodejs";
+            tag = "latest";
+            contents = [ dcf-nodejs-node ];
+            config = {
+              Entrypoint = [ "${dcf-nodejs-node}/bin/dcf-node-js" ];
+              Cmd = [ "recv" "--follow" ];
+              ExposedPorts = { "7801/udp" = { }; };
+              Labels = { "org.opencontainers.image.source" = "https://github.com/ALH477/HydraMesh"; };
+            };
+          };
+
           # Node.js SDK
           dcf-nodejs = pkgs.nodePackages.buildNpmPackage {
             pname = "dcf-nodejs";
