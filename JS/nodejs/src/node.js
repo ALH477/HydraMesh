@@ -119,6 +119,11 @@ function parsePeers(spec) {
 async function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   const o = parseFlags(rest);
+  if (cmd === undefined || cmd === 'version' || cmd === '--version' || cmd === '-v' || cmd === 'help' || cmd === '--help') {
+    console.log('dcfnode(js) 0.3.0 — DCF Node.js node (17-byte DeModFrame + SuperPack, UDP, stdlib dgram)');
+    console.log('usage: dcf-node-js <recv|send> ...  (recv --follow | send "msg" --peers host:port)');
+    process.exit(0);
+  }
   if (cmd === 'recv') {
     const channel = o.channel || process.env.DCF_CHANNEL || 'duet';
     const port = parseInt(o.port || '7801', 10);
