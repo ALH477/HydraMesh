@@ -84,6 +84,34 @@ fun main(args: Array<String>) {
     fails += synFails
     if (synFails == 0) println("  PASS  $synCount syndrome_basis vectors")
 
+    // 5. SuperPack container vectors (Documentation/superpack_vectors.json)
+    val spJson = File(resolveSuper()).readText()
+    val spRe = Regex(
+        "\"a\"\\s*:\\s*\"([0-9a-fA-F]+)\"[\\s\\S]*?\"b\"\\s*:\\s*\"([0-9a-fA-F]+)\"" +
+            "[\\s\\S]*?\"super\"\\s*:\\s*\"([0-9a-fA-F]+)\""
+    )
+    val spCases = spRe.findAll(spJson).toList()
+    fails += check(spCases.isNotEmpty(), "SuperPack vectors present")
+    var spFails = 0
+    for ((i, mc) in spCases.withIndex()) {
+        val a = unhex(mc.groupValues[1]); val b = unhex(mc.groupValues[2])
+        val sp = mc.groupValues[3].lowercase()
+        val packed = SuperPack.pack(a, b)
+        if (!SuperPack.isSuperPack(packed) || Frame.hex(packed) != sp) {
+            spFails++; println("  FAIL  superpack[$i] pack")
+        }
+        val (ra, rb) = SuperPack.unpack(unhex(sp))
+        if (Frame.hex(ra) != mc.groupValues[1].lowercase() || Frame.hex(rb) != mc.groupValues[2].lowercase()) {
+            spFails++; println("  FAIL  superpack[$i] unpack")
+        }
+    }
+    fails += spFails
+    if (spFails == 0) println("  PASS  ${spCases.size} SuperPack pairs pack/unpack byte-identically")
+    val zf = Frame(type = 0).encode()
+    val spz = SuperPack.pack(zf, zf)
+    val joint = ((spz[30].toInt() and 0xFF) shl 8) or (spz[31].toInt() and 0xFF)
+    fails += check(joint == 0x5B75, "SuperPack zero-core joint CRC = 0x%04X (want 0x5B75)".format(joint))
+
     println()
     if (fails == 0) {
         println("ALL CHECKS PASSED — Kotlin codec cemented (${frames.size} encode + $synCount syndrome).")
@@ -114,4 +142,16 @@ private fun resolveGolden(args: Array<String>): String {
         if (File(p).exists()) return p
     }
     error("golden_vectors.json not found")
+}
+
+private fun resolveSuper(): String {
+    for (p in listOf(
+        "Documentation/superpack_vectors.json",
+        "../Documentation/superpack_vectors.json",
+        "../../Documentation/superpack_vectors.json",
+        "python/MCP/superpack_vectors.json",
+    )) {
+        if (File(p).exists()) return p
+    }
+    error("superpack_vectors.json not found (run gen_superpack_vectors.py)")
 }

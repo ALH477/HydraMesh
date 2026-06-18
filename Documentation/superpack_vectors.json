@@ -1,0 +1,47 @@
+{
+ "super_type": 5,
+ "super_len": 32,
+ "core_len": 14,
+ "anchors": {
+  "crc_123456789": 10673,
+  "crc_zero15": 20163,
+  "zero_core_joint_crc": 23413
+ },
+ "cases": [
+  {
+   "a": "d310000000000000000000000000005b80",
+   "b": "d31312340001ffffdeadbeefab12cd24c0",
+   "super": "d31510000000000000000000000000001312340001ffffdeadbeefab12cd2435"
+  },
+  {
+   "a": "d310010203040506cafebabe010203f4af",
+   "b": "d3117fffa1a100b270696e670000ff93b3",
+   "super": "d31510010203040506cafebabe010203117fffa1a100b270696e670000ff2ea0"
+  },
+  {
+   "a": "d31200a010002000ff00ff00ffffffb630",
+   "b": "d313ffffffffffffffffffffffffff00fc",
+   "super": "d3151200a010002000ff00ff00ffffff13ffffffffffffffffffffffffff02d4"
+  },
+  {
+   "a": "d31312340001ffffdeadbeefab12cd24c0",
+   "b": "d31200a010002000ff00ff00ffffffb630",
+   "super": "d3151312340001ffffdeadbeefab12cd1200a010002000ff00ff00ffffff07ff"
+  },
+  {
+   "a": "d3117fffa1a100b270696e670000ff93b3",
+   "b": "d310010203040506cafebabe010203f4af",
+   "super": "d315117fffa1a100b270696e670000ff10010203040506cafebabe0102039789"
+  },
+  {
+   "a": "d313ffffffffffffffffffffffffff00fc",
+   "b": "d313ffffffffffffffffffffffffff00fc",
+   "super": "d31513ffffffffffffffffffffffffff13ffffffffffffffffffffffffffe472"
+  },
+  {
+   "a": "d310000000000000000000000000005b80",
+   "b": "d313ffffffffffffffffffffffffff00fc",
+   "super": "d315100000000000000000000000000013ffffffffffffffffffffffffff0009"
+  }
+ ]
+}

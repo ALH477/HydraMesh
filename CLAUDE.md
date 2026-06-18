@@ -120,6 +120,32 @@ SDK hookup: `DcfNode::send_game_dcf` + `reassemble_game_payload` and
 `MessageHandler::handle_game` (`rust/src/lib.rs`). Client: a **Game** tab (a 2-D
 dot-arena demo) alongside Jam/Messages in `client/`.
 
+## DCF SuperPack (the paired-frame container)
+
+An **opt-in container adapter**, not a new wire format: SuperPack packs **two**
+17-byte `DeModFrame`s into **one 32-byte** message (`sync | sflags=0x15 | coreA[14]
+| coreB[14] | joint-crc16`), dropping the 6 redundant bytes (2 inner syncs + 2
+inner CRCs) recoverable from context. Net `34 → 32` bytes **and** a single joint
+CRC over both quanta. `unpack` rebuilds each inner frame **bit-exact**, so the
+246-vector wire certificate is untouched — single frames stay the default.
+
+It is the **lower-latency option for paired sends**: one datagram instead of two
+(one IP/UDP header, one syscall, one packet on the wire), so a frame pair crosses
+the network with strictly less per-pair overhead/latency than two separate frames.
+
+- Spec: `Documentation/SUPERPACK_SPEC.md`. Contract: `Documentation/superpack_vectors.json`
+  (+ identical `python/MCP/` copy) and `codec/superpack_vectors.gen.h`.
+- Implemented and **certified in every wire-codec language** (Python/Rust/C/Go/C++/
+  Perl/Node/Java/Kotlin/Swift/Haskell/Lua/Lisp); `pack`/`unpack`/`is_superpack`
+  live next to each language's frame codec (e.g. `codec/src/superpack.rs`,
+  `codec/demod_superpack.h`, `go/dcf/superpack.go`). Anchor: zero-core joint CRC = `0x5B75`.
+
+```sh
+python3 python/MCP/gen_superpack_vectors.py /tmp/sp.json   # regen + verify laws
+cd codec && cargo test --test certify_superpack            # Rust
+gcc -std=c11 -I codec C_SDK/tests/test_superpack_certify.c -lm -o /tmp/sc && /tmp/sc  # C
+```
+
 ## Comms client (`client/`) — Tauri 2 end-user app
 
 A cross-platform communications client (Rust core + Vue UI) on `dcf-rust-sdk` + the

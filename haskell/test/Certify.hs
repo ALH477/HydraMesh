@@ -24,6 +24,7 @@ import           System.Directory     (doesFileExist)
 import           System.Exit          (exitFailure, exitSuccess)
 
 import           DCF.Transport.FrameSpec
+import           DCF.Transport.SuperPack (isSuperPack, packSuper, unpackSuper)
 
 main :: IO ()
 main = do
@@ -72,11 +73,37 @@ main = do
     when (got /= expected) $
       bad ("syndrome_basis[" ++ show i ++ "]: got 0x" ++ hex16 got ++ " want 0x" ++ hex16 expected)
 
+  -- 5. SuperPack container vectors (Documentation/superpack_vectors.json)
+  spPath <- findSuper
+  spRaw  <- BL.readFile spPath
+  let spRoot  = fromMaybe (error ("cannot parse JSON: " ++ spPath)) (decode spRaw :: Maybe Value)
+      spCases = arr (look "cases" spRoot)
+  forM_ (zip [0 :: Int ..] spCases) $ \(i, o) -> do
+    let aHex = T.unpack (str (look "a" o))
+        bHex = T.unpack (str (look "b" o))
+        spHx = T.unpack (str (look "super" o))
+    case packSuper (hexBytes aHex) (hexBytes bHex) of
+      Left e   -> bad ("superpack[" ++ show i ++ "]: pack " ++ e)
+      Right pk -> do
+        unless (isSuperPack pk) $ bad ("superpack[" ++ show i ++ "]: not recognised")
+        unless (bytesHex pk == spHx) $ bad ("superpack[" ++ show i ++ "]: pack bytes")
+    case unpackSuper (hexBytes spHx) of
+      Left e         -> bad ("superpack[" ++ show i ++ "]: unpack " ++ e)
+      Right (ra, rb) ->
+        unless (bytesHex ra == aHex && bytesHex rb == bHex) $
+          bad ("superpack[" ++ show i ++ "]: unpack mismatch")
+  let zeroFrame = encodeFrame (Frame 1 Data 0 0 0 (0, 0, 0, 0) 0)
+  case packSuper zeroFrame zeroFrame of
+    Right spz -> unless (makeW16 (spz !! 30) (spz !! 31) == 0x5B75) $
+                   bad "superpack zero-core anchor /= 0x5B75"
+    Left e    -> bad ("superpack zero-core: " ++ e)
+
   n <- readIORef fails
   putStrLn ""
   if n == 0
     then do putStrLn ("ALL CHECKS PASSED (" ++ show (length encs) ++ " encode + "
-                      ++ show (length syns) ++ " syndrome) — Haskell codec cemented.")
+                      ++ show (length syns) ++ " syndrome + " ++ show (length spCases)
+                      ++ " superpack) — Haskell codec cemented.")
             exitSuccess
     else do putStrLn (show n ++ " certification check(s) FAILED")
             exitFailure
@@ -89,6 +116,14 @@ findGolden = go [ "../Documentation/golden_vectors.json"
                 , "../python/MCP/golden_vectors.json" ]
   where
     go []       = error "golden_vectors.json not found in expected locations"
+    go (p : ps) = do e <- doesFileExist p; if e then return p else go ps
+
+findSuper :: IO FilePath
+findSuper = go [ "../Documentation/superpack_vectors.json"
+               , "Documentation/superpack_vectors.json"
+               , "../python/MCP/superpack_vectors.json" ]
+  where
+    go []       = error "superpack_vectors.json not found (run gen_superpack_vectors.py)"
     go (p : ps) = do e <- doesFileExist p; if e then return p else go ps
 
 look :: Key -> Value -> Value

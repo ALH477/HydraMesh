@@ -6,11 +6,13 @@
   "author": "DeMoD LLC",
   "main": "src/frame.js",
   "files": [
-    "src/frame.js"
+    "src/frame.js",
+    "src/superpack.js"
   ],
   "scripts": {
-    "certify": "node test/certify.js",
-    "test": "node test/certify.js"
+    "certify": "node test/certify.js && node test/certify_superpack.js",
+    "certify:superpack": "node test/certify_superpack.js",
+    "test": "node test/certify.js && node test/certify_superpack.js"
   },
   "repository": {
     "type": "git",

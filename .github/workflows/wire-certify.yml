@@ -45,6 +45,14 @@ jobs:
       - name: Run MCP self-test
         run: python3 python/MCP/wirelab_mcp.py --selftest
 
+      - name: SuperPack — self-test, regenerate vectors, diff the committed copies
+        run: |
+          python3 python/MCP/superpack.py
+          python3 python/MCP/gen_superpack_vectors.py /tmp/superpack_vectors.json
+          diff /tmp/superpack_vectors.json   Documentation/superpack_vectors.json
+          diff /tmp/superpack_vectors.json   python/MCP/superpack_vectors.json
+          diff /tmp/superpack_vectors.gen.h  codec/superpack_vectors.gen.h
+
   certify-c:
     runs-on: ubuntu-latest
     steps:
@@ -58,6 +66,11 @@ jobs:
       - name: Run C wire certification
         run: build/wire_certify
 
+      - name: Build and run C SuperPack certification
+        run: |
+          gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_superpack_certify C_SDK/tests/test_superpack_certify.c -lm
+          /tmp/test_superpack_certify
+
   certify-rust:
     runs-on: ubuntu-latest
     steps:
@@ -70,6 +83,7 @@ jobs:
         working-directory: codec
         run: |
           cargo test --test certify
+          cargo test --test certify_superpack
 
   certify-audio:
     runs-on: ubuntu-latest
@@ -186,6 +200,9 @@ jobs:
       - name: Certify the Lua DCF-Audio framework
         run: lua5.4 lua/selftest.lua
 
+      - name: Certify the Lua SuperPack container
+        run: lua5.4 lua/dcf_superpack.lua
+
       - name: Smoke the rendezvous CLI
         run: lua5.4 lua/dcf_jam.lua --passphrase ci-jam --codec pcm --blocks 20
 
@@ -239,8 +256,10 @@ jobs:
 
       - name: Certify the Java DeModFrame codec against the golden vectors
         run: |
-          javac -d /tmp/jout java/com/demod/dcf/Frame.java java/com/demod/dcf/Certify.java
+          javac -d /tmp/jout java/com/demod/dcf/Frame.java java/com/demod/dcf/Certify.java \
+            java/com/demod/dcf/SuperPack.java java/com/demod/dcf/SuperPackCertify.java
           java -cp /tmp/jout com.demod.dcf.Certify Documentation/golden_vectors.json
+          java -cp /tmp/jout com.demod.dcf.SuperPackCertify Documentation/superpack_vectors.json
 
   certify-kotlin:
     runs-on: ubuntu-latest
@@ -258,7 +277,7 @@ jobs:
 
       - name: Certify the Kotlin DeModFrame codec against the golden vectors
         run: |
-          kotlinc kotlin/src/main/kotlin/dcf/Frame.kt kotlin/src/main/kotlin/dcf/Certify.kt -include-runtime -d /tmp/kcert.jar
+          kotlinc kotlin/src/main/kotlin/dcf/Frame.kt kotlin/src/main/kotlin/dcf/SuperPack.kt kotlin/src/main/kotlin/dcf/Certify.kt -include-runtime -d /tmp/kcert.jar
           java -cp /tmp/kcert.jar dcf.CertifyKt Documentation/golden_vectors.json
 
   certify-node:
@@ -273,6 +292,9 @@ jobs:
 
       - name: Certify the Node.js DeModFrame codec against the golden vectors
         run: node JS/nodejs/test/certify.js
+
+      - name: Certify the Node.js SuperPack container
+        run: node JS/nodejs/test/certify_superpack.js
 
   certify-perl:
     runs-on: ubuntu-latest
@@ -299,6 +321,11 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -I cpp/include -o /tmp/cpp_certify cpp/tests/certify.cpp
           /tmp/cpp_certify Documentation/golden_vectors.json
+
+      - name: Certify the C++ SuperPack container
+        run: |
+          g++ -std=c++17 -Wall -Wextra -I cpp/include -o /tmp/cpp_superpack cpp/tests/certify_superpack.cpp
+          /tmp/cpp_superpack
 
   certify-swift:
     runs-on: ubuntu-latest
