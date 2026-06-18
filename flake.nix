@@ -134,6 +134,26 @@
             };
           };
 
+          # Python node: the stdlib mesh endpoint (matrix-bridge/a2a.py over
+          # DcfTextNode — bare DeModFrame + SuperPack dialect). `recv --follow`
+          # is a persistent listener; `send "msg" --peers h:p` unicasts.
+          dcf-python-node = pkgs.writeShellApplication {
+            name = "dcf-node";
+            runtimeInputs = [ pkgs.python3 ];
+            text = ''exec python3 ${self}/matrix-bridge/a2a.py "$@"'';
+          };
+          docker-dcf-python = pkgs.dockerTools.buildLayeredImage {
+            name = "alh477/dcf-python";
+            tag = "latest";
+            contents = [ dcf-python-node ];
+            config = {
+              Entrypoint = [ "${dcf-python-node}/bin/dcf-node" ];
+              Cmd = [ "recv" "--follow" ];
+              ExposedPorts = { "7801/udp" = { }; };
+              Labels = { "org.opencontainers.image.source" = "https://github.com/ALH477/HydraMesh"; };
+            };
+          };
+
           # Node.js SDK
           dcf-nodejs = pkgs.nodePackages.buildNpmPackage {
             pname = "dcf-nodejs";
