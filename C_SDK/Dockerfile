@@ -63,7 +63,6 @@ WORKDIR /src
 
 # Copy source files (including LICENSE for CPack)
 COPY CMakeLists.txt LICENSE* ./
-COPY cmake/ ./cmake/
 COPY include/ ./include/
 COPY src/ ./src/
 COPY tests/ ./tests/
