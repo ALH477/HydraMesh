@@ -50,17 +50,18 @@
             meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 
-          # Go SDK
+          # Go SDK — builds the dcfnode CLI (a real UDP DeModFrame node, the Go
+          # analogue of the Rust `dcf` binary). The module is stdlib-only (no
+          # external deps, no gRPC/proto), so vendorHash = null.
           dcf-go = pkgs.buildGoModule {
             pname = "dcf-go";
             version = "0.3.0";
             src = self + "/go";
-            vendorHash = pkgs.lib.fakeHash; # TODO: real hash via `nix build` (needs a nix environment)
-            preBuild = ''
-              ${protobuf}/bin/protoc -I${self} --go_out=. --go-grpc_out=. ${self}/messages.proto ${self}/services.proto
-            '';
-            meta.description = "Go SDK for DCF";
+            vendorHash = null; # stdlib-only: nothing to vendor
+            subPackages = [ "cmd/dcfnode" ];
+            meta.description = "DCF Go SDK node (dcfnode CLI)";
             meta.license = pkgs.lib.licenses.lgpl3Only;
+            meta.mainProgram = "dcfnode";
           };
 
           # Lisp SDK (dev shell oriented, as it's interpreted)
@@ -88,19 +89,49 @@
             meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 
-          # Rust SDK
+          # Rust SDK — the `dcf` node binary. Built from the whole repo so the
+          # crate's path dependency on ../codec resolves; build.rs runs tonic-build
+          # itself (it just needs protoc via PROTOC), so no manual codegen phase.
           dcf-rust = pkgs.rustPlatform.buildRustPackage {
             pname = "dcf-rust";
             version = "0.3.0";
-            src = self + "/rust";
-            cargoLock.lockFile = self + "/rust/Cargo.lock"; # deterministic — no precomputed hash needed
+            src = self;
+            cargoRoot = "rust";
+            buildAndTestSubdir = "rust";
+            cargoLock.lockFile = self + "/rust/Cargo.lock"; # deterministic — local path dep, no hash
             nativeBuildInputs = [ protobuf ];
-            buildPhase = ''
-              ${pkgs.tonic-build}/bin/tonic-build --build-server --out-dir src ${self}/services.proto
-              cargo build --release
-            '';
-            meta.description = "Rust SDK for DCF";
+            PROTOC = "${protobuf}/bin/protoc";
+            doCheck = false;
+            meta.description = "DCF Rust SDK node (dcf binary)";
             meta.license = pkgs.lib.licenses.lgpl3Only;
+            meta.mainProgram = "dcf";
+          };
+
+          # ── OCI node images (hermetic; built with `nix build .#docker-*`) ──────
+          # These run like real nodes, not cert harnesses: each image's entrypoint
+          # is the node binary with `start` as the default command.
+          docker-dcf-go = pkgs.dockerTools.buildLayeredImage {
+            name = "alh477/dcf-go";
+            tag = "latest";
+            contents = [ dcf-go pkgs.cacert ];
+            config = {
+              Entrypoint = [ "${dcf-go}/bin/dcfnode" ];
+              Cmd = [ "start" ];
+              ExposedPorts = { "7777/udp" = { }; };
+              Labels = { "org.opencontainers.image.source" = "https://github.com/ALH477/HydraMesh"; };
+            };
+          };
+
+          docker-dcf-rust = pkgs.dockerTools.buildLayeredImage {
+            name = "alh477/dcf-rs";
+            tag = "latest";
+            contents = [ dcf-rust pkgs.cacert ];
+            config = {
+              Entrypoint = [ "${dcf-rust}/bin/dcf" ];
+              Cmd = [ "start" ];
+              ExposedPorts = { "7777/udp" = { }; "50051/tcp" = { }; };
+              Labels = { "org.opencontainers.image.source" = "https://github.com/ALH477/HydraMesh"; };
+            };
           };
 
           # Node.js SDK
