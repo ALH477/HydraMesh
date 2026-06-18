@@ -14,9 +14,11 @@
 # `start` as the default command (override with any subcommand, e.g.
 #   docker run --rm alh477/dcf-go send-text --peer host:7777 --text hi).
 #
-# Node-capable images: dcf-go (go/cmd/dcfnode), dcf-rs (rust `dcf`). The C SDK
-# ships no networking (only 4 modules compile), and the C++ binding is a header-
-# only codec, so there is no dcf-c / dcf-cpp *node* image to build here.
+# Node-capable images and their on-wire dialect:
+#   dcf-go, dcf-rs        — ProtoMessage transport (mesh with each other)
+#   dcf-python, dcf-nodejs — bare DeModFrame + SuperPack (mesh with each other)
+# The C SDK ships no networking (only 4 modules compile) and the C++ binding is a
+# header-only codec, so there is no dcf-c / dcf-cpp *node* image to build here.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -39,9 +41,16 @@ build_one() {
 
 target="${1:-all}"
 case "$target" in
-  dcf-go) build_one dcf-go docker-dcf-go ;;
-  dcf-rs) build_one dcf-rs docker-dcf-rust ;;
-  all)    build_one dcf-go docker-dcf-go; build_one dcf-rs docker-dcf-rust ;;
-  *) echo "unknown target: $target (dcf-go|dcf-rs|all)"; exit 2 ;;
+  dcf-go)     build_one dcf-go     docker-dcf-go ;;
+  dcf-rs)     build_one dcf-rs     docker-dcf-rust ;;
+  dcf-python) build_one dcf-python docker-dcf-python ;;
+  dcf-nodejs) build_one dcf-nodejs docker-dcf-nodejs ;;
+  all)
+    build_one dcf-go     docker-dcf-go
+    build_one dcf-rs     docker-dcf-rust
+    build_one dcf-python docker-dcf-python
+    build_one dcf-nodejs docker-dcf-nodejs
+    ;;
+  *) echo "unknown target: $target (dcf-go|dcf-rs|dcf-python|dcf-nodejs|all)"; exit 2 ;;
 esac
 echo "DONE"
