@@ -228,17 +228,22 @@ static const char* opt(int argc, char** argv, const char* key, const char* def) 
     return def;
 }
 
+static void print_usage() {
+    std::printf(
+        "dcfcpp 0.3.0 — DCF C++ gRPC node (DeModFrame + SuperPack over gRPC bidi MeshStream)\n"
+        "  serve      [--port 50051] [--node-id ID]\n"
+        "  connect    --peer host:port [--node-id ID]\n"
+        "  send-frame --peer host:port [--hex BYTES]\n"
+        "  bench      --peer host:port [--count 100]\n");
+}
+
 int main(int argc, char** argv) {
-    if (argc < 2) {
-        std::fprintf(stderr,
-            "dcfcpp — DCF C++ gRPC node\n"
-            "  serve      [--port 50051] [--node-id ID]\n"
-            "  connect    --peer host:port [--node-id ID]\n"
-            "  send-frame --peer host:port [--hex BYTES]\n"
-            "  bench      --peer host:port [--count 100]\n");
-        return 2;
-    }
+    if (argc < 2) { print_usage(); return 2; }
     std::string cmd = argv[1];
+    if (cmd == "version" || cmd == "--version" || cmd == "-v" || cmd == "help" || cmd == "--help") {
+        print_usage();
+        return 0;
+    }
     int rc = argc - 2; char** ra = argv + 2;
     if (cmd == "serve") {
         std::string port = opt(rc, ra, "--port", "50051");
