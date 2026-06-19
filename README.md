@@ -20,6 +20,8 @@
 > experimental stub. Version 1.0.0 is reserved for when the advertised set is
 > green in CI.
 
+https://github.com/user-attachments/assets/4f167206-7c25-4f70-b277-4f23d707cb7f
+
 ## Overview
 HydraMesh is a free and open-source software (FOSS) framework evolved from the DeMoD Secure Protocol, designed for low-latency, modular, and interoperable data exchange. It targets applications like IoT messaging, real-time gaming synchronization, distributed computing, and edge networking. HydraMesh features a handshakeless design and a compatibility layer for UDP, TCP, WebSocket, and gRPC transports, aiming at peer-to-peer (P2P) networking with self-healing redundancy.
 
