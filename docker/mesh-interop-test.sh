@@ -16,7 +16,7 @@
 set -uo pipefail
 
 ORG="${ORG:-alh477}"; TAG="${TAG:-latest}"
-NET="dcf-interop-$$"; MODEM_DIR="$(mktemp -d)"
+NET="dcf-interop-$$"; MODEM_VOL="dcf-modem-$$"
 GO="$ORG/dcf-go:$TAG"; RS="$ORG/dcf-rs:$TAG"; PY="$ORG/dcf-python:$TAG"
 JS="$ORG/dcf-nodejs:$TAG"; C="$ORG/dcf-c:$TAG"; CPP="$ORG/dcf-cpp:$TAG"
 fails=0
@@ -25,10 +25,10 @@ fail() { echo "  FAIL  $*"; fails=$((fails + 1)); }
 cleanup() {
   docker rm -f go-hub rs-hub py-hub js-hub c-hub cpp-hub >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
-  rm -rf "$MODEM_DIR"
+  docker volume rm "$MODEM_VOL" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
-cleanup; docker network create "$NET" >/dev/null
+cleanup; docker network create "$NET" >/dev/null; docker volume create "$MODEM_VOL" >/dev/null
 
 echo "== 1. identity / cross-cert matrix =="
 docker run --rm "$GO"  version 2>&1 | grep -q "dcfnode"         && pass "dcf-go"     || fail "dcf-go version"
@@ -60,10 +60,9 @@ docker logs py-hub 2>&1 | grep -q "node-to-py" && pass "Py hub <- Node (cross-la
 docker rm -f py-hub >/dev/null 2>&1
 
 echo "== 4. Faust modem (file medium): dcf-c send-modem -> recv-modem per modulation =="
-U="$(id -u):$(id -g)"
 for mod in fsk ook psk qam; do
-  docker run --rm --user "$U" -v "$MODEM_DIR:/m" "$C" send-modem --medium "/m/$mod.dcfm" --modulation "$mod" --text "modem-$mod" >/dev/null 2>&1
-  docker run --rm --user "$U" -v "$MODEM_DIR:/m" "$C" recv-modem --medium "/m/$mod.dcfm" 2>&1 | grep -q "modem-$mod" \
+  docker run --rm -v "$MODEM_VOL:/m" "$C" send-modem --medium "/m/$mod.dcfm" --modulation "$mod" --text "modem-$mod" >/dev/null 2>&1
+  docker run --rm -v "$MODEM_VOL:/m" "$C" recv-modem --medium "/m/$mod.dcfm" 2>&1 | grep -q "modem-$mod" \
     && pass "modem $mod: byte-exact over the medium" || fail "modem $mod"
 done
 

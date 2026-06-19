@@ -168,15 +168,36 @@ SDK additions for the client: `list_peers_detailed`/per-peer RTT, `run_ping_sche
 
 ## C SDK (`C_SDK/`) — compiled spine vs. quarantine
 
-Only four modules compile and ship (the sound part): `dcf_platform`, `dcf_error`,
-`dcf_ringbuf`, `dcf_connpool` (`DCF_SOURCES` in `C_SDK/CMakeLists.txt`). Public
-headers declare more than the build delivers; `include/experimental/`,
-`plugins/experimental/`, `tests/legacy/` are quarantined (don't build).
+Only four modules compile and ship in the **library** (the sound part):
+`dcf_platform`, `dcf_error`, `dcf_ringbuf`, `dcf_connpool` (`DCF_SOURCES` in
+`C_SDK/CMakeLists.txt`). Public headers declare more than the build delivers;
+`include/experimental/`, `plugins/experimental/`, `tests/legacy/` are quarantined.
+
+Separately, **`C_SDK/node/` builds `dcfnode`** (`-DDCF_BUILD_NODE=ON`, on by
+default) — a real mesh node *independent of* the 4-module spine, on the header-only
+certified codec (`../codec/demod_*.h`):
+- **ProtoMessage/UDP transport** (`node/dcf_proto.h`, byte-identical to Go/Rust's
+  envelope — golden vector in `tests/test_proto_certify.c`): `start`,
+  `send-text/game/position`. **Meshes with the Go and Rust nodes.**
+- **Faust-DSP modem** (`node/dcf_modem.h` + `codec/faust/dcf_modem.dsp`):
+  `send-modem`/`recv-modem` carry a frame across a modulation **medium**
+  (FSK/OOK/PSK/QAM). The byte↔symbol mapping is certified
+  (`codec/demod_modulation.h`); the waveform is loopback-tested. See
+  `Documentation/DCF_MODEM_SPEC.md`.
+
+The **C++ binding** (`cpp/`) is the **supercharged gRPC node** `dcfcpp`
+(`cpp/src/dcf_node.cpp`, `cpp/proto/dcf.proto`): unary `SendFrame`, bidirectional
+`MeshStream` (frames + SuperPacks + game/audio/text adapter frames), `Ping`/RTT,
+health + reflection — over the header-only `cpp/include/dcf/{frame,superpack}.hpp`.
 
 ```sh
-cd C_SDK && mkdir build && cd build && cmake .. && make && ctest
-cd C_SDK && make            # minimal/embedded (no CMake)
+cd C_SDK && cmake -B build -DDCF_BUILD_NODE=ON -DDCF_BUILD_EXAMPLES=OFF && cmake --build build && ctest --test-dir build
+cd cpp && cmake -B build -DDCF_CPP_GRPC=ON && cmake --build build   # needs grpc+protobuf (use `nix build .#dcf-cpp`)
 ```
+
+Both ship as hermetic Nix node images: `nix build .#docker-dcf-c` /
+`.#docker-dcf-cpp` (entrypoints `dcfnode start` / `dcfcpp serve`); pushed via
+`docker/build-and-push.sh` and exercised by `docker/mesh-interop-test.sh`.
 
 ## Per-language build & test
 

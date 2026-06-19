@@ -53,6 +53,14 @@ jobs:
           diff /tmp/superpack_vectors.json   python/MCP/superpack_vectors.json
           diff /tmp/superpack_vectors.gen.h  codec/superpack_vectors.gen.h
 
+      - name: Modulation — self-test, regenerate vectors, diff the committed copies
+        run: |
+          python3 python/MCP/modulationlab_core.py
+          python3 python/MCP/gen_modulation_vectors.py /tmp/modulation_vectors.json
+          diff /tmp/modulation_vectors.json   Documentation/modulation_vectors.json
+          diff /tmp/modulation_vectors.json   python/MCP/modulation_vectors.json
+          diff /tmp/modulation_vectors.gen.h  codec/modulation_vectors.gen.h
+
   certify-c:
     runs-on: ubuntu-latest
     steps:
@@ -71,6 +79,14 @@ jobs:
           gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_superpack_certify C_SDK/tests/test_superpack_certify.c -lm
           /tmp/test_superpack_certify
 
+      - name: Build and run C modulation certification + node/modem (cmake)
+        run: |
+          gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_modulation_certify C_SDK/tests/test_modulation_certify.c
+          /tmp/test_modulation_certify
+          cmake -S C_SDK -B /tmp/cbuild -DDCF_BUILD_NODE=ON -DDCF_BUILD_TESTS=ON -DDCF_BUILD_EXAMPLES=OFF
+          cmake --build /tmp/cbuild --target dcfnode test_proto_certify test_modem_loopback
+          ctest --test-dir /tmp/cbuild -R "proto_certify|modulation_certify|modem_loopback" --output-on-failure
+
   certify-rust:
     runs-on: ubuntu-latest
     steps:
@@ -84,6 +100,7 @@ jobs:
         run: |
           cargo test --test certify
           cargo test --test certify_superpack
+          cargo test --test certify_modulation
 
   certify-audio:
     runs-on: ubuntu-latest

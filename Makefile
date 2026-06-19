@@ -34,6 +34,13 @@ certify: ## Regenerate golden vectors + run the wire & audio certs (Python/Rust/
 	diff /tmp/dcf_sp.json python/MCP/superpack_vectors.json
 	cd codec && cargo test --test certify_superpack
 	gcc -std=c11 -I codec C_SDK/tests/test_superpack_certify.c -lm -o /tmp/dcf_sc && /tmp/dcf_sc
+	@echo "== Modulation (Faust modem mapping): regenerate vectors + diff, Rust + C certs =="
+	python3 python/MCP/modulationlab_core.py
+	python3 python/MCP/gen_modulation_vectors.py /tmp/dcf_mod.json
+	diff /tmp/dcf_mod.json Documentation/modulation_vectors.json
+	diff /tmp/dcf_mod.json python/MCP/modulation_vectors.json
+	cd codec && cargo test --test certify_modulation
+	gcc -std=c11 -I codec C_SDK/tests/test_modulation_certify.c -o /tmp/dcf_mc && /tmp/dcf_mc
 	@echo "ALL CERTS PASS"
 
 test: ## Run per-language tests (codec + rust + python; best-effort)
