@@ -1,0 +1,344 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LGPL-3.0-only
+# Copyright (c) 2026 DeMoD LLC.
+"""dcf-rec — capture, inspect, and record DCF-Audio over the `dcf` ffmpeg demuxer.
+
+DCF-Audio is an adapter over the 17-byte DeModFrame wire quantum. A ".dcf" dump is
+a flat concatenation of those frames (one per UDP MSG_AUDIO payload). This tool is
+the front door to the native `dcf` demuxer built into `dcf-ffmpeg`:
+
+  dcf-rec INPUT.dcf -o OUT.ext     record to a file (type by extension)
+  dcf-rec info INPUT.dcf           inspect: peers, codecs, duration, packet loss
+  dcf-rec split INPUT.dcf          one file per peer (DAW stems)
+  dcf-rec listen --bind :7100 ...  capture audio live off the wire
+
+ffmpeg/ffprobe come from $PATH (the Nix `dcf-rec` package injects `dcf-ffmpeg`);
+override with FFMPEG=/path FFPROBE=/path for a local patched build.
+"""
+import argparse
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import time
+
+# Resolve repo root from this script's location so the certified Python modules
+# import whether run from a checkout or the read-only Nix store.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(_HERE)
+sys.path.insert(0, os.path.join(_ROOT, "python", "MCP"))
+sys.path.insert(0, os.path.join(_ROOT, "python"))
+
+import audiolab_core as al               # certified L2 framing + codec ids
+from wirelab_core import decode          # certified DeModFrame decode
+
+FFMPEG = os.environ.get("FFMPEG", "ffmpeg")
+FFPROBE = os.environ.get("FFPROBE", "ffprobe")
+FRAME_SIZE = 17
+BLOCK_S = 0.020                          # 20 ms per audio block
+PROG = "dcf-rec"
+
+# codec_id -> (ffmpeg codec_name as the demuxer presents it, sample rate)
+CODEC_INFO = {
+    al.CODEC_OPUS:     ("opus", 48000),
+    al.CODEC_PCM_DIAG: ("pcm_u8", al.PCM_DIAG_RATE),
+    al.CODEC_FAUST_PM: ("pm/pcm_f32le", 48000),
+}
+SUBCMDS = ("rec", "info", "split", "listen")
+
+
+def err(msg, code=2):
+    print(f"{PROG}: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def run(cmd):
+    r = subprocess.run(cmd)
+    if r.returncode != 0:
+        err(f"ffmpeg failed ({r.returncode})", code=1)
+
+
+def split_hostport(s):
+    host, _, port = s.rpartition(":")
+    if not port:
+        err(f"expected host:port, got {s!r}")
+    return (host or "0.0.0.0", int(port))
+
+
+# ── codec selection by output extension (shared by rec + split) ───────────────
+def ext_codec(ext, is_opus):
+    """ffmpeg `-c:a ...` args for a single audio stream of extension `ext`."""
+    if ext == "wav":
+        return ["-c:a", "pcm_s16le"]
+    if ext == "flac":
+        return ["-c:a", "flac"]
+    if ext == "mp3":
+        return ["-c:a", "libmp3lame", "-q:a", "2"]
+    if ext in ("m4a", "aac"):
+        return ["-c:a", "aac"]
+    if ext in ("opus", "ogg"):
+        return ["-c:a", "copy"] if is_opus else ["-c:a", "libopus"]
+    err(f"unsupported output type .{ext}")
+
+
+# raw-muxer name for stdout (where ffmpeg can't infer from a filename)
+EXT_MUXER = {"wav": "wav", "flac": "flac", "mp3": "mp3", "m4a": "ipod",
+             "aac": "adts", "opus": "opus", "ogg": "ogg", "mka": "matroska"}
+
+
+def probe_streams(input_spec):
+    out = subprocess.run(
+        [FFPROBE, "-v", "error", "-f", "dcf", "-i", input_spec, "-select_streams", "a",
+         "-show_entries", "stream=index,id,codec_name:stream_tags=title", "-of", "json"],
+        capture_output=True, text=True)
+    try:
+        return json.loads(out.stdout or "{}").get("streams", [])
+    except json.JSONDecodeError:
+        return []
+
+
+def stream_src(s):
+    """The peer (frame src) id for a stream. Prefer the demuxer's "peer 0xNNNN"
+    title tag (always set); fall back to AVStream.id (only shown with SHOW_IDS)."""
+    title = (s.get("tags") or {}).get("title", "")
+    if title.startswith("peer 0x"):
+        try:
+            return int(title[len("peer 0x"):], 16)
+        except ValueError:
+            pass
+    v = s.get("id", 0)
+    try:
+        return int(v, 0) if isinstance(v, str) else int(v)
+    except (ValueError, TypeError):
+        return 0
+
+
+# ── frame scan (pure-python: accurate pkts/loss/duration the demuxer omits) ───
+def scan(path):
+    with open(path, "rb") as f:
+        data = f.read()
+    per = {}            # src -> stats
+    reasm = {}          # src -> AudioReassembler
+    for i in range(0, len(data) - FRAME_SIZE + 1, FRAME_SIZE):
+        frame = data[i:i + FRAME_SIZE]
+        try:
+            d = decode(frame)
+        except ValueError:
+            continue
+        if d["frame_type"] != al.FCTRL:
+            continue
+        src, dst = d["src"], d["dst"]
+        st = per.setdefault(src, {"codec": None, "pids": set(), "chans": set()})
+        st["chans"].add(dst)
+        r = reasm.setdefault(src, al.AudioReassembler())
+        for ev in r.push(frame):
+            if ev[0] == "packet":
+                _, pid, _ts, cid, _payload, _flags = ev
+                st["pids"].add(pid)
+                st["codec"] = cid
+    out = {}
+    for src, st in per.items():
+        pids = st["pids"]
+        received = len(pids)
+        expected = (max(pids) - min(pids) + 1) if pids else 0   # within one pid wrap
+        dropped = max(0, expected - received)
+        cid = st["codec"]
+        cname, rate = CODEC_INFO.get(cid, (f"codec{cid}", 0))
+        out[src] = {
+            "src": src, "codec_id": cid, "codec": cname, "sample_rate": rate,
+            "packets": received, "dropped": dropped,
+            "loss_pct": round(100.0 * dropped / expected, 2) if expected else 0.0,
+            "duration_s": round(expected * BLOCK_S, 2),
+            "channels": sorted(st["chans"]),
+        }
+    return out
+
+
+def print_info(per, as_json=False):
+    if as_json:
+        print(json.dumps(list(per.values()), indent=2))
+        return
+    if not per:
+        print("(no DCF-Audio streams found)", file=sys.stderr)
+        return
+    print(f"{'src':<10}{'codec':<15}{'rate':>7}  {'dur':>7}  {'pkts':>6}  "
+          f"{'loss':>6}  channels")
+    for src in sorted(per):
+        r = per[src]
+        chans = ",".join(f"CH{c}" for c in r["channels"])
+        print(f"0x{src:04x}    {r['codec']:<15}{r['sample_rate']:>7}  "
+              f"{r['duration_s']:>6.2f}s  {r['packets']:>6}  "
+              f"{r['loss_pct']:>5.1f}%  {chans}")
+
+
+# ── subcommands ───────────────────────────────────────────────────────────────
+def transcode(input_spec, out, ext, yes, allow_multi=True):
+    """Run ffmpeg: .dcf -> a single output file/stream of type `ext`."""
+    is_stdin = input_spec == "pipe:0"
+    streams = [] if is_stdin else probe_streams(input_spec)
+    n = len(streams) if streams else 1
+    all_opus = bool(streams) and all(s.get("codec_name") == "opus" for s in streams)
+
+    cmd = [FFMPEG, "-hide_banner", "-loglevel", "error"]
+    if yes or out == "pipe:1":
+        cmd += ["-y"]
+    cmd += ["-f", "dcf", "-i", input_spec]
+
+    if ext == "mka":                                  # multitrack master, one per peer
+        for i in range(n):
+            cmd += ["-map", f"0:a:{i}"]
+        cmd += ["-c:a", "copy"]
+    else:
+        if n > 1 and allow_multi:                     # downmix multiple peers
+            cmd += ["-filter_complex",
+                    f"amix=inputs={n}:duration=longest:normalize=0[a]", "-map", "[a]"]
+        cmd += ext_codec(ext, all_opus)
+    if out == "pipe:1":
+        cmd += ["-f", EXT_MUXER.get(ext, ext)]
+    cmd += [out]
+    run(cmd)
+
+
+def cmd_rec(args):
+    inp = "pipe:0" if args.input == "-" else args.input
+    out = args.output or args.out_pos
+    if out is None:
+        if args.input == "-":
+            err("recording from stdin requires -o OUTPUT (or --format with -o -)")
+        out = os.path.splitext(args.input)[0] + "." + (args.format or "flac")
+    if out == "-":
+        if not args.format:
+            err("writing to stdout (-o -) requires --format EXT")
+        ext, out_spec = args.format, "pipe:1"
+    else:
+        ext = args.format or out.rsplit(".", 1)[-1].lower()
+        out_spec = out
+    transcode(inp, out_spec, ext, args.yes)
+    if out_spec != "pipe:1":
+        print(f"{PROG}: wrote {out}", file=sys.stderr)
+
+
+def cmd_info(args):
+    print_info(scan(args.input), as_json=args.json)
+
+
+def cmd_split(args):
+    streams = probe_streams(args.input)
+    if not streams:
+        err("no audio streams in input", code=1)
+    os.makedirs(args.out_dir, exist_ok=True)
+    ext = args.format
+    written = []
+    for pos, s in enumerate(streams):
+        sid = stream_src(s)
+        out = os.path.join(args.out_dir, f"peer-0x{sid:04x}.{ext}")
+        is_opus = s.get("codec_name") == "opus"
+        cmd = [FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-f", "dcf",
+               "-i", args.input, "-map", f"0:a:{pos}", *ext_codec(ext, is_opus), out]
+        run(cmd)
+        written.append(out)
+    print(f"{PROG}: wrote {len(written)} per-peer track(s) to {args.out_dir}/",
+          file=sys.stderr)
+    for w in written:
+        print(f"  {w}", file=sys.stderr)
+
+
+def cmd_listen(args):
+    import signal
+    import threading
+    from dcf.wiretap import Wiretap
+    from dcf.proto import ProtoMessage, MSG_AUDIO
+
+    bind = split_hostport(args.bind)
+    forward = split_hostport(args.forward) if args.forward else None
+    keep = args.keep or tempfile.mktemp(prefix="dcf-rec-", suffix=".dcf")
+    dump = open(keep, "wb")
+    n = [0]
+
+    def on_capture(data, _src, _summary):
+        try:
+            msg = ProtoMessage.deserialize(data)
+        except ValueError:
+            return
+        if msg.msg_type == MSG_AUDIO and len(msg.payload) == FRAME_SIZE:
+            dump.write(msg.payload)
+            n[0] += 1
+
+    # Explicit handlers (Ctrl-C *and* `kill`) driving an Event — reliable shutdown
+    # even with the capture daemon thread running.
+    stop = threading.Event()
+    signal.signal(signal.SIGINT, lambda *_: stop.set())
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
+
+    tap = Wiretap(bind, forward, on_capture=on_capture, label="dcf-rec")
+    relay = f" (relaying to {args.forward})" if forward else ""
+    print(f"{PROG} listen: capturing AUDIO on {args.bind}{relay} — Ctrl-C to stop",
+          file=sys.stderr)
+    tap.start()
+    try:
+        while not stop.wait(0.5):
+            pass
+    finally:
+        tap.stop()
+        dump.close()
+    print(f"\n{PROG}: captured {n[0]} audio frame(s) -> {keep}", file=sys.stderr)
+    if n[0]:
+        print_info(scan(keep))
+    if args.output:
+        ext = args.format or args.output.rsplit(".", 1)[-1].lower()
+        transcode(keep, args.output, ext, True)
+        print(f"{PROG}: wrote {args.output}", file=sys.stderr)
+    elif not args.keep:
+        print(f"{PROG}: capture kept at {keep} (use -o to record, --keep to name it)",
+              file=sys.stderr)
+
+
+def build_parser():
+    p = argparse.ArgumentParser(
+        prog=PROG, description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = p.add_subparsers(dest="command", required=True)
+
+    r = sub.add_parser("rec", help="record a .dcf into an audio file (type by extension)")
+    r.add_argument("input", help=".dcf frame dump, or - for stdin")
+    r.add_argument("out_pos", nargs="?", metavar="OUTPUT", help="output file")
+    r.add_argument("-o", "--output", help="output file (or - for stdout)")
+    r.add_argument("--format", help="output type override (wav/flac/opus/ogg/mka/mp3/m4a)")
+    r.add_argument("-y", "--yes", action="store_true", help="overwrite output")
+    r.set_defaults(func=cmd_rec)
+
+    i = sub.add_parser("info", help="show peers, codecs, duration, packet loss")
+    i.add_argument("input", help=".dcf frame dump")
+    i.add_argument("--json", action="store_true", help="machine-readable output")
+    i.set_defaults(func=cmd_info)
+
+    s = sub.add_parser("split", help="write one file per peer (DAW stems)")
+    s.add_argument("input", help=".dcf frame dump")
+    s.add_argument("--out-dir", default=".", help="directory for per-peer files")
+    s.add_argument("--format", default="wav", help="per-peer file type (default wav)")
+    s.set_defaults(func=cmd_split)
+
+    l = sub.add_parser("listen", help="capture audio live off the wire")
+    l.add_argument("--bind", required=True, metavar="HOST:PORT", help="listen address")
+    l.add_argument("-o", "--output", help="record to this file on stop")
+    l.add_argument("--format", help="output type override")
+    l.add_argument("--forward", metavar="HOST:PORT",
+                   help="also relay datagrams here (transparent inline tap)")
+    l.add_argument("--keep", metavar="FILE.dcf", help="keep the raw capture at this path")
+    l.add_argument("-y", "--yes", action="store_true", help="overwrite output")
+    l.set_defaults(func=cmd_listen)
+    return p
+
+
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # Ergonomic default: a bare `dcf-rec INPUT ...` means `dcf-rec rec INPUT ...`.
+    if argv and argv[0] not in SUBCMDS and argv[0] not in ("-h", "--help"):
+        argv = ["rec"] + argv
+    args = build_parser().parse_args(argv)
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
