@@ -17,10 +17,12 @@ import (
 	"github.com/ALH477/HydraMesh/go/text"
 )
 
-// peerAddr is a peer's resolved host/port.
+// peerAddr is a peer's host/port plus a best-effort resolved IP (for addr matching
+// when peers share a port, e.g. :7777 across Docker containers).
 type peerAddr struct {
 	host string
 	port uint16
+	ip   string // resolved IP of host (empty if unresolved; lazily filled)
 }
 
 // ErrNotInitialized is returned when the UDP endpoint is absent (non-UDP transport).
@@ -100,12 +102,16 @@ func (n *DcfNode) nextSeq() uint32 { return n.seq.Add(1) - 1 }
 
 // AddPeer registers (or updates) a peer's address.
 func (n *DcfNode) AddPeer(id, host string, port uint16) {
+	ip := ""
+	if addrs, err := net.LookupHost(host); err == nil && len(addrs) > 0 {
+		ip = addrs[0]
+	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	if _, ok := n.peers[id]; !ok {
 		n.peerOrder = append(n.peerOrder, id)
 	}
-	n.peers[id] = peerAddr{host: host, port: port}
+	n.peers[id] = peerAddr{host: host, port: port, ip: ip}
 }
 
 // RemovePeer drops a peer and its stats.
@@ -173,13 +179,17 @@ func (n *DcfNode) recordPeerRTT(from *net.UDPAddr, rttMs float64) {
 	st.UpdateRTT(rttMs)
 }
 
-// matchPeerLocked resolves the peer id for a source address (port, then ip-refined). The
-// caller must hold n.mu (read or write).
+// matchPeerLocked resolves the peer id for a source address by IP+port (peers may share a
+// port, so port-only would collide), falling back to port-only as a last resort. The caller
+// must hold n.mu (read or write).
 func (n *DcfNode) matchPeerLocked(from *net.UDPAddr) string {
 	fromIP := from.IP.String()
 	for _, id := range n.peerOrder {
 		a := n.peers[id]
-		if int(a.port) == from.Port && (a.host == fromIP || a.host == "localhost" || a.host == "127.0.0.1" || a.host == "0.0.0.0") {
+		if int(a.port) != from.Port {
+			continue
+		}
+		if a.ip == fromIP || a.host == fromIP || a.host == "localhost" || a.host == "127.0.0.1" || a.host == "0.0.0.0" {
 			return id
 		}
 	}
@@ -196,6 +206,40 @@ func (n *DcfNode) peerIDByAddr(from *net.UDPAddr) string {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	return n.matchPeerLocked(from)
+}
+
+// refreshPeerIPs re-resolves any peer whose IP is still unknown (a DNS name not yet
+// resolvable when AddPeer ran — e.g. a Docker peer that started slightly later). The mesh
+// loop calls this each tick so addr matching becomes correct within a tick or two.
+func (n *DcfNode) refreshPeerIPs() {
+	n.mu.RLock()
+	hosts := map[string]string{}
+	for _, id := range n.peerOrder {
+		if n.peers[id].ip == "" {
+			hosts[id] = n.peers[id].host
+		}
+	}
+	n.mu.RUnlock()
+	if len(hosts) == 0 {
+		return
+	}
+	resolved := map[string]string{}
+	for id, h := range hosts {
+		if a, err := net.LookupHost(h); err == nil && len(a) > 0 {
+			resolved[id] = a[0]
+		}
+	}
+	if len(resolved) == 0 {
+		return
+	}
+	n.mu.Lock()
+	for id, ip := range resolved {
+		if p, ok := n.peers[id]; ok {
+			p.ip = ip
+			n.peers[id] = p
+		}
+	}
+	n.mu.Unlock()
 }
 
 // peerRTTms returns a peer's smoothed RTT in whole milliseconds (0 if no sample yet).

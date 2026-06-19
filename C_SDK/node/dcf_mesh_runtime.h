@@ -31,13 +31,31 @@
 
 typedef struct {
     int id;                 /* numeric peer node id            */
+    char host[64];          /* peer host (numeric IP or DNS name) */
+    int port;
     struct sockaddr_in addr;
+    bool resolved;          /* host resolved to addr yet?       */
     bool answered;          /* PONG seen since the last tick    */
     uint8_t window[DCF_MESH_WINDOW];
     int wlen;
     int status;             /* DCF_MESH_HEALTHY/DEGRADED/UNREACHABLE */
     int rtt_ms;             /* last measured RTT                */
 } dcf_mesh_peer_t;
+
+/* Resolve a peer's host:port into p->addr; sets p->resolved. */
+static inline bool dcf_mesh_resolve(dcf_mesh_peer_t *p) {
+    char portstr[16];
+    snprintf(portstr, sizeof portstr, "%d", p->port);
+    struct addrinfo hints, *res = NULL;
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    if (getaddrinfo(p->host, portstr, &hints, &res) != 0 || !res) return false;
+    memcpy(&p->addr, res->ai_addr, sizeof(struct sockaddr_in));
+    freeaddrinfo(res);
+    p->resolved = true;
+    return true;
+}
 
 typedef struct {
     int reporter;
@@ -89,20 +107,22 @@ static inline void dcf_mesh_init(dcf_mesh_node_t *m, int fd, const char *mode,
 
 static inline bool dcf_mesh_add_peer(dcf_mesh_node_t *m, int id, const char *host, int port) {
     if (m->n_peers >= DCF_MESH_MAX_PEERS) return false;
-    /* Resolve host (numeric IP or DNS name, e.g. a Docker container name). */
-    char portstr[16];
-    snprintf(portstr, sizeof portstr, "%d", port);
-    struct addrinfo hints, *res = NULL;
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_DGRAM;
-    if (getaddrinfo(host, portstr, &hints, &res) != 0 || !res) return false;
+    /* Always add the peer; resolution may fail now (a Docker peer not up yet) and is
+     * retried each tick via dcf_mesh_refresh — never drop a peer on a transient DNS miss. */
     dcf_mesh_peer_t *p = &m->peers[m->n_peers++];
+    memset(p, 0, sizeof *p);
     p->id = id;
-    memcpy(&p->addr, res->ai_addr, sizeof(struct sockaddr_in));
-    freeaddrinfo(res);
+    p->port = port;
+    snprintf(p->host, sizeof p->host, "%s", host);
     p->status = DCF_MESH_HEALTHY;
+    dcf_mesh_resolve(p);
     return true;
+}
+
+/* Re-resolve any peer whose host wasn't resolvable yet (call each tick). */
+static inline void dcf_mesh_refresh(dcf_mesh_node_t *m) {
+    for (int i = 0; i < m->n_peers; i++)
+        if (!m->peers[i].resolved) dcf_mesh_resolve(&m->peers[i]);
 }
 
 static inline dcf_mesh_peer_t *dcf_mesh_peer_by_id(dcf_mesh_node_t *m, int id) {
@@ -111,8 +131,12 @@ static inline dcf_mesh_peer_t *dcf_mesh_peer_by_id(dcf_mesh_node_t *m, int id) {
 }
 
 static inline dcf_mesh_peer_t *dcf_mesh_peer_by_addr(dcf_mesh_node_t *m, const struct sockaddr_in *from) {
+    /* Match IP + port: peers often share a port (e.g. :7777 across Docker containers),
+     * so port-only would collide; the address is resolved at add time. */
     for (int i = 0; i < m->n_peers; i++)
-        if (m->peers[i].addr.sin_port == from->sin_port) return &m->peers[i];
+        if (m->peers[i].addr.sin_port == from->sin_port &&
+            m->peers[i].addr.sin_addr.s_addr == from->sin_addr.s_addr)
+            return &m->peers[i];
     return NULL;
 }
 
@@ -160,6 +184,7 @@ static inline int dcf_mesh_status_of(dcf_mesh_node_t *m, int id) {
 
 /* One tick: fold health, ping peers, run the AUTO/master loop, log status. */
 static inline void dcf_mesh_tick(dcf_mesh_node_t *m) {
+    dcf_mesh_refresh(m); /* resolve any peer whose DNS wasn't ready at start */
     /* 1. health: evaluate answered/timeout into the FSM, then ping */
     for (int i = 0; i < m->n_peers; i++) {
         dcf_mesh_peer_t *p = &m->peers[i];
@@ -168,7 +193,7 @@ static inline void dcf_mesh_tick(dcf_mesh_node_t *m) {
         if (p->wlen < DCF_MESH_WINDOW) p->window[p->wlen++] = ev;
         else { memmove(p->window, p->window + 1, DCF_MESH_WINDOW - 1); p->window[DCF_MESH_WINDOW - 1] = ev; }
         p->status = dcf_mesh_peer_status(p->window, p->wlen, DCF_MESH_FAIL_THR, DCF_MESH_OK_THR);
-        dcf_mesh_send(m, &p->addr, DCF_MSG_PING, NULL, 0);
+        if (p->resolved) dcf_mesh_send(m, &p->addr, DCF_MSG_PING, NULL, 0);
     }
 
     /* 2. control */
@@ -181,7 +206,7 @@ static inline void dcf_mesh_tick(dcf_mesh_node_t *m) {
         uint8_t payload[5 + 5 * DCF_MESH_MAX_PEERS];
         int plen = dcf_mesh_pack_report(m->node_id, rep, m->n_peers, payload);
         dcf_mesh_peer_t *mp = dcf_mesh_peer_by_id(m, m->master_peer_id);
-        if (mp) dcf_mesh_send(m, &mp->addr, DCF_MSG_MESH, payload, (uint32_t)plen);
+        if (mp && mp->resolved) dcf_mesh_send(m, &mp->addr, DCF_MSG_MESH, payload, (uint32_t)plen);
 
         /* decentralized failover: master Unreachable -> local re-election (lowest healthy id) */
         if (mp && dcf_mesh_status_of(m, m->master_peer_id) == DCF_MESH_UNREACHABLE) {

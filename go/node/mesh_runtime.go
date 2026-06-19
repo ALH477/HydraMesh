@@ -300,6 +300,7 @@ func (m *MeshRuntime) run(n *DcfNode) {
 			if !n.IsRunning() {
 				return
 			}
+			n.refreshPeerIPs()
 			peers := n.ListPeers()
 			m.healthTick(peers)
 			for _, id := range peers {
