@@ -11,6 +11,7 @@
 #define DCF_MESH_RUNTIME_H
 
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -88,12 +89,18 @@ static inline void dcf_mesh_init(dcf_mesh_node_t *m, int fd, const char *mode,
 
 static inline bool dcf_mesh_add_peer(dcf_mesh_node_t *m, int id, const char *host, int port) {
     if (m->n_peers >= DCF_MESH_MAX_PEERS) return false;
+    /* Resolve host (numeric IP or DNS name, e.g. a Docker container name). */
+    char portstr[16];
+    snprintf(portstr, sizeof portstr, "%d", port);
+    struct addrinfo hints, *res = NULL;
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    if (getaddrinfo(host, portstr, &hints, &res) != 0 || !res) return false;
     dcf_mesh_peer_t *p = &m->peers[m->n_peers++];
     p->id = id;
-    memset(&p->addr, 0, sizeof p->addr);
-    p->addr.sin_family = AF_INET;
-    p->addr.sin_port = htons((uint16_t)port);
-    inet_pton(AF_INET, host, &p->addr.sin_addr);
+    memcpy(&p->addr, res->ai_addr, sizeof(struct sockaddr_in));
+    freeaddrinfo(res);
     p->status = DCF_MESH_HEALTHY;
     return true;
 }
