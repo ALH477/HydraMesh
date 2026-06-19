@@ -27,6 +27,8 @@
 #include "demod_frame.h"
 #include "demod_game.h"
 #include "demod_text.h"
+#include "demod_modulation.h"
+#include "dcf_modem.h"
 #include "dcf_proto.h"
 
 #define DCF_NODE_DEFAULT_PORT 7777
@@ -219,6 +221,81 @@ static int cmd_send_position(int argc, char **argv) {
     return 0;
 }
 
+/* ── Faust-DSP modem over a file "medium" (stand-in for an acoustic/RF channel) ──
+ * Medium file: "DCFM" | mod(u8) | nbytes(u32 BE) | nsamples(u32 BE) | double[nsamples] */
+static int modem_id(const char *name) {
+    if (!strcmp(name, "fsk")) return DCF_MOD_FSK;
+    if (!strcmp(name, "ook")) return DCF_MOD_OOK;
+    if (!strcmp(name, "psk")) return DCF_MOD_PSK;
+    if (!strcmp(name, "qam")) return DCF_MOD_QAM;
+    return -1;
+}
+static const char *modem_name(uint8_t m) {
+    static const char *n[4] = {"fsk", "ook", "psk", "qam"};
+    return m < 4 ? n[m] : "?";
+}
+static void put_u32_be(uint8_t *o, uint32_t v) {
+    o[0] = (uint8_t)(v >> 24); o[1] = (uint8_t)(v >> 16); o[2] = (uint8_t)(v >> 8); o[3] = (uint8_t)v;
+}
+static uint32_t get_u32_be(const uint8_t *o) {
+    return ((uint32_t)o[0] << 24) | ((uint32_t)o[1] << 16) | ((uint32_t)o[2] << 8) | o[3];
+}
+
+static int cmd_send_modem(int argc, char **argv) {
+    const char *medium = opt(argc, argv, "--medium", NULL);
+    const char *modn = opt(argc, argv, "--modulation", "qam");
+    const char *text = opt(argc, argv, "--text", NULL);
+    const char *hx = opt(argc, argv, "--hex", NULL);
+    if (!medium) { fprintf(stderr, "--medium PATH required\n"); return 2; }
+    int mod = modem_id(modn);
+    if (mod < 0) { fprintf(stderr, "--modulation must be fsk|ook|psk|qam\n"); return 2; }
+
+    uint8_t data[1024]; size_t len;
+    if (hx) len = unhex(hx, data, sizeof data);
+    else { const char *t = text ? text : "modem over different mediums"; len = strlen(t); memcpy(data, t, len); }
+
+    static uint8_t syms[8192];
+    size_t nsyms = dcf_modulate((uint8_t)mod, data, len, syms, sizeof syms);
+    static double samples[8192 * DCF_MODEM_SPS];
+    size_t ns = dcf_modem_render((uint8_t)mod, syms, nsyms, samples, sizeof(samples) / sizeof(samples[0]));
+
+    FILE *f = fopen(medium, "wb");
+    if (!f) { fprintf(stderr, "open %s failed\n", medium); return 1; }
+    uint8_t hdr[13]; memcpy(hdr, "DCFM", 4); hdr[4] = (uint8_t)mod;
+    put_u32_be(hdr + 5, (uint32_t)len); put_u32_be(hdr + 9, (uint32_t)ns);
+    fwrite(hdr, 1, sizeof hdr, f);
+    fwrite(samples, sizeof(double), ns, f);
+    fclose(f);
+    printf("modulated %zu bytes -> %zu %s symbols -> %zu samples on medium %s\n",
+           len, nsyms, modem_name((uint8_t)mod), ns, medium);
+    return 0;
+}
+
+static int cmd_recv_modem(int argc, char **argv) {
+    const char *medium = opt(argc, argv, "--medium", NULL);
+    if (!medium) { fprintf(stderr, "--medium PATH required\n"); return 2; }
+    FILE *f = fopen(medium, "rb");
+    if (!f) { fprintf(stderr, "open %s failed\n", medium); return 1; }
+    uint8_t hdr[13];
+    if (fread(hdr, 1, sizeof hdr, f) != sizeof hdr || memcmp(hdr, "DCFM", 4) != 0) {
+        fprintf(stderr, "not a DCFM medium\n"); fclose(f); return 1;
+    }
+    uint8_t mod = hdr[4];
+    uint32_t nbytes = get_u32_be(hdr + 5), ns = get_u32_be(hdr + 9);
+    static double samples[8192 * DCF_MODEM_SPS];
+    if (ns > sizeof(samples) / sizeof(samples[0])) { fclose(f); return 1; }
+    if (fread(samples, sizeof(double), ns, f) != ns) { fclose(f); return 1; }
+    fclose(f);
+
+    static uint8_t syms[8192];
+    size_t rn = dcf_modem_recover(mod, samples, ns, syms, sizeof syms);
+    uint8_t out[1024];
+    if (nbytes > sizeof out) return 1;
+    dcf_demodulate(mod, syms, rn, out, nbytes);
+    printf("demodulated %s medium: %u bytes: %.*s\n", modem_name(mod), nbytes, (int)nbytes, out);
+    return 0;
+}
+
 static void usage(void) {
     fprintf(stderr,
         "dcfnode — DCF C SDK node\n\n"
@@ -226,7 +303,9 @@ static void usage(void) {
         "  start         [--bind host:port]\n"
         "  send-text     --peer host:port --channel NAME --text S\n"
         "  send-game     --peer host:port --channel-id N --hex BYTES [--type T]\n"
-        "  send-position --peer host:port --x X --y Y --z Z\n");
+        "  send-position --peer host:port --x X --y Y --z Z\n"
+        "  send-modem    --medium PATH --modulation fsk|ook|psk|qam [--text S | --hex B]\n"
+        "  recv-modem    --medium PATH\n");
 }
 
 int main(int argc, char **argv) {
@@ -239,6 +318,8 @@ int main(int argc, char **argv) {
     if (!strcmp(cmd, "send-text")) return cmd_send_text(rest, ra);
     if (!strcmp(cmd, "send-game")) return cmd_send_game(rest, ra);
     if (!strcmp(cmd, "send-position")) return cmd_send_position(rest, ra);
+    if (!strcmp(cmd, "send-modem")) return cmd_send_modem(rest, ra);
+    if (!strcmp(cmd, "recv-modem")) return cmd_recv_modem(rest, ra);
     usage();
     return 2;
 }

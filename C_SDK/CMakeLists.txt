@@ -361,6 +361,12 @@ if(DCF_BUILD_NODE)
         target_include_directories(test_modulation_certify PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../codec)
         add_test(NAME modulation_certify COMMAND test_modulation_certify
                  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+        add_executable(test_modem_loopback tests/test_modem_loopback.c)
+        target_include_directories(test_modem_loopback PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/node ${CMAKE_CURRENT_SOURCE_DIR}/../codec)
+        target_link_libraries(test_modem_loopback PRIVATE m)
+        add_test(NAME modem_loopback COMMAND test_modem_loopback)
     endif()
 endif()
 
