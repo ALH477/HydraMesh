@@ -35,19 +35,26 @@
             meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 
-          # C++ SDK (assumes proto gen in build)
+          # C++ SDK — the supercharged gRPC node (dcfcpp). CMake's find_package
+          # picks up gRPC/protobuf and runs the C++/grpc codegen on cpp/proto/dcf.proto;
+          # the Nix derivation provides the full transitive closure (re2/absl/...).
           dcf-cpp = pkgs.stdenv.mkDerivation {
             pname = "dcf-cpp";
             version = "0.3.0";
             src = self + "/cpp";
-            nativeBuildInputs = [ protobuf pkgs.grpc pkgs.cmake ];
-            preBuild = ''
-              ${protobuf}/bin/protoc -I${self} --cpp_out=src --grpc_out=src --plugin=protoc-gen-grpc=${pkgs.grpc}/bin/grpc_cpp_plugin ${self}/messages.proto ${self}/services.proto
+            nativeBuildInputs = [ pkgs.cmake pkgs.pkg-config pkgs.protobuf pkgs.grpc ];
+            buildInputs = [ pkgs.grpc pkgs.protobuf pkgs.openssl pkgs.zlib pkgs.c-ares pkgs.re2 pkgs.abseil-cpp ];
+            cmakeFlags = [ "-DDCF_CPP_GRPC=ON" ];
+            # Build only the node target (the certify tests need ../Documentation at run
+            # time and are exercised separately).
+            buildPhase = "cmake --build . --target dcfcpp -j$NIX_BUILD_CORES";
+            installPhase = ''
+              mkdir -p $out/bin
+              cp dcfcpp $out/bin/
             '';
-            buildPhase = "cmake . && make";
-            installPhase = "make install DESTDIR=$out";
-            meta.description = "C++ SDK for DCF";
+            meta.description = "DCF C++ gRPC node (dcfcpp)";
             meta.license = pkgs.lib.licenses.lgpl3Only;
+            meta.mainProgram = "dcfcpp";
           };
 
           # Go SDK — builds the dcfnode CLI (a real UDP DeModFrame node, the Go

@@ -1,0 +1,64 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+syntax = "proto3";
+
+package dcf;
+
+// DCFService — the C++ "supercharged gRPC" transport for the DCF mesh. It carries
+// the certified 17-byte DeModFrame quantum (and 32-byte SuperPacks, and the
+// game/audio/text adapters, which are just bursts of frames) as opaque payloads;
+// the wire codec stays the contract. The headline is MeshStream: a bidirectional
+// stream so two nodes exchange frames, SuperPacks, and PING/PONG in both directions.
+service DCFService {
+  // Unary: hand the server a single frame/superpack, get an ack.
+  rpc SendFrame(Envelope) returns (Ack);
+
+  // Server-streaming: subscribe to everything the server is meshing.
+  rpc Subscribe(Subscription) returns (stream Envelope);
+
+  // Bidirectional streaming mesh: the supercharged path.
+  rpc MeshStream(stream Envelope) returns (stream Envelope);
+
+  // Peer/RTT probe (also available inline as PING/PONG envelopes on a stream).
+  rpc Ping(PingRequest) returns (PongReply);
+}
+
+// Envelope kind — what the bytes are. The frame/superpack/adapter payloads are the
+// certified wire bytes; ProtoMessage-style routing lives in `kind`.
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_FRAME       = 1;  // one 17-byte DeModFrame
+  KIND_SUPERPACK   = 2;  // one 32-byte SuperPack (two frames)
+  KIND_GAME_DCF    = 3;  // one DCF-Game L2 frame
+  KIND_TEXT_DCF    = 4;  // one DCF-Text L2 frame
+  KIND_AUDIO       = 5;  // one DCF-Audio L2 frame
+  KIND_PING        = 6;
+  KIND_PONG        = 7;
+}
+
+message Envelope {
+  Kind   kind      = 1;
+  uint32 sequence  = 2;
+  uint64 timestamp = 3;   // micros since the Unix epoch
+  bytes  payload   = 4;   // certified wire bytes (frame / superpack / adapter / 8-byte ts for ping)
+  string node_id   = 5;
+}
+
+message Ack {
+  bool   ok      = 1;
+  string detail  = 2;
+}
+
+message Subscription {
+  string node_id  = 1;
+  uint32 channel  = 2;   // 0 = all channels
+}
+
+message PingRequest {
+  string node_id   = 1;
+  uint64 timestamp = 2;
+}
+
+message PongReply {
+  string node_id   = 1;
+  uint64 timestamp = 2;   // echoes the request stamp for RTT
+}
