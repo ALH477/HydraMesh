@@ -15,6 +15,8 @@ option(DCF_BUILD_STATIC "Build static library" ON)
 option(DCF_BUILD_TESTS "Build unit tests" ON)
 option(DCF_BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(DCF_BUILD_EXAMPLES "Build examples" ON)
+option(DCF_BUILD_NODE "Build the dcfnode UDP mesh node (ProtoMessage transport)" ON)
+option(DCF_MODEM_AUDIO "Link a live-audio backend into the Faust modem transport" OFF)
 option(DCF_ENABLE_SANITIZERS "Enable address/thread sanitizers" OFF)
 option(DCF_ENABLE_ARCH_NATIVE "Enable -march=native for latency benchmark" OFF)
 option(DCF_ENABLE_COVERAGE "Enable code coverage" OFF)
@@ -322,17 +324,38 @@ if(DCF_BUILD_TESTS)
         ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1"
     )
     
-    # Latency test for audio benchmarking
-    add_executable(latency_test tests/latency/latency_test.c)
-    target_link_libraries(latency_test PRIVATE dcf::dcf m)
-    target_compile_options(latency_test PRIVATE 
-        ${DCF_WARNINGS}
-        -O3 $<$<BOOL:${DCF_ENABLE_ARCH_NATIVE}>:-march=native>
-    )
-    
-    if(DCF_ENABLE_SANITIZERS)
-        target_compile_options(latency_test PRIVATE ${DCF_SANITIZER_FLAGS})
-        target_link_options(latency_test PRIVATE ${DCF_SANITIZER_FLAGS})
+    # Latency test for audio benchmarking (only if the source is present)
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/latency/latency_test.c)
+        add_executable(latency_test tests/latency/latency_test.c)
+        target_link_libraries(latency_test PRIVATE dcf::dcf m)
+        target_compile_options(latency_test PRIVATE
+            ${DCF_WARNINGS}
+            -O3 $<$<BOOL:${DCF_ENABLE_ARCH_NATIVE}>:-march=native>
+        )
+        if(DCF_ENABLE_SANITIZERS)
+            target_compile_options(latency_test PRIVATE ${DCF_SANITIZER_FLAGS})
+            target_link_options(latency_test PRIVATE ${DCF_SANITIZER_FLAGS})
+        endif()
+    endif()
+endif()
+
+# ============================================================================
+# dcfnode — the C mesh node (independent of the 4-module spine; header-only
+# codec from ../codec + ProtoMessage/UDP). Built by default; toggle DCF_BUILD_NODE.
+# ============================================================================
+
+if(DCF_BUILD_NODE)
+    add_executable(dcfnode node/dcfnode.c)
+    target_include_directories(dcfnode PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/node
+        ${CMAKE_CURRENT_SOURCE_DIR}/../codec)
+    target_compile_options(dcfnode PRIVATE ${DCF_WARNINGS})
+    target_link_libraries(dcfnode PRIVATE m)
+
+    if(DCF_BUILD_TESTS)
+        add_executable(test_proto_certify tests/test_proto_certify.c)
+        target_include_directories(test_proto_certify PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/node)
+        add_test(NAME proto_certify COMMAND test_proto_certify)
     endif()
 endif()
 
@@ -340,7 +363,7 @@ endif()
 # Examples
 # ============================================================================
 
-if(DCF_BUILD_EXAMPLES)
+if(DCF_BUILD_EXAMPLES AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/basic_example.c)
     add_executable(example_basic examples/basic_example.c)
     target_link_libraries(example_basic PRIVATE dcf::dcf)
 endif()
