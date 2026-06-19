@@ -8,7 +8,10 @@
   "MASTER": 2,
   "INF": 1073741823,
   "NO_HOP": -1,
-  "ISOLATED": -1
+  "ISOLATED": -1,
+  "MESH_REPORT": 0,
+  "MESH_ROLE": 1,
+  "MSG_MESH": 11
  },
  "fsm": [
   {
@@ -492,5 +495,66 @@
     0
    ]
   }
- ]
+ ],
+ "control": {
+  "report": [
+   {
+    "node_id": 5,
+    "peers": [
+     [
+      1,
+      0,
+      10
+     ],
+     [
+      2,
+      1,
+      30
+     ],
+     [
+      3,
+      2,
+      9999
+     ]
+    ],
+    "bytes": "0001000503000100000a000201001e000302270f"
+   },
+   {
+    "node_id": 161,
+    "peers": [],
+    "bytes": "000100a100"
+   },
+   {
+    "node_id": 42,
+    "peers": [
+     [
+      7,
+      0,
+      1
+     ]
+    ],
+    "bytes": "0001002a010007000001"
+   }
+  ],
+  "role": [
+   {
+    "node_id": 7,
+    "role": 1,
+    "master_id": 5,
+    "bytes": "01010007010005"
+   },
+   {
+    "node_id": 3,
+    "role": 2,
+    "master_id": 3,
+    "bytes": "01010003020003"
+   },
+   {
+    "node_id": 65535,
+    "role": 0,
+    "master_id": 161,
+    "bytes": "0101ffff0000a1"
+   }
+  ]
+ }
 }

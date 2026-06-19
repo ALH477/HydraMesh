@@ -53,7 +53,32 @@ int main(void) {
     }
     printf("PASS: %d master-election cases\n", MESH_N_ELECT);
 
+    for (int i = 0; i < MESH_N_REPORT; i++) {
+        const mesh_report_t *c = &MESH_REPORT_V[i];
+        uint8_t out[256];
+        int n = dcf_mesh_pack_report(c->node_id, c->peers, c->n_peers, out);
+        if (n != c->n_bytes || memcmp(out, c->bytes, n) != 0) { fail("report pack", i); continue; }
+        int nid, peers[16][3];
+        int np = dcf_mesh_unpack_report(c->bytes, c->n_bytes, &nid, peers);
+        if (np != c->n_peers || nid != c->node_id) fail("report unpack", i);
+        else for (int p = 0; p < np; p++)
+            if (memcmp(peers[p], c->peers[p], 3 * sizeof(int)) != 0) { fail("report unpack peer", i); break; }
+    }
+    printf("PASS: %d REPORT control cases\n", MESH_N_REPORT);
+
+    for (int i = 0; i < MESH_N_ROLE; i++) {
+        const mesh_role_msg_t *c = &MESH_ROLE_V[i];
+        uint8_t out[16];
+        int n = dcf_mesh_pack_role(c->node_id, c->role, c->master_id, out);
+        int nid, role, mid;
+        if (n != c->n_bytes || memcmp(out, c->bytes, n) != 0 ||
+            !dcf_mesh_unpack_role(c->bytes, c->n_bytes, &nid, &role, &mid) ||
+            nid != c->node_id || role != c->role || mid != c->master_id)
+            fail("role", i);
+    }
+    printf("PASS: %d ROLE control cases\n", MESH_N_ROLE);
+
     if (fails) { fprintf(stderr, "\n%d FAILURE(S)\n", fails); return 1; }
-    printf("\nALL MESH VECTORS HOLD — C self-healing algorithms are cemented.\n");
+    printf("\nALL MESH VECTORS HOLD — C self-healing algorithms + control are cemented.\n");
     return 0;
 }

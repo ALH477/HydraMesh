@@ -30,6 +30,10 @@ const (
 	// MsgTextDCF carries one DCF-Text L2 frame (a single 17-byte DeModFrame DATA frame).
 	// Go extension — not yet in the Rust SDK; back-port for parity.
 	MsgTextDCF uint8 = 10
+
+	// MsgMesh carries a DCF-Mesh control message (REPORT/ROLE; see go/mesh) for the
+	// self-healing runtime's AUTO/master role assignment.
+	MsgMesh uint8 = 11
 )
 
 // protoHeaderLen is the fixed ProtoMessage header size:

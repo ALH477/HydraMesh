@@ -34,6 +34,7 @@
 #define DCF_MSG_PONG       8u
 #define DCF_MSG_GAME_DCF   9u
 #define DCF_MSG_TEXT_DCF   10u  /* Go extension; carries one DCF-Text DeModFrame */
+#define DCF_MSG_MESH       11u  /* DCF-Mesh control (REPORT/ROLE); see demod_mesh.h */
 
 #define DCF_PROTO_HEADER_LEN 17u
 

@@ -154,6 +154,54 @@ def elect(n, edges, relay_min_degree=2):
     return master, roles
 
 
+# ── DCF-Mesh control adapter (REPORT / ROLE) ──────────────────────────────────
+# Carried as the payload of a ProtoMessage MsgMesh (=11). Big-endian, byte-exact.
+#   REPORT (node->master): type(1)=0 | ver(1)=1 | node_id(2) | n_peers(1) |
+#                          n_peers x [ peer_id(2) | status(1) | rtt_ms(2) ]
+#   ROLE   (master->node): type(1)=1 | ver(1)=1 | node_id(2) | role(1) | master_id(2)
+MESH_REPORT = 0
+MESH_ROLE = 1
+MESH_VERSION = 1
+
+
+def pack_report(node_id, peers):
+    """peers: list of (peer_id, status, rtt_ms) -> bytes."""
+    out = bytearray([MESH_REPORT, MESH_VERSION, (node_id >> 8) & 0xFF, node_id & 0xFF, len(peers) & 0xFF])
+    for pid, status, rtt in peers:
+        out += bytes([(pid >> 8) & 0xFF, pid & 0xFF, status & 0xFF, (rtt >> 8) & 0xFF, rtt & 0xFF])
+    return bytes(out)
+
+
+def unpack_report(buf):
+    if len(buf) < 5 or buf[0] != MESH_REPORT or buf[1] != MESH_VERSION:
+        raise ValueError("not a REPORT")
+    node_id = (buf[2] << 8) | buf[3]
+    n = buf[4]
+    if len(buf) < 5 + 5 * n:
+        raise ValueError("truncated REPORT")
+    peers = []
+    off = 5
+    for _ in range(n):
+        peers.append(((buf[off] << 8) | buf[off + 1], buf[off + 2], (buf[off + 3] << 8) | buf[off + 4]))
+        off += 5
+    return node_id, peers
+
+
+def pack_role(node_id, role, master_id):
+    return bytes([MESH_ROLE, MESH_VERSION, (node_id >> 8) & 0xFF, node_id & 0xFF,
+                  role & 0xFF, (master_id >> 8) & 0xFF, master_id & 0xFF])
+
+
+def unpack_role(buf):
+    if len(buf) < 7 or buf[0] != MESH_ROLE or buf[1] != MESH_VERSION:
+        raise ValueError("not a ROLE")
+    return ((buf[2] << 8) | buf[3], buf[4], (buf[5] << 8) | buf[6])
+
+
+def mesh_msg_type(buf):
+    return buf[0] if buf else -1
+
+
 if __name__ == "__main__":
     # FSM
     assert peer_status([1, 1, 1], 3, 2) == HEALTHY
@@ -173,4 +221,10 @@ if __name__ == "__main__":
     # election: star center 1 is master
     m, roles = elect(4, [(1, 0, 10), (1, 2, 10), (1, 3, 10)])
     assert m == 1 and roles == [LEAF, MASTER, LEAF, LEAF]
-    print("meshlab selftest: CERTIFIED (FSM + grouping + Dijkstra + routes + election)")
+    # control adapter round-trips
+    rb = pack_report(5, [(1, HEALTHY, 10), (2, DEGRADED, 30), (3, UNREACHABLE, 9999)])
+    assert unpack_report(rb) == (5, [(1, 0, 10), (2, 1, 30), (3, 2, 9999)])
+    assert mesh_msg_type(rb) == MESH_REPORT
+    lb = pack_role(7, RELAY, 5)
+    assert unpack_role(lb) == (7, 1, 5) and mesh_msg_type(lb) == MESH_ROLE
+    print("meshlab selftest: CERTIFIED (FSM + grouping + Dijkstra + routes + election + control)")

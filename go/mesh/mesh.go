@@ -184,3 +184,61 @@ func Elect(n int, edges [][3]int, relayMinDegree int) (master int, roles []int) 
 	roles[master] = Master
 	return master, roles
 }
+
+// ── DCF-Mesh control adapter (REPORT / ROLE) ──────────────────────────────────
+// Carried as the payload of a ProtoMessage MsgMesh (=11). Big-endian, byte-exact.
+const (
+	MeshReport  = 0
+	MeshRole    = 1
+	MeshVersion = 1
+	MsgMesh     = 11 // ProtoMessage type carrying a DCF-Mesh control message
+)
+
+// PackReport serialises a REPORT. peers are {peerID, status, rtt}.
+func PackReport(nodeID int, peers [][3]int) []byte {
+	out := []byte{MeshReport, MeshVersion, byte(nodeID >> 8), byte(nodeID), byte(len(peers))}
+	for _, p := range peers {
+		out = append(out, byte(p[0]>>8), byte(p[0]), byte(p[1]), byte(p[2]>>8), byte(p[2]))
+	}
+	return out
+}
+
+// UnpackReport parses a REPORT into (nodeID, peers). ok is false on bad input.
+func UnpackReport(buf []byte) (nodeID int, peers [][3]int, ok bool) {
+	if len(buf) < 5 || buf[0] != MeshReport || buf[1] != MeshVersion {
+		return 0, nil, false
+	}
+	nodeID = int(buf[2])<<8 | int(buf[3])
+	n := int(buf[4])
+	if len(buf) < 5+5*n {
+		return 0, nil, false
+	}
+	peers = make([][3]int, n)
+	off := 5
+	for i := 0; i < n; i++ {
+		peers[i] = [3]int{int(buf[off])<<8 | int(buf[off+1]), int(buf[off+2]), int(buf[off+3])<<8 | int(buf[off+4])}
+		off += 5
+	}
+	return nodeID, peers, true
+}
+
+// PackRole serialises a ROLE (7 bytes).
+func PackRole(nodeID, role, masterID int) []byte {
+	return []byte{MeshRole, MeshVersion, byte(nodeID >> 8), byte(nodeID), byte(role), byte(masterID >> 8), byte(masterID)}
+}
+
+// UnpackRole parses a ROLE into (nodeID, role, masterID). ok is false on bad input.
+func UnpackRole(buf []byte) (nodeID, role, masterID int, ok bool) {
+	if len(buf) < 7 || buf[0] != MeshRole || buf[1] != MeshVersion {
+		return 0, 0, 0, false
+	}
+	return int(buf[2])<<8 | int(buf[3]), int(buf[4]), int(buf[5])<<8 | int(buf[6]), true
+}
+
+// MeshMsgType returns the control message type byte (-1 if empty).
+func MeshMsgType(buf []byte) int {
+	if len(buf) == 0 {
+		return -1
+	}
+	return int(buf[0])
+}

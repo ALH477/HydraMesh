@@ -108,6 +108,65 @@ pub fn elect(n: usize, edges: &[[i32; 3]], relay_min_degree: i32) -> (i32, Vec<i
     (master as i32, roles)
 }
 
+// ── DCF-Mesh control adapter (REPORT / ROLE) ──────────────────────────────────
+// Carried as the payload of a ProtoMessage MsgMesh (=11). Big-endian, byte-exact.
+pub const MESH_REPORT: u8 = 0;
+pub const MESH_ROLE: u8 = 1;
+pub const MESH_VERSION: u8 = 1;
+pub const MSG_MESH: u8 = 11;
+
+/// Serialise a REPORT. `peers` are `[peer_id, status, rtt]`.
+pub fn pack_report(node_id: i32, peers: &[[i32; 3]]) -> Vec<u8> {
+    let mut out = vec![MESH_REPORT, MESH_VERSION,
+                       ((node_id >> 8) & 0xFF) as u8, (node_id & 0xFF) as u8,
+                       (peers.len() & 0xFF) as u8];
+    for p in peers {
+        out.push(((p[0] >> 8) & 0xFF) as u8); out.push((p[0] & 0xFF) as u8);
+        out.push((p[1] & 0xFF) as u8);
+        out.push(((p[2] >> 8) & 0xFF) as u8); out.push((p[2] & 0xFF) as u8);
+    }
+    out
+}
+
+/// Parse a REPORT into `(node_id, peers)`, or `None` on bad input.
+pub fn unpack_report(buf: &[u8]) -> Option<(i32, Vec<[i32; 3]>)> {
+    if buf.len() < 5 || buf[0] != MESH_REPORT || buf[1] != MESH_VERSION {
+        return None;
+    }
+    let node_id = ((buf[2] as i32) << 8) | buf[3] as i32;
+    let n = buf[4] as usize;
+    if buf.len() < 5 + 5 * n {
+        return None;
+    }
+    let mut peers = Vec::with_capacity(n);
+    let mut off = 5;
+    for _ in 0..n {
+        peers.push([
+            ((buf[off] as i32) << 8) | buf[off + 1] as i32,
+            buf[off + 2] as i32,
+            ((buf[off + 3] as i32) << 8) | buf[off + 4] as i32,
+        ]);
+        off += 5;
+    }
+    Some((node_id, peers))
+}
+
+/// Serialise a ROLE (7 bytes).
+pub fn pack_role(node_id: i32, role: i32, master_id: i32) -> Vec<u8> {
+    vec![MESH_ROLE, MESH_VERSION,
+         ((node_id >> 8) & 0xFF) as u8, (node_id & 0xFF) as u8, (role & 0xFF) as u8,
+         ((master_id >> 8) & 0xFF) as u8, (master_id & 0xFF) as u8]
+}
+
+/// Parse a ROLE into `(node_id, role, master_id)`, or `None` on bad input.
+pub fn unpack_role(buf: &[u8]) -> Option<(i32, i32, i32)> {
+    if buf.len() < 7 || buf[0] != MESH_ROLE || buf[1] != MESH_VERSION {
+        return None;
+    }
+    Some((((buf[2] as i32) << 8) | buf[3] as i32, buf[4] as i32,
+          ((buf[5] as i32) << 8) | buf[6] as i32))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -83,6 +83,10 @@ pub mod msg_type {
     pub const PONG: u8 = 8;
     /// DCF-Game L2 frame (one 17-byte DeModFrame DATA frame). See DCF_GAME_SPEC.md.
     pub const GAME_DCF: u8 = 9;
+    /// DCF-Text L2 frame (Go extension; back-port for parity).
+    pub const TEXT_DCF: u8 = 10;
+    /// DCF-Mesh control message (REPORT/ROLE) for self-healing AUTO/master roles.
+    pub const MESH: u8 = 11;
 }
 
 const DEFAULT_UDP_PORT: u16 = 7777;

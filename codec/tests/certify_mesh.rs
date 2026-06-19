@@ -15,7 +15,14 @@ struct Vectors {
     dijkstra: Vec<Dij>,
     routes: Vec<Route>,
     election: Vec<Elect>,
+    control: Control,
 }
+#[derive(Deserialize)]
+struct Control { report: Vec<Report>, role: Vec<Role> }
+#[derive(Deserialize)]
+struct Report { node_id: i32, peers: Vec<[i32; 3]>, bytes: String }
+#[derive(Deserialize)]
+struct Role { node_id: i32, role: i32, master_id: i32, bytes: String }
 #[derive(Deserialize)]
 struct Fsm { events: Vec<u8>, fail_threshold: i32, ok_threshold: i32, status: i32 }
 #[derive(Deserialize)]
@@ -62,6 +69,22 @@ fn all_primitives_match_golden() {
         let (m, roles) = mesh::elect(c.n, &c.edges, c.relay_min_degree);
         assert_eq!(m, c.master, "election master");
         assert_eq!(roles, c.roles, "election roles");
+    }
+    let hex = |b: &[u8]| b.iter().map(|x| format!("{:02x}", x)).collect::<String>();
+    for c in &v.control.report {
+        let packed = mesh::pack_report(c.node_id, &c.peers);
+        assert_eq!(hex(&packed), c.bytes, "report pack");
+        let raw: Vec<u8> = (0..c.bytes.len()).step_by(2)
+            .map(|i| u8::from_str_radix(&c.bytes[i..i + 2], 16).unwrap()).collect();
+        let (nid, peers) = mesh::unpack_report(&raw).expect("unpack report");
+        assert_eq!((nid, peers), (c.node_id, c.peers.clone()), "report unpack");
+    }
+    for c in &v.control.role {
+        let packed = mesh::pack_role(c.node_id, c.role, c.master_id);
+        assert_eq!(hex(&packed), c.bytes, "role pack");
+        let raw: Vec<u8> = (0..c.bytes.len()).step_by(2)
+            .map(|i| u8::from_str_radix(&c.bytes[i..i + 2], 16).unwrap()).collect();
+        assert_eq!(mesh::unpack_role(&raw), Some((c.node_id, c.role, c.master_id)), "role unpack");
     }
     println!(
         "PASS  mesh: {} fsm, {} grouping, {} dijkstra, {} routes, {} election",

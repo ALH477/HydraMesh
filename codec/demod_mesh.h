@@ -14,6 +14,7 @@
 #ifndef DCF_DEMOD_MESH_H
 #define DCF_DEMOD_MESH_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -118,5 +119,64 @@ static inline int dcf_mesh_elect(int n, const int edges[][3], int n_edges,
     roles[master] = DCF_MESH_MASTER;
     return master;
 }
+
+/* ── DCF-Mesh control adapter (REPORT / ROLE) ──────────────────────────────────
+ * Carried as the payload of a ProtoMessage MsgMesh (=11). Big-endian, byte-exact.
+ *   REPORT: type=0 | ver=1 | node_id(2) | n_peers(1) | n x [pid(2)|status(1)|rtt(2)]
+ *   ROLE  : type=1 | ver=1 | node_id(2) | role(1) | master_id(2) */
+#define DCF_MESH_REPORT  0
+#define DCF_MESH_ROLE    1
+#define DCF_MESH_VERSION 1
+#define DCF_MSG_MESH     11
+
+/* Serialise a REPORT; peers[n_peers][3] = {peer_id, status, rtt}. Returns length. */
+static inline int dcf_mesh_pack_report(int node_id, const int peers[][3], int n_peers, uint8_t *out) {
+    out[0] = DCF_MESH_REPORT; out[1] = DCF_MESH_VERSION;
+    out[2] = (uint8_t)((node_id >> 8) & 0xFF); out[3] = (uint8_t)(node_id & 0xFF);
+    out[4] = (uint8_t)(n_peers & 0xFF);
+    int off = 5;
+    for (int i = 0; i < n_peers; i++) {
+        out[off++] = (uint8_t)((peers[i][0] >> 8) & 0xFF); out[off++] = (uint8_t)(peers[i][0] & 0xFF);
+        out[off++] = (uint8_t)(peers[i][1] & 0xFF);
+        out[off++] = (uint8_t)((peers[i][2] >> 8) & 0xFF); out[off++] = (uint8_t)(peers[i][2] & 0xFF);
+    }
+    return off;
+}
+
+/* Parse a REPORT into node_id + peers[][3]; returns n_peers, or -1 on bad input. */
+static inline int dcf_mesh_unpack_report(const uint8_t *buf, int len, int *node_id, int peers[][3]) {
+    if (len < 5 || buf[0] != DCF_MESH_REPORT || buf[1] != DCF_MESH_VERSION) return -1;
+    *node_id = (buf[2] << 8) | buf[3];
+    int n = buf[4];
+    if (len < 5 + 5 * n) return -1;
+    int off = 5;
+    for (int i = 0; i < n; i++) {
+        peers[i][0] = (buf[off] << 8) | buf[off + 1];
+        peers[i][1] = buf[off + 2];
+        peers[i][2] = (buf[off + 3] << 8) | buf[off + 4];
+        off += 5;
+    }
+    return n;
+}
+
+/* Serialise a ROLE (7 bytes). */
+static inline int dcf_mesh_pack_role(int node_id, int role, int master_id, uint8_t *out) {
+    out[0] = DCF_MESH_ROLE; out[1] = DCF_MESH_VERSION;
+    out[2] = (uint8_t)((node_id >> 8) & 0xFF); out[3] = (uint8_t)(node_id & 0xFF);
+    out[4] = (uint8_t)(role & 0xFF);
+    out[5] = (uint8_t)((master_id >> 8) & 0xFF); out[6] = (uint8_t)(master_id & 0xFF);
+    return 7;
+}
+
+/* Parse a ROLE; returns true on success. */
+static inline bool dcf_mesh_unpack_role(const uint8_t *buf, int len, int *node_id, int *role, int *master_id) {
+    if (len < 7 || buf[0] != DCF_MESH_ROLE || buf[1] != DCF_MESH_VERSION) return false;
+    *node_id = (buf[2] << 8) | buf[3];
+    *role = buf[4];
+    *master_id = (buf[5] << 8) | buf[6];
+    return true;
+}
+
+static inline int dcf_mesh_msg_type(const uint8_t *buf, int len) { return len > 0 ? buf[0] : -1; }
 
 #endif /* DCF_DEMOD_MESH_H */

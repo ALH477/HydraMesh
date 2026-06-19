@@ -89,11 +89,34 @@ for (n, edges, rmin) in el_inputs:
                      "relay_min_degree": rmin, "master": master, "roles": roles})
 ok(f"{len(election)} master-election cases")
 
+# ── control adapter (REPORT / ROLE) cases ─────────────────────────────────────
+report_inputs = [
+    (5, [(1, m.HEALTHY, 10), (2, m.DEGRADED, 30), (3, m.UNREACHABLE, 9999)]),
+    (0x00A1, []),
+    (42, [(7, m.HEALTHY, 1)]),
+]
+reports = []
+for node_id, peers in report_inputs:
+    b = m.pack_report(node_id, peers)
+    assert m.unpack_report(b) == (node_id, [tuple(p) for p in peers])
+    assert m.mesh_msg_type(b) == m.MESH_REPORT
+    reports.append({"node_id": node_id, "peers": [list(p) for p in peers], "bytes": b.hex()})
+
+role_inputs = [(7, m.RELAY, 5), (3, m.MASTER, 3), (0xFFFF, m.LEAF, 0x00A1)]
+roles_msgs = []
+for node_id, role, master_id in role_inputs:
+    b = m.pack_role(node_id, role, master_id)
+    assert m.unpack_role(b) == (node_id, role, master_id) and m.mesh_msg_type(b) == m.MESH_ROLE
+    roles_msgs.append({"node_id": node_id, "role": role, "master_id": master_id, "bytes": b.hex()})
+ok(f"{len(reports)} REPORT + {len(roles_msgs)} ROLE control-adapter cases (round-trip)")
+
 cert = {
     "constants": {"HEALTHY": m.HEALTHY, "DEGRADED": m.DEGRADED, "UNREACHABLE": m.UNREACHABLE,
                   "LEAF": m.LEAF, "RELAY": m.RELAY, "MASTER": m.MASTER,
-                  "INF": m.INF, "NO_HOP": m.NO_HOP, "ISOLATED": m.ISOLATED},
+                  "INF": m.INF, "NO_HOP": m.NO_HOP, "ISOLATED": m.ISOLATED,
+                  "MESH_REPORT": m.MESH_REPORT, "MESH_ROLE": m.MESH_ROLE, "MSG_MESH": 11},
     "fsm": fsm, "grouping": grouping, "dijkstra": dijkstra, "routes": routes, "election": election,
+    "control": {"report": reports, "role": roles_msgs},
 }
 
 out = sys.argv[1] if len(sys.argv) > 1 else "mesh_vectors.json"
@@ -150,7 +173,24 @@ with open(hdr, "w") as h:
         edges = c["edges"] + [[0, 0, 0]] * (64 - len(c["edges"]))
         roles = c["roles"] + [0] * (32 - len(c["roles"]))
         h.write("  {%d,%d,%s,%d,%d,%s},\n" % (c["n"], len(c["edges"]), arr2(edges, 3), c["relay_min_degree"], c["master"], arr(roles)))
-    h.write("};\nstatic const int MESH_N_ELECT = (int)(sizeof(MESH_ELECT)/sizeof(MESH_ELECT[0]));\n")
+    h.write("};\nstatic const int MESH_N_ELECT = (int)(sizeof(MESH_ELECT)/sizeof(MESH_ELECT[0]));\n\n")
+
+    h.write("typedef struct { int node_id, n_peers, peers[16][3], n_bytes; uint8_t bytes[128]; } mesh_report_t;\n")
+    h.write("static const mesh_report_t MESH_REPORT_V[] = {\n")
+    for c in reports:
+        peers = c["peers"] + [[0, 0, 0]] * (16 - len(c["peers"]))
+        raw = bytes.fromhex(c["bytes"])
+        bts = list(raw) + [0] * (128 - len(raw))
+        h.write("  {%d,%d,%s,%d,%s},\n" % (c["node_id"], len(c["peers"]), arr2(peers, 3), len(raw), arr(bts)))
+    h.write("};\nstatic const int MESH_N_REPORT = (int)(sizeof(MESH_REPORT_V)/sizeof(MESH_REPORT_V[0]));\n\n")
+
+    h.write("typedef struct { int node_id, role, master_id, n_bytes; uint8_t bytes[8]; } mesh_role_msg_t;\n")
+    h.write("static const mesh_role_msg_t MESH_ROLE_V[] = {\n")
+    for c in roles_msgs:
+        raw = bytes.fromhex(c["bytes"])
+        bts = list(raw) + [0] * (8 - len(raw))
+        h.write("  {%d,%d,%d,%d,%s},\n" % (c["node_id"], c["role"], c["master_id"], len(raw), arr(bts)))
+    h.write("};\nstatic const int MESH_N_ROLE = (int)(sizeof(MESH_ROLE_V)/sizeof(MESH_ROLE_V[0]));\n")
     h.write("#endif\n")
 print(f"  INFO  wrote {hdr} ({os.path.getsize(hdr)} bytes)")
 print("ALL MESH LAWS HOLD")

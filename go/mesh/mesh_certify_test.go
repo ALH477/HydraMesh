@@ -3,6 +3,7 @@
 package mesh
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"reflect"
@@ -40,6 +41,19 @@ type meshVectors struct {
 		Master        int      `json:"master"`
 		Roles         []int    `json:"roles"`
 	} `json:"election"`
+	Control struct {
+		Report []struct {
+			NodeID int      `json:"node_id"`
+			Peers  [][3]int `json:"peers"`
+			Bytes  string   `json:"bytes"`
+		} `json:"report"`
+		Role []struct {
+			NodeID   int    `json:"node_id"`
+			Role     int    `json:"role"`
+			MasterID int    `json:"master_id"`
+			Bytes    string `json:"bytes"`
+		} `json:"role"`
+	} `json:"control"`
 }
 
 func loadMesh(t *testing.T) meshVectors {
@@ -98,6 +112,30 @@ func TestMeshAlgorithmsMatchGolden(t *testing.T) {
 			t.Errorf("election[%d]: master %d/%d roles %v/%v", i, m, c.Master, roles, c.Roles)
 		}
 	}
-	t.Logf("mesh: %d fsm, %d grouping, %d dijkstra, %d routes, %d election",
-		len(v.FSM), len(v.Grouping), len(v.Dijkstra), len(v.Routes), len(v.Election))
+	for i, c := range v.Control.Report {
+		if got := hex.EncodeToString(PackReport(c.NodeID, c.Peers)); got != c.Bytes {
+			t.Errorf("report[%d] pack: got %s want %s", i, got, c.Bytes)
+		}
+		raw, _ := hex.DecodeString(c.Bytes)
+		nid, peers, ok := UnpackReport(raw)
+		if !ok || nid != c.NodeID {
+			t.Errorf("report[%d] unpack node_id", i)
+		}
+		// normalise empty vs nil for the no-peers case
+		if len(peers) != len(c.Peers) || (len(peers) > 0 && !reflect.DeepEqual(peers, c.Peers)) {
+			t.Errorf("report[%d] unpack peers: %v vs %v", i, peers, c.Peers)
+		}
+	}
+	for i, c := range v.Control.Role {
+		if got := hex.EncodeToString(PackRole(c.NodeID, c.Role, c.MasterID)); got != c.Bytes {
+			t.Errorf("role[%d] pack: got %s want %s", i, got, c.Bytes)
+		}
+		raw, _ := hex.DecodeString(c.Bytes)
+		if nid, role, mid, ok := UnpackRole(raw); !ok || nid != c.NodeID || role != c.Role || mid != c.MasterID {
+			t.Errorf("role[%d] unpack", i)
+		}
+	}
+	t.Logf("mesh: %d fsm, %d grouping, %d dijkstra, %d routes, %d election, %d report, %d role",
+		len(v.FSM), len(v.Grouping), len(v.Dijkstra), len(v.Routes), len(v.Election),
+		len(v.Control.Report), len(v.Control.Role))
 }
