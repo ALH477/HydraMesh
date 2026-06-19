@@ -14,7 +14,10 @@
  *
  * Build: gcc -std=c11 -I codec -I C_SDK/node dcfnode.c -o dcfnode  (POSIX sockets)
  */
+#define _POSIX_C_SOURCE 200112L  /* getaddrinfo + POSIX sockets under -std=c11 */
+
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -65,17 +68,21 @@ static int udp_socket_bound(const char *host, int port) {
 /* Send one ProtoMessage(msg_type, payload) to host:port from an ephemeral socket. */
 static int send_proto(const char *host, int port, uint8_t msg_type,
                       const uint8_t *payload, uint32_t plen) {
-    int fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (fd < 0) return -1;
-    struct sockaddr_in dst;
-    memset(&dst, 0, sizeof(dst));
-    dst.sin_family = AF_INET;
-    dst.sin_port = htons((uint16_t)port);
-    if (inet_pton(AF_INET, host, &dst.sin_addr) != 1) { close(fd); return -1; }
+    /* Resolve host (accepts both numeric IPs and DNS names, e.g. container names). */
+    char portstr[16];
+    snprintf(portstr, sizeof portstr, "%d", port);
+    struct addrinfo hints, *res = NULL;
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    if (getaddrinfo(host, portstr, &hints, &res) != 0 || !res) return -1;
+    int fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (fd < 0) { freeaddrinfo(res); return -1; }
     uint8_t buf[DCF_PROTO_HEADER_LEN + 4096];
     size_t n = dcf_proto_serialize(msg_type, 0, now_us(), payload, plen, buf);
-    ssize_t sent = sendto(fd, buf, n, 0, (struct sockaddr *)&dst, sizeof(dst));
+    ssize_t sent = sendto(fd, buf, n, 0, res->ai_addr, res->ai_addrlen);
     close(fd);
+    freeaddrinfo(res);
     return (sent == (ssize_t)n) ? 0 : -1;
 }
 
