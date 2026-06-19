@@ -41,6 +41,14 @@ certify: ## Regenerate golden vectors + run the wire & audio certs (Python/Rust/
 	diff /tmp/dcf_mod.json python/MCP/modulation_vectors.json
 	cd codec && cargo test --test certify_modulation
 	gcc -std=c11 -I codec C_SDK/tests/test_modulation_certify.c -o /tmp/dcf_mc && /tmp/dcf_mc
+	@echo "== Mesh (self-healing algorithms): regenerate vectors + diff, Rust + C + Go certs =="
+	python3 python/MCP/meshlab_core.py
+	python3 python/MCP/gen_mesh_vectors.py /tmp/dcf_mesh.json
+	diff /tmp/dcf_mesh.json Documentation/mesh_vectors.json
+	diff /tmp/dcf_mesh.json python/MCP/mesh_vectors.json
+	cd codec && cargo test --test certify_mesh
+	gcc -std=c11 -I codec C_SDK/tests/test_mesh_certify.c -o /tmp/dcf_meshc && /tmp/dcf_meshc
+	cd go && go test ./mesh/
 	@echo "ALL CERTS PASS"
 
 ci-local: ## Run the wire-certify CI workflow locally (host toolchains + nix for the rest)

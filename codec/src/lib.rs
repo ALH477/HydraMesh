@@ -6,6 +6,7 @@ pub use frame::{crc16_ccitt, Frame, FrameError, FrameType, BROADCAST, FRAME_SIZE
 
 pub mod audio;
 pub mod game;
+pub mod mesh;
 pub mod modulation;
 pub mod superpack;
 pub mod text;

@@ -61,6 +61,14 @@ jobs:
           diff /tmp/modulation_vectors.json   python/MCP/modulation_vectors.json
           diff /tmp/modulation_vectors.gen.h  codec/modulation_vectors.gen.h
 
+      - name: Mesh — self-test, regenerate vectors, diff the committed copies
+        run: |
+          python3 python/MCP/meshlab_core.py
+          python3 python/MCP/gen_mesh_vectors.py /tmp/mesh_vectors.json
+          diff /tmp/mesh_vectors.json   Documentation/mesh_vectors.json
+          diff /tmp/mesh_vectors.json   python/MCP/mesh_vectors.json
+          diff /tmp/mesh_vectors.gen.h  codec/mesh_vectors.gen.h
+
   certify-c:
     runs-on: ubuntu-latest
     steps:
@@ -79,13 +87,15 @@ jobs:
           gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_superpack_certify C_SDK/tests/test_superpack_certify.c -lm
           /tmp/test_superpack_certify
 
-      - name: Build and run C modulation certification + node/modem (cmake)
+      - name: Build and run C modulation + mesh certification + node/modem (cmake)
         run: |
           gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_modulation_certify C_SDK/tests/test_modulation_certify.c
           /tmp/test_modulation_certify
+          gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_mesh_certify C_SDK/tests/test_mesh_certify.c
+          /tmp/test_mesh_certify
           cmake -S C_SDK -B /tmp/cbuild -DDCF_BUILD_NODE=ON -DDCF_BUILD_TESTS=ON -DDCF_BUILD_EXAMPLES=OFF
-          cmake --build /tmp/cbuild --target dcfnode test_proto_certify test_modulation_certify test_modem_loopback
-          ctest --test-dir /tmp/cbuild -R "proto_certify|modulation_certify|modem_loopback" --output-on-failure
+          cmake --build /tmp/cbuild --target dcfnode test_proto_certify test_modulation_certify test_mesh_certify test_modem_loopback
+          ctest --test-dir /tmp/cbuild -R "proto_certify|modulation_certify|mesh_certify|modem_loopback" --output-on-failure
 
   certify-rust:
     runs-on: ubuntu-latest
@@ -101,6 +111,7 @@ jobs:
           cargo test --test certify
           cargo test --test certify_superpack
           cargo test --test certify_modulation
+          cargo test --test certify_mesh
 
   certify-audio:
     runs-on: ubuntu-latest

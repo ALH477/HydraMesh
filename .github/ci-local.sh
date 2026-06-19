@@ -48,7 +48,12 @@ run python '
   python3 python/MCP/gen_modulation_vectors.py '"$WORK"'/modulation_vectors.json
   diff '"$WORK"'/modulation_vectors.json Documentation/modulation_vectors.json
   diff '"$WORK"'/modulation_vectors.json python/MCP/modulation_vectors.json
-  diff '"$WORK"'/modulation_vectors.gen.h codec/modulation_vectors.gen.h'
+  diff '"$WORK"'/modulation_vectors.gen.h codec/modulation_vectors.gen.h
+  python3 python/MCP/meshlab_core.py
+  python3 python/MCP/gen_mesh_vectors.py '"$WORK"'/mesh_vectors.json
+  diff '"$WORK"'/mesh_vectors.json Documentation/mesh_vectors.json
+  diff '"$WORK"'/mesh_vectors.json python/MCP/mesh_vectors.json
+  diff '"$WORK"'/mesh_vectors.gen.h codec/mesh_vectors.gen.h'
 
 run rust '( cd codec && cargo test --tests )'
 
@@ -58,12 +63,13 @@ run c '
   gcc -std=c11 -Wall -Wextra -I codec -o '"$WORK"'/wc C_SDK/tests/test_wire_certify.c -lm && '"$WORK"'/wc
   gcc -std=c11 -Wall -Wextra -I codec -o '"$WORK"'/spc C_SDK/tests/test_superpack_certify.c -lm && '"$WORK"'/spc
   gcc -std=c11 -Wall -Wextra -I codec -o '"$WORK"'/mc C_SDK/tests/test_modulation_certify.c && '"$WORK"'/mc
+  gcc -std=c11 -Wall -Wextra -I codec -o '"$WORK"'/meshc C_SDK/tests/test_mesh_certify.c && '"$WORK"'/meshc
   gcc -std=c11 -I codec -o '"$WORK"'/ac C_SDK/tests/test_audio_certify.c -lm && '"$WORK"'/ac
   gcc -std=c11 -I codec -o '"$WORK"'/gc C_SDK/tests/test_game_certify.c -lm && '"$WORK"'/gc
   gcc -std=c11 -I codec -o '"$WORK"'/tc C_SDK/tests/test_text_certify.c -lm && '"$WORK"'/tc
   cmake -S C_SDK -B '"$WORK"'/cbuild -DDCF_BUILD_NODE=ON -DDCF_BUILD_TESTS=ON -DDCF_BUILD_EXAMPLES=OFF
-  cmake --build '"$WORK"'/cbuild --target dcfnode test_proto_certify test_modulation_certify test_modem_loopback
-  ctest --test-dir '"$WORK"'/cbuild -R "proto_certify|modulation_certify|modem_loopback" --output-on-failure'
+  cmake --build '"$WORK"'/cbuild --target dcfnode test_proto_certify test_modulation_certify test_mesh_certify test_modem_loopback
+  ctest --test-dir '"$WORK"'/cbuild -R "proto_certify|modulation_certify|mesh_certify|modem_loopback" --output-on-failure'
 
 run cpp '
   g++ -std=c++17 -Wall -Wextra -I cpp/include -o '"$WORK"'/cppc cpp/tests/certify.cpp && '"$WORK"'/cppc Documentation/golden_vectors.json

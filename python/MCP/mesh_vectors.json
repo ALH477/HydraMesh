@@ -1,0 +1,496 @@
+{
+ "constants": {
+  "HEALTHY": 0,
+  "DEGRADED": 1,
+  "UNREACHABLE": 2,
+  "LEAF": 0,
+  "RELAY": 1,
+  "MASTER": 2,
+  "INF": 1073741823,
+  "NO_HOP": -1,
+  "ISOLATED": -1
+ },
+ "fsm": [
+  {
+   "events": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "fail_threshold": 3,
+   "ok_threshold": 2,
+   "status": 0
+  },
+  {
+   "events": [
+    1,
+    0
+   ],
+   "fail_threshold": 3,
+   "ok_threshold": 2,
+   "status": 1
+  },
+  {
+   "events": [
+    0,
+    0,
+    0
+   ],
+   "fail_threshold": 3,
+   "ok_threshold": 2,
+   "status": 2
+  },
+  {
+   "events": [
+    0,
+    0,
+    0,
+    1
+   ],
+   "fail_threshold": 3,
+   "ok_threshold": 2,
+   "status": 2
+  },
+  {
+   "events": [
+    0,
+    0,
+    0,
+    1,
+    1
+   ],
+   "fail_threshold": 3,
+   "ok_threshold": 2,
+   "status": 0
+  },
+  {
+   "events": [
+    1,
+    0,
+    1,
+    0,
+    1
+   ],
+   "fail_threshold": 2,
+   "ok_threshold": 2,
+   "status": 0
+  },
+  {
+   "events": [
+    0,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0,
+    1,
+    1
+   ],
+   "fail_threshold": 3,
+   "ok_threshold": 2,
+   "status": 0
+  },
+  {
+   "events": [
+    1,
+    1,
+    0,
+    0
+   ],
+   "fail_threshold": 2,
+   "ok_threshold": 1,
+   "status": 2
+  }
+ ],
+ "grouping": [
+  {
+   "rtt": 35,
+   "threshold": 50,
+   "status": 0,
+   "group": 0
+  },
+  {
+   "rtt": 50,
+   "threshold": 50,
+   "status": 0,
+   "group": 1
+  },
+  {
+   "rtt": 120,
+   "threshold": 50,
+   "status": 0,
+   "group": 2
+  },
+  {
+   "rtt": 5,
+   "threshold": 20,
+   "status": 1,
+   "group": 0
+  },
+  {
+   "rtt": 999,
+   "threshold": 50,
+   "status": 0,
+   "group": 19
+  },
+  {
+   "rtt": 35,
+   "threshold": 50,
+   "status": 2,
+   "group": -1
+  }
+ ],
+ "dijkstra": [
+  {
+   "n": 3,
+   "edges": [
+    [
+     0,
+     1,
+     10
+    ],
+    [
+     1,
+     2,
+     10
+    ],
+    [
+     0,
+     2,
+     50
+    ]
+   ],
+   "source": 0,
+   "dist": [
+    0,
+    10,
+    20
+   ],
+   "next_hop": [
+    -1,
+    1,
+    1
+   ]
+  },
+  {
+   "n": 5,
+   "edges": [
+    [
+     0,
+     1,
+     1
+    ],
+    [
+     1,
+     2,
+     1
+    ],
+    [
+     0,
+     2,
+     5
+    ],
+    [
+     2,
+     3,
+     1
+    ],
+    [
+     0,
+     3,
+     2
+    ],
+    [
+     3,
+     4,
+     1
+    ]
+   ],
+   "source": 0,
+   "dist": [
+    0,
+    1,
+    2,
+    2,
+    3
+   ],
+   "next_hop": [
+    -1,
+    1,
+    1,
+    3,
+    3
+   ]
+  },
+  {
+   "n": 4,
+   "edges": [
+    [
+     0,
+     1,
+     10
+    ],
+    [
+     2,
+     3,
+     10
+    ]
+   ],
+   "source": 0,
+   "dist": [
+    0,
+    10,
+    1073741823,
+    1073741823
+   ],
+   "next_hop": [
+    -1,
+    1,
+    -1,
+    -1
+   ]
+  },
+  {
+   "n": 4,
+   "edges": [
+    [
+     0,
+     1,
+     5
+    ],
+    [
+     0,
+     2,
+     5
+    ],
+    [
+     1,
+     3,
+     5
+    ],
+    [
+     2,
+     3,
+     5
+    ]
+   ],
+   "source": 0,
+   "dist": [
+    0,
+    5,
+    5,
+    10
+   ],
+   "next_hop": [
+    -1,
+    1,
+    2,
+    1
+   ]
+  },
+  {
+   "n": 1,
+   "edges": [],
+   "source": 0,
+   "dist": [
+    0
+   ],
+   "next_hop": [
+    -1
+   ]
+  }
+ ],
+ "routes": [
+  {
+   "candidates": [
+    [
+     7,
+     1,
+     5
+    ],
+    [
+     3,
+     0,
+     9
+    ],
+    [
+     4,
+     2,
+     1
+    ],
+    [
+     5,
+     0,
+     2
+    ]
+   ],
+   "ordered": [
+    5,
+    3,
+    7
+   ]
+  },
+  {
+   "candidates": [
+    [
+     1,
+     0,
+     10
+    ],
+    [
+     2,
+     0,
+     10
+    ]
+   ],
+   "ordered": [
+    1,
+    2
+   ]
+  },
+  {
+   "candidates": [
+    [
+     9,
+     2,
+     1
+    ]
+   ],
+   "ordered": []
+  },
+  {
+   "candidates": [
+    [
+     0,
+     1,
+     3
+    ],
+    [
+     1,
+     1,
+     3
+    ],
+    [
+     2,
+     0,
+     8
+    ]
+   ],
+   "ordered": [
+    2,
+    0,
+    1
+   ]
+  }
+ ],
+ "election": [
+  {
+   "n": 4,
+   "edges": [
+    [
+     1,
+     0,
+     10
+    ],
+    [
+     1,
+     2,
+     10
+    ],
+    [
+     1,
+     3,
+     10
+    ]
+   ],
+   "relay_min_degree": 2,
+   "master": 1,
+   "roles": [
+    0,
+    2,
+    0,
+    0
+   ]
+  },
+  {
+   "n": 5,
+   "edges": [
+    [
+     0,
+     1,
+     5
+    ],
+    [
+     1,
+     2,
+     5
+    ],
+    [
+     2,
+     3,
+     5
+    ],
+    [
+     3,
+     4,
+     5
+    ]
+   ],
+   "relay_min_degree": 2,
+   "master": 1,
+   "roles": [
+    0,
+    2,
+    1,
+    1,
+    0
+   ]
+  },
+  {
+   "n": 4,
+   "edges": [
+    [
+     0,
+     1,
+     10
+    ],
+    [
+     0,
+     2,
+     10
+    ],
+    [
+     1,
+     2,
+     10
+    ],
+    [
+     2,
+     3,
+     30
+    ]
+   ],
+   "relay_min_degree": 2,
+   "master": 2,
+   "roles": [
+    1,
+    1,
+    2,
+    0
+   ]
+  },
+  {
+   "n": 3,
+   "edges": [],
+   "relay_min_degree": 2,
+   "master": 0,
+   "roles": [
+    2,
+    0,
+    0
+   ]
+  }
+ ]
+}
