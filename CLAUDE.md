@@ -17,6 +17,10 @@ Read these first — they are normative:
 - `Documentation/DCF_AUDIO_SPEC.md` — collaborative audio as an adapter over it.
 - `Documentation/DCF_GAME_SPEC.md` — multiplayer game state/events as an adapter
   over it (same fragmentation scheme as audio, on `DATA` frames).
+- `Documentation/DCF_MESH_SPEC.md` — self-healing redundancy (peer-health FSM,
+  REPORT/ROLE control, election + failover) as a `MsgMesh` control adapter.
+- `Documentation/DCF_SECURITY_EXPOSURE.md` — the plaintext wire's exposure and the
+  WireGuard / external-crypto deployment rule.
 - `Documentation/DCF_CODE_REVIEW.md` — frank, module-by-module status (consult
   before trusting any module's surface area).
 
@@ -146,6 +150,41 @@ cd codec && cargo test --test certify_superpack            # Rust
 gcc -std=c11 -I codec C_SDK/tests/test_superpack_certify.c -lm -o /tmp/sc && /tmp/sc  # C
 ```
 
+## DCF-Mesh (self-healing redundancy over the wire)
+
+A control adapter (not a new wire format) for self-healing meshes: the payload of a
+`ProtoMessage` of type **`MsgMesh = 11`**. Two messages — **REPORT** (node→master:
+`node_id + [peer_id, status, rtt]` list) and **ROLE** (master→node: assigned role +
+master_id) — are byte-certified across Python/C/Rust/Go, alongside the certified
+algorithm primitives (`peer_status`, `group_of`, `dijkstra`, `select_routes`,
+`elect`). Spec: `Documentation/DCF_MESH_SPEC.md`.
+
+- The **self-healing runtime** drives those algorithms from live PING/PONG +
+  REPORT/ROLE, and runs in the **Go, C, Rust, and Python** nodes: per-peer liveness
+  FSM (window 5, fail 3 → Unreachable, ok 2 → recover), an AUTO/master loop (AUTO
+  nodes REPORT; the master aggregates topology, runs `elect`, broadcasts ROLE), and
+  **decentralized failover** (master Unreachable → local re-election of the lowest-id
+  healthy node). Tick ~1s; a periodic `mesh-status` line shows roles/health.
+- Algorithm + control references: `codec/demod_mesh.h` (C), `codec/src/mesh.rs`
+  (Rust), `go/mesh/mesh.go` (Go), `python/MCP/meshlab_core.py` (Python). Runtimes:
+  `go/node/mesh_runtime.go`, `C_SDK/node/dcf_mesh_runtime.h`, `rust/src/mesh_runtime.rs`,
+  `python/dcf/mesh_runtime.py` (+ stdlib UDP node `python/dcf/{udp_node,proto}.py`).
+- Vectors: `Documentation/mesh_vectors.json` (+ `python/MCP/` copy) and
+  `codec/mesh_vectors.gen.h`. The runtime's *timing* is integration-tested, not
+  vectored; the algorithms + control bytes are the contract.
+- CLI (same flags everywhere): `<node> start --mode p2p|auto|master --node-id N
+  [--master PEER] --peer id@host:port` — Go/C `dcfnode start`, Rust `dcf mesh`,
+  Python `python3 python/dcf_node.py start`. The nodes interoperate (a Go master
+  assigns roles to Rust/Python AUTO nodes). The wire is plaintext — deploy behind
+  WireGuard (`Documentation/DCF_SECURITY_EXPOSURE.md`).
+
+```sh
+python3 python/MCP/gen_mesh_vectors.py /tmp/mv.json                              # regen + verify laws
+cd codec && cargo test --test certify_mesh                                       # Rust
+gcc -std=c11 -I codec C_SDK/tests/test_mesh_certify.c -lm -o /tmp/mc && /tmp/mc  # C
+cd go && go test ./mesh/                                                         # Go
+```
+
 ## Comms client (`client/`) — Tauri 2 end-user app
 
 A cross-platform communications client (Rust core + Vue UI) on `dcf-rust-sdk` + the
@@ -231,7 +270,12 @@ default devShell (`nix develop`) with all toolchains. Top-level `Dockerfile`,
 - New transports/codecs are adapters over `DeModFrame`, not new wire formats.
 - The protocol is deliberately **encryption-free** for EAR/ITAR export compliance
   (`Documentation/Specs/export_compliance.markdown`). Do not add encryption to the
-  core wire path.
+  core wire path. The flip side — the plaintext wire is fully readable by any on-path
+  observer (membership, topology/RTT, roles, message contents) — is documented in
+  `Documentation/DCF_SECURITY_EXPOSURE.md`, with a passive wiretap demo
+  (`python/dcf_node.py wiretap`, `python/tests/test_eavesdrop_leak.py`). Deploy DCF
+  inside WireGuard (or operator-supplied, export-compliant crypto) **beneath** the UDP
+  socket — never in the codec.
 - License is **LGPL-3.0** for the linkable library; GPL-3.0 is scoped to the DOOM
   example only. (The repo has historical README inconsistencies — see the code
   review.)

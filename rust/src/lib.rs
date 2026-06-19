@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
-use std::net::{SocketAddr, UdpSocket};
+use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -45,6 +45,13 @@ pub fn reassemble_audio_payload(
     let frame: [u8; 17] = payload.try_into().ok()?;
     reasm.push(&frame)
 }
+
+/// DCF-Mesh: the self-healing runtime (peer health FSM + AUTO/master role
+/// assignment + decentralized failover), driving the certified
+/// `dcf_wire_codec::mesh` algorithms from live PING/PONG + the REPORT/ROLE control
+/// adapter. Meshes with the Go and C nodes. See [`MeshRuntime`].
+pub mod mesh_runtime;
+pub use mesh_runtime::MeshRuntime;
 
 /// DCF-Game: multiplayer state/events over the DeModFrame wire (re-exported codec).
 /// Provides `packetize`, `GameReassembler`, body packers, etc. See DCF_GAME_SPEC.md.
@@ -340,9 +347,21 @@ impl UdpEndpoint {
     }
 
     pub fn send_message(&self, msg: &ProtoMessage, host: &str, port: u16, reliable: bool) -> Result<()> {
-        let addr: SocketAddr = format!("{}:{}", host, port).parse()
-            .map_err(|e| DcfError::Network(format!("Invalid address: {}", e)))?;
-        
+        // Resolve via getaddrinfo so hostname peers (e.g. "localhost", Docker
+        // container names) work, not just IP literals — `SocketAddr::parse` rejects
+        // hostnames. Prefer an IPv4 result since the node socket binds IPv4 (else a
+        // host that resolves to ::1 first is unreachable). Matches the Go node.
+        let resolved: Vec<SocketAddr> = (host, port)
+            .to_socket_addrs()
+            .map_err(|e| DcfError::Network(format!("resolve {}:{}: {}", host, port, e)))?
+            .collect();
+        let addr: SocketAddr = resolved
+            .iter()
+            .find(|a| a.is_ipv4())
+            .or_else(|| resolved.first())
+            .copied()
+            .ok_or_else(|| DcfError::Network(format!("no address for {}:{}", host, port)))?;
+
         let data = msg.serialize();
         
         if reliable {
@@ -554,6 +573,8 @@ pub struct DcfNode {
     role: Arc<RwLock<String>>,
     master_address: Arc<RwLock<String>>,
     tx_cache: Arc<Mutex<HashMap<String, TxContext>>>,
+    /// Optional self-healing mesh runtime, attached via [`DcfNode::enable_mesh`].
+    mesh: Arc<Mutex<Option<Arc<MeshRuntime>>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -587,6 +608,7 @@ impl DcfNode {
             role: Arc::new(RwLock::new("p2p".to_string())),
             master_address: Arc::new(RwLock::new(String::new())),
             tx_cache: Arc::new(Mutex::new(HashMap::new())),
+            mesh: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -650,25 +672,61 @@ impl DcfNode {
             .collect()
     }
 
-    /// Resolve the peer_id for a source address (matched by port, then ip) and fold
-    /// a fresh RTT sample into its per-peer stats. Called from the PONG handler.
+    /// Resolve the peer_id for a source address (matched by port, then ip). Shared by
+    /// the PONG RTT path and the mesh runtime's PONG->mark_answered hook.
+    pub(crate) fn peer_id_by_addr(&self, from: SocketAddr) -> Option<String> {
+        let map = self.peer_map.read();
+        map.iter()
+            .find(|(_, (host, port))| {
+                *port == from.port()
+                    && (host == &from.ip().to_string()
+                        || host == "localhost"
+                        || host == "0.0.0.0")
+            })
+            .or_else(|| map.iter().find(|(_, (_, port))| *port == from.port()))
+            .map(|(id, _)| id.clone())
+    }
+
+    /// Smoothed per-peer RTT in whole milliseconds (0 if unknown). Used by the mesh
+    /// runtime for REPORT weights and status-line grouping.
+    pub(crate) fn peer_rtt_ms(&self, id: &str) -> i32 {
+        match self.per_peer_stats.read().get(id) {
+            Some(s) if s.avg_rtt > 0.0 => (s.avg_rtt + 0.5) as i32,
+            _ => 0,
+        }
+    }
+
+    /// Resolve the peer_id for a source address and fold a fresh RTT sample into its
+    /// per-peer stats. Called from the PONG handler.
     fn record_peer_rtt(&self, from: SocketAddr, rtt_ms: f64) {
-        let peer_id = {
-            let map = self.peer_map.read();
-            map.iter()
-                .find(|(_, (host, port))| {
-                    *port == from.port()
-                        && (host == &from.ip().to_string()
-                            || host == "localhost"
-                            || host == "0.0.0.0")
-                })
-                .or_else(|| map.iter().find(|(_, (_, port))| *port == from.port()))
-                .map(|(id, _)| id.clone())
-        };
-        if let Some(id) = peer_id {
+        if let Some(id) = self.peer_id_by_addr(from) {
             let mut stats = self.per_peer_stats.write();
             stats.entry(id).or_default().update_rtt(rtt_ms);
         }
+    }
+
+    /// Send a DCF-Mesh control payload (REPORT/ROLE) as a `MsgMesh` ProtoMessage.
+    pub(crate) fn send_mesh(&self, payload: Vec<u8>, host: &str, port: u16) {
+        if let Some(ep) = &self.udp_endpoint {
+            let msg = ProtoMessage::new(msg_type::MESH, self.next_sequence(), payload);
+            let _ = ep.send_message(&msg, host, port, false);
+        }
+    }
+
+    /// As [`Self::send_mesh`], addressed by `SocketAddr` (master ROLE unicast).
+    pub(crate) fn send_mesh_addr(&self, payload: Vec<u8>, addr: SocketAddr) {
+        self.send_mesh(payload, &addr.ip().to_string(), addr.port());
+    }
+
+    /// Attach a self-healing mesh runtime. Spawn its loop via [`run_mesh_runtime`]
+    /// after [`Self::start`]. `mode` is "p2p" | "auto" | "master".
+    pub fn enable_mesh(&self, mode: &str, node_id: u16, master_peer: &str, group_thr: i32) {
+        *self.mesh.lock() = Some(Arc::new(MeshRuntime::new(mode, node_id, master_peer, group_thr)));
+    }
+
+    /// The attached mesh runtime, if any.
+    pub fn mesh(&self) -> Option<Arc<MeshRuntime>> {
+        self.mesh.lock().clone()
     }
 
     // ========================================================================
@@ -1190,6 +1248,15 @@ pub async fn run_ping_scheduler(node: Arc<DcfNode>, every: Duration) {
     }
 }
 
+/// Spawn the attached self-healing mesh runtime's tick loop (no-op if none). The
+/// loop drives its own per-tick PINGs, so do not also run [`run_ping_scheduler`]
+/// when the mesh runtime is active. Call after [`DcfNode::start`].
+pub fn run_mesh_runtime(node: Arc<DcfNode>) {
+    if let Some(m) = node.mesh() {
+        tokio::spawn(async move { m.run(node).await });
+    }
+}
+
 pub async fn run_udp_receiver(
     node: Arc<DcfNode>,
     handler: Arc<dyn MessageHandler>,
@@ -1262,6 +1329,18 @@ async fn handle_incoming_message(
             let rtt = (now.saturating_sub(msg.timestamp)) as f64 / 1000.0;
             endpoint.stats.write().update_rtt(rtt);
             node.record_peer_rtt(from, rtt);
+            // Feed the mesh runtime's liveness FSM.
+            if let Some(m) = node.mesh() {
+                if let Some(id) = node.peer_id_by_addr(from) {
+                    m.mark_answered(&id);
+                }
+            }
+        }
+        msg_type::MESH => {
+            // DCF-Mesh control (REPORT/ROLE) for the self-healing runtime.
+            if let Some(m) = node.mesh() {
+                m.handle_control(&msg.payload, from);
+            }
         }
         msg_type::RELIABLE => {
             let _ = endpoint.send_ack(msg.sequence, &from);

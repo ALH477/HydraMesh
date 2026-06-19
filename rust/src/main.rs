@@ -20,7 +20,7 @@ use tokio::net::UdpSocket;
 use dcf_rust_sdk::{
     DcfConfig, DcfNode, DcfError, Result,
     MyDcfService, DefaultMessageHandler,
-    run_udp_receiver, run_reliable_handler,
+    run_udp_receiver, run_reliable_handler, run_mesh_runtime,
     Position, GameEvent, MessageHandler,
 };
 use dcf_rust_sdk::proto::dcf_service_server::DcfServiceServer;
@@ -145,6 +145,26 @@ enum Commands {
     
     /// Show detailed help information
     Info,
+
+    /// Run as a self-healing mesh node (peer health FSM + AUTO/master role
+    /// assignment + decentralized failover). Meshes with the Go/C/Python nodes.
+    Mesh {
+        /// Bind address host:port (defaults to the config udp_port on 0.0.0.0)
+        #[arg(long)]
+        bind: Option<String>,
+        /// Mesh mode: p2p | auto | master
+        #[arg(long, default_value = "p2p")]
+        mode: String,
+        /// This node's numeric mesh id (u16; required for auto/master)
+        #[arg(long, default_value_t = 0)]
+        node_id: u16,
+        /// Peer id to REPORT to (auto mode)
+        #[arg(long, default_value = "")]
+        master: String,
+        /// Peer as id@host:port (repeatable)
+        #[arg(long)]
+        peer: Vec<String>,
+    },
 }
 
 // ============================================================================
@@ -216,6 +236,10 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         }
         Some(Commands::Info) => {
             print_info();
+            return Ok(());
+        }
+        Some(Commands::Mesh { bind, mode, node_id, master, peer }) => {
+            run_mesh(&cli.config, bind.clone(), mode, *node_id, master, peer).await?;
             return Ok(());
         }
         _ => {}
@@ -306,6 +330,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             println!("{{\"status\": \"transaction-rolled-back\", \"tx_id\": \"{}\"}}", tx_id);
         }
         Some(Commands::Info) => unreachable!(),
+        Some(Commands::Mesh { .. }) => unreachable!(),
     }
 
     Ok(())
@@ -436,6 +461,67 @@ async fn run_server(
     playback_task.abort();
     shim_listener_task.abort();
 
+    Ok(())
+}
+
+// ============================================================================
+// Self-healing mesh node
+// ============================================================================
+
+/// Parse a `id@host:port` peer spec.
+fn parse_peer_spec(s: &str) -> std::result::Result<(String, String, u16), String> {
+    let (id, addr) = s.split_once('@').ok_or_else(|| format!("expected id@host:port, got {:?}", s))?;
+    let (host, port) = addr.rsplit_once(':').ok_or_else(|| format!("expected host:port, got {:?}", addr))?;
+    let port: u16 = port.parse().map_err(|_| format!("bad port in {:?}", s))?;
+    Ok((id.to_string(), host.to_string(), port))
+}
+
+/// Run as a self-healing mesh node until Ctrl-C. Mirrors `go/cmd/dcfnode start`.
+async fn run_mesh(
+    config_path: &str,
+    bind: Option<String>,
+    mode: &str,
+    node_id: u16,
+    master: &str,
+    peers: &[String],
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let mut config = load_config(config_path)?;
+    config.transport = "UDP".to_string();
+    config.node_id = Some(node_id.to_string());
+    if let Some(b) = bind {
+        let (host, port) = b.rsplit_once(':').ok_or("--bind expects host:port")?;
+        config.host = host.to_string();
+        config.udp_port = port.parse().map_err(|_| "bad --bind port")?;
+    }
+    let group_thr = config.group_rtt_threshold as i32;
+
+    let node = Arc::new(DcfNode::new(config)?);
+    for ps in peers {
+        let (id, host, port) = parse_peer_spec(ps).map_err(|e| format!("--peer {}: {}", ps, e))?;
+        node.add_peer(&id, &host, port)?;
+    }
+    node.enable_mesh(mode, node_id, master, group_thr);
+    node.start()?;
+    log::info!(
+        "self-healing mesh: mode={} node-id={} master={:?} listening on {}:{}",
+        mode, node_id, master, node.config().host, node.config().udp_port
+    );
+
+    // UDP receiver (drives PING/PONG + MsgMesh dispatch) + the mesh tick loop.
+    let recv_node = node.clone();
+    let handler = Arc::new(DefaultMessageHandler) as Arc<dyn MessageHandler>;
+    let recv_task = tokio::spawn(async move {
+        if let Err(e) = run_udp_receiver(recv_node, handler).await {
+            log::error!("UDP receiver error: {}", e);
+        }
+    });
+    run_mesh_runtime(node.clone());
+
+    log::info!("dcf mesh node ready (Ctrl-C to stop)");
+    tokio::signal::ctrl_c().await?;
+    log::info!("shutting down");
+    node.stop()?;
+    recv_task.abort();
     Ok(())
 }
 

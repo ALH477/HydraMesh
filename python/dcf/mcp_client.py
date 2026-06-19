@@ -7,7 +7,7 @@ import asyncio
 import logging
 import time
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx  # For HTTP retries
 from mcp import ClientSession, StdioServerParameters, types

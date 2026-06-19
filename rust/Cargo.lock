@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "dcf-rust-sdk"
-version = "2.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "dcf-wire-codec"
-version = "1.0.0"
+version = "0.3.0"
 dependencies = [
  "cc",
  "serde",
