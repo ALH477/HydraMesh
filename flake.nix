@@ -21,18 +21,30 @@
       {
         packages = rec {
 
-          # C SDK
+          # C SDK — builds the dcfnode mesh node (ProtoMessage/UDP + Faust modem).
+          # src is the whole repo because the node includes the header-only codec
+          # at ../codec; the build only targets dcfnode (the 4-module spine is
+          # configured but not linked here).
           dcf-c = pkgs.stdenv.mkDerivation {
             pname = "dcf-c";
             version = "0.3.0";
-            src = self + "/C_SDK";
-            nativeBuildInputs = [ pkgs.cmake pkgs.pkg-config ];
-            buildInputs = [ pkgs.libprotobufc pkgs.libuuid pkgs.cjson pkgs.ncurses ];
-            configurePhase = "cmakeConfigurePhase";
-            buildPhase = "make";
-            installPhase = "make install DESTDIR=$out";
-            meta.description = "C SDK for DCF";
+            src = self;
+            nativeBuildInputs = [ pkgs.cmake ];
+            dontUseCmakeConfigure = true;
+            buildPhase = ''
+              runHook preBuild
+              cmake -S C_SDK -B build \
+                -DDCF_BUILD_NODE=ON -DDCF_BUILD_TESTS=OFF -DDCF_BUILD_EXAMPLES=OFF
+              cmake --build build --target dcfnode -j''${NIX_BUILD_CORES:-2}
+              runHook postBuild
+            '';
+            installPhase = ''
+              mkdir -p $out/bin
+              cp build/dcfnode $out/bin/
+            '';
+            meta.description = "DCF C SDK node (dcfnode: ProtoMessage/UDP + Faust modem)";
             meta.license = pkgs.lib.licenses.lgpl3Only;
+            meta.mainProgram = "dcfnode";
           };
 
           # C++ SDK — the supercharged gRPC node (dcfcpp). CMake's find_package
@@ -157,6 +169,33 @@
               Entrypoint = [ "${dcf-python-node}/bin/dcf-node" ];
               Cmd = [ "recv" "--follow" ];
               ExposedPorts = { "7801/udp" = { }; };
+              Labels = { "org.opencontainers.image.source" = "https://github.com/ALH477/HydraMesh"; };
+            };
+          };
+
+          # C node image: dcfnode (ProtoMessage/UDP, meshes with Go/Rust; plus the
+          # Faust modem send-modem/recv-modem over a file medium).
+          docker-dcf-c = pkgs.dockerTools.buildLayeredImage {
+            name = "alh477/dcf-c";
+            tag = "latest";
+            contents = [ dcf-c pkgs.cacert ];
+            config = {
+              Entrypoint = [ "${dcf-c}/bin/dcfnode" ];
+              Cmd = [ "start" ];
+              ExposedPorts = { "7777/udp" = { }; };
+              Labels = { "org.opencontainers.image.source" = "https://github.com/ALH477/HydraMesh"; };
+            };
+          };
+
+          # C++ node image: the supercharged gRPC node (dcfcpp).
+          docker-dcf-cpp = pkgs.dockerTools.buildLayeredImage {
+            name = "alh477/dcf-cpp";
+            tag = "latest";
+            contents = [ dcf-cpp pkgs.cacert ];
+            config = {
+              Entrypoint = [ "${dcf-cpp}/bin/dcfcpp" ];
+              Cmd = [ "serve" ];
+              ExposedPorts = { "50051/tcp" = { }; };
               Labels = { "org.opencontainers.image.source" = "https://github.com/ALH477/HydraMesh"; };
             };
           };
