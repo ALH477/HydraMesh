@@ -3,7 +3,7 @@
 # point for setup, certification, tests, docs, and the client (see README.md).
 
 .DEFAULT_GOAL := help
-.PHONY: help setup certify test docs client clean
+.PHONY: help setup certify ci-local test docs client clean
 
 help: ## List the available tasks
 	@echo "HydraMesh / DCF — make targets:"
@@ -42,6 +42,9 @@ certify: ## Regenerate golden vectors + run the wire & audio certs (Python/Rust/
 	cd codec && cargo test --test certify_modulation
 	gcc -std=c11 -I codec C_SDK/tests/test_modulation_certify.c -o /tmp/dcf_mc && /tmp/dcf_mc
 	@echo "ALL CERTS PASS"
+
+ci-local: ## Run the wire-certify CI workflow locally (host toolchains + nix for the rest)
+	bash .github/ci-local.sh
 
 test: ## Run per-language tests (codec + rust + python; best-effort)
 	cd codec && cargo test
