@@ -84,7 +84,7 @@ jobs:
           gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_modulation_certify C_SDK/tests/test_modulation_certify.c
           /tmp/test_modulation_certify
           cmake -S C_SDK -B /tmp/cbuild -DDCF_BUILD_NODE=ON -DDCF_BUILD_TESTS=ON -DDCF_BUILD_EXAMPLES=OFF
-          cmake --build /tmp/cbuild --target dcfnode test_proto_certify test_modem_loopback
+          cmake --build /tmp/cbuild --target dcfnode test_proto_certify test_modulation_certify test_modem_loopback
           ctest --test-dir /tmp/cbuild -R "proto_certify|modulation_certify|modem_loopback" --output-on-failure
 
   certify-rust:
