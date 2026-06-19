@@ -40,6 +40,8 @@ type DcfNode struct {
 	peers     map[string]peerAddr      // peer_id -> addr
 	peerStats map[string]*NetworkStats // peer_id -> per-peer RTT/jitter
 
+	mesh *MeshRuntime // optional self-healing runtime (nil unless EnableMesh)
+
 	seq     atomic.Uint32
 	running atomic.Bool
 	stop    chan struct{}
@@ -159,24 +161,7 @@ func (n *DcfNode) peerInfo(id string) (peerAddr, bool) {
 func (n *DcfNode) recordPeerRTT(from *net.UDPAddr, rttMs float64) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	fromIP := from.IP.String()
-	var match string
-	// Prefer a port+ip (or loopback/wildcard host) match, mirroring the Rust resolver.
-	for _, id := range n.peerOrder {
-		a := n.peers[id]
-		if int(a.port) == from.Port && (a.host == fromIP || a.host == "localhost" || a.host == "127.0.0.1" || a.host == "0.0.0.0") {
-			match = id
-			break
-		}
-	}
-	if match == "" {
-		for _, id := range n.peerOrder {
-			if int(n.peers[id].port) == from.Port {
-				match = id
-				break
-			}
-		}
-	}
+	match := n.matchPeerLocked(from)
 	if match == "" {
 		return
 	}
@@ -187,6 +172,45 @@ func (n *DcfNode) recordPeerRTT(from *net.UDPAddr, rttMs float64) {
 	}
 	st.UpdateRTT(rttMs)
 }
+
+// matchPeerLocked resolves the peer id for a source address (port, then ip-refined). The
+// caller must hold n.mu (read or write).
+func (n *DcfNode) matchPeerLocked(from *net.UDPAddr) string {
+	fromIP := from.IP.String()
+	for _, id := range n.peerOrder {
+		a := n.peers[id]
+		if int(a.port) == from.Port && (a.host == fromIP || a.host == "localhost" || a.host == "127.0.0.1" || a.host == "0.0.0.0") {
+			return id
+		}
+	}
+	for _, id := range n.peerOrder {
+		if int(n.peers[id].port) == from.Port {
+			return id
+		}
+	}
+	return ""
+}
+
+// peerIDByAddr resolves a peer id from a source address (used by the mesh runtime's PONG hook).
+func (n *DcfNode) peerIDByAddr(from *net.UDPAddr) string {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.matchPeerLocked(from)
+}
+
+// peerRTTms returns a peer's smoothed RTT in whole milliseconds (0 if no sample yet).
+func (n *DcfNode) peerRTTms(id string) int {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	if st := n.peerStats[id]; st != nil && st.AvgRTT > 0 {
+		return int(st.AvgRTT + 0.5)
+	}
+	return 0
+}
+
+// EnableMesh attaches a self-healing runtime; Start then runs its loop. Mesh() returns it.
+func (n *DcfNode) EnableMesh(m *MeshRuntime) { n.mesh = m }
+func (n *DcfNode) Mesh() *MeshRuntime        { return n.mesh }
 
 // ── Plain send API (mirrors the Rust gaming API) ────────────────────────────
 
@@ -430,6 +454,14 @@ func (n *DcfNode) Start(h MessageHandler) error {
 		defer n.wg.Done()
 		RunReliableHandler(n)
 	}()
+
+	if n.mesh != nil {
+		n.wg.Add(1)
+		go func() {
+			defer n.wg.Done()
+			n.mesh.run(n)
+		}()
+	}
 
 	return nil
 }

@@ -70,6 +70,15 @@ func (n *DcfNode) dispatch(h MessageHandler, msg *ProtoMessage, from *net.UDPAdd
 		}
 		n.ep.recordRTT(rtt)
 		n.recordPeerRTT(from, rtt)
+		if n.mesh != nil {
+			if id := n.peerIDByAddr(from); id != "" {
+				n.mesh.markAnswered(id)
+			}
+		}
+	case MsgMesh:
+		if n.mesh != nil {
+			n.mesh.handleControl(msg.Payload, from)
+		}
 	case MsgReliable:
 		_ = n.ep.SendACK(msg.Sequence, from)
 		// Inner payload delivery would dispatch on an embedded type if used.

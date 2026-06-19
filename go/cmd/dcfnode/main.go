@@ -156,19 +156,17 @@ func cmdStart(args []string) {
 	fs := flag.NewFlagSet("start", flag.ExitOnError)
 	bind := fs.String("bind", "", "bind address host:port (default 0.0.0.0:7777)")
 	config := fs.String("config", "", "JSON config file")
+	mode := fs.String("mode", "p2p", "mesh mode: p2p | auto | master (self-healing runtime)")
+	nodeID := fs.Uint("node-id", 0, "this node's numeric mesh id (uint16; required for auto/master)")
+	master := fs.String("master", "", "peer id to REPORT to (auto mode)")
 	var peers multiFlag
-	fs.Var(&peers, "peer", "peer id@host:port (repeatable)")
+	fs.Var(&peers, "peer", "peer id@host:port (repeatable; id must be numeric in mesh modes)")
 	_ = fs.Parse(args)
 
 	n, err := newNode(*bind, *config)
 	if err != nil {
 		log.Fatal(err)
 	}
-	h := &logHandler{n: n, gReasm: game.NewGameReassembler(), tReasm: text.NewTextReassembler()}
-	if err := n.Start(h); err != nil {
-		log.Fatal(err)
-	}
-	defer n.Stop()
 	for _, ps := range peers {
 		id, host, port, err := peerSpec(ps)
 		if err != nil {
@@ -177,7 +175,16 @@ func cmdStart(args []string) {
 		n.AddPeer(id, host, port)
 		log.Printf("added peer %s at %s:%d", id, host, port)
 	}
-	node.RunPingScheduler(n, 5*time.Second)
+	if *mode != "p2p" {
+		n.EnableMesh(node.NewMeshRuntime(*mode, uint16(*nodeID), *master, int(n.Config().GroupRTTThreshold)))
+		log.Printf("self-healing mesh: mode=%s node-id=%d master=%q", *mode, *nodeID, *master)
+	}
+
+	h := &logHandler{n: n, gReasm: game.NewGameReassembler(), tReasm: text.NewTextReassembler()}
+	if err := n.Start(h); err != nil {
+		log.Fatal(err)
+	}
+	defer n.Stop()
 	log.Printf("dcfnode %s listening as %s on :%d (Ctrl-C to stop)", version, n.NodeID(), n.LocalPort())
 
 	sig := make(chan os.Signal, 1)
