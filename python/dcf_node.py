@@ -25,6 +25,7 @@ sys.path.insert(0, __file__.rsplit("/", 1)[0])
 from dcf.udp_node import DcfNode
 from dcf.mesh_runtime import MeshRuntime
 from dcf.wiretap import Wiretap
+from dcf.proto import ProtoMessage, MSG_AUDIO
 
 
 def _split_hostport(s, what):
@@ -65,17 +66,39 @@ def cmd_start(args):
 def cmd_wiretap(args):
     bind = _split_hostport(args.bind, "--bind")
     forward = _split_hostport(args.forward, "--forward")
-    tap = Wiretap(bind, forward, label="wiretap")
+
+    # --dump: append every captured AUDIO frame (one 17-byte DeModFrame per
+    # MSG_AUDIO datagram) to a flat .dcf the `dcf` ffmpeg demuxer / dcf-rec read.
+    dump_f = open(args.dump, "wb") if args.dump else None
+    n_audio = [0]
+
+    def on_capture(data, src, summary):
+        if dump_f is None:
+            return
+        try:
+            msg = ProtoMessage.deserialize(data)
+        except ValueError:
+            return
+        if msg.msg_type == MSG_AUDIO and len(msg.payload) == 17:
+            dump_f.write(msg.payload)
+            n_audio[0] += 1
+
+    tap = Wiretap(bind, forward, on_capture=on_capture, label="wiretap")
     logging.info("wiretap: capturing %s -> %s (plaintext DCF wire; Ctrl-C to stop)",
                  args.bind, args.forward)
+    if dump_f is not None:
+        logging.info("wiretap: dumping AUDIO frames to %s", args.dump)
     tap.start()
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        logging.info("captured %d datagrams", len(tap.captures))
+        logging.info("captured %d datagrams (%d audio frames dumped)",
+                     len(tap.captures), n_audio[0])
     finally:
         tap.stop()
+        if dump_f is not None:
+            dump_f.close()
 
 
 def main(argv=None):
@@ -97,6 +120,8 @@ def main(argv=None):
     w = sub.add_parser("wiretap", help="passively capture + forward the plaintext wire")
     w.add_argument("--bind", required=True, help="listen address host:port")
     w.add_argument("--forward", required=True, help="real destination host:port")
+    w.add_argument("--dump", metavar="FILE.dcf",
+                   help="append captured AUDIO frames to a .dcf for the ffmpeg demuxer")
     w.set_defaults(func=cmd_wiretap)
 
     args = p.parse_args(argv)

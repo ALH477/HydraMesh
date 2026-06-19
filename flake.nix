@@ -126,6 +126,46 @@
             meta.mainProgram = "dcf";
           };
 
+          # FFmpeg with the native DCF-Audio demuxer built in. DCF-Audio is an
+          # adapter over the 17-byte wire quantum; ff_dcf_demuxer reuses the
+          # certified C reassembler (codec/demod_audio.h) so `ffmpeg -f dcf -i
+          # capture.dcf out.flac` records audio off the wire into any file type.
+          # See ffmpeg-dcf/README.md. The PM synth (codec_id 2) is compiled in
+          # from codec/faust/dcf_pm_codec.gen.c; codec_id 0/1 ride built-in
+          # opus / pcm_u8 decoders, so only a demuxer is registered.
+          dcf-ffmpeg = pkgs.ffmpeg.overrideAttrs (old: {
+            pname = "dcf-ffmpeg";
+            postPatch = (old.postPatch or "") + ''
+              cp ${self}/ffmpeg-dcf/dcfdec.c            libavformat/dcfdec.c
+              cp ${self}/ffmpeg-dcf/dcf_pm_ff.c         libavformat/dcf_pm_ff.c
+              cp ${self}/codec/demod_frame.h            libavformat/demod_frame.h
+              cp ${self}/codec/demod_audio.h            libavformat/demod_audio.h
+              cp ${self}/codec/faust/dcf_pm_codec.gen.c libavformat/dcf_pm_codec.gen.c
+              cp ${self}/codec/faust/dcf_pm_faust.c     libavformat/dcf_pm_faust.c
+              # Register the demuxer (configure's find_things_extern scans this file).
+              sed -i '/extern const FFInputFormat  *ff_aa_demuxer;/a extern const FFInputFormat  ff_dcf_demuxer;' \
+                  libavformat/allformats.c
+              # Link the demuxer + PM synth (compiled via the missing-prototypes
+              # build shim) when CONFIG_DCF_DEMUXER is on.
+              printf '\nOBJS-$(CONFIG_DCF_DEMUXER) += dcfdec.o dcf_pm_ff.o\n' \
+                  >> libavformat/Makefile
+            '';
+            configureFlags = (old.configureFlags or [ ]) ++ [ "--enable-demuxer=dcf" ];
+            doCheck = false;
+            meta = (old.meta or { }) // {
+              description = "FFmpeg with the native DCF-Audio (dcf) demuxer";
+            };
+          });
+
+          # CLI front door to the `dcf` demuxer: record / inspect / split / listen.
+          # Python (reuses the certified python/MCP + python/dcf modules) and shells
+          # ffmpeg/ffprobe from dcf-ffmpeg. See ffmpeg-dcf/dcf-rec + README.
+          dcf-rec = pkgs.writeShellApplication {
+            name = "dcf-rec";
+            runtimeInputs = [ dcf-ffmpeg pkgs.python3 ];
+            text = ''exec python3 ${self}/ffmpeg-dcf/dcf-rec "$@"'';
+          };
+
           # ── OCI node images (hermetic; built with `nix build .#docker-*`) ──────
           # These run like real nodes, not cert harnesses: each image's entrypoint
           # is the node binary with `start` as the default command.
@@ -318,7 +358,12 @@
 
         devShells = {
           default = pkgs.mkShell {
-            packages = [ protobuf pkgs.cmake pkgs.grpc pkgs.rustc pkgs.cargo pkgs.go pkgs.nodejs pkgs.python3 pkgs.perl pkgs.sbcl ];
+            packages = [
+              protobuf pkgs.cmake pkgs.grpc pkgs.rustc pkgs.cargo pkgs.go
+              pkgs.nodejs pkgs.python3 pkgs.perl pkgs.sbcl
+              # DCF-Audio -> ffmpeg recording: the `dcf` demuxer + dcf-rec wrapper.
+              self.packages.${system}.dcf-ffmpeg self.packages.${system}.dcf-rec
+            ];
             shellHook = ''
               export PROTOC=${protobuf}/bin/protoc
             '';

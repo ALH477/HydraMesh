@@ -104,10 +104,14 @@ external_unwrap = external_wrap
 
 
 class Wiretap:
-    """Transparent capturing UDP relay. Forwards ``bind`` -> ``forward``."""
+    """Transparent capturing UDP relay. Forwards ``bind`` -> ``forward``.
 
-    def __init__(self, bind, forward, on_capture=None, label="wiretap"):
-        self.forward = (forward[0], int(forward[1]))
+    ``forward`` may be ``None`` for a pure passive listener (bind + capture only,
+    no relay) — used by ``dcf-rec listen`` to record audio sent at a bound port.
+    """
+
+    def __init__(self, bind, forward=None, on_capture=None, label="wiretap"):
+        self.forward = (forward[0], int(forward[1])) if forward else None
         self.label = label
         self.on_capture = on_capture
         self.captures = []                     # list of (raw_bytes, src_addr)
@@ -149,11 +153,13 @@ class Wiretap:
             log.info("[%s] %s -> %s : %s", self.label, src, self.forward, summary)
             if self.on_capture:
                 self.on_capture(data, src, summary)
-            # Forward unchanged — a passive tap is transparent to the mesh.
-            try:
-                self._sock.sendto(data, self.forward)
-            except OSError:
-                pass
+            # Forward unchanged — a passive tap is transparent to the mesh. With no
+            # forward configured this is a pure listener (no relay).
+            if self.forward is not None:
+                try:
+                    self._sock.sendto(data, self.forward)
+                except OSError:
+                    pass
 
     def decoded(self):
         """All captures that decode as a DCF ProtoMessage (the recovered plaintext)."""
