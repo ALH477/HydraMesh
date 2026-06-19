@@ -33,6 +33,9 @@
 #include "demod_modulation.h"
 #include "dcf_modem.h"
 #include "dcf_proto.h"
+#include "dcf_mesh_runtime.h"
+
+static const char *opt(int argc, char **argv, const char *key, const char *def);
 
 #define DCF_NODE_DEFAULT_PORT 7777
 
@@ -107,42 +110,83 @@ static int cmd_start(int argc, char **argv) {
     for (int i = 0; i < argc; i++)
         if (!strcmp(argv[i], "--bind") && i + 1 < argc) parse_hostport(argv[++i], host, sizeof host, &port);
 
+    const char *mode = opt(argc, argv, "--mode", "p2p");
+    int node_id = atoi(opt(argc, argv, "--node-id", "0"));
+    int master_peer = atoi(opt(argc, argv, "--master", "0"));
+
     int fd = udp_socket_bound(host, port);
     if (fd < 0) { fprintf(stderr, "bind %s:%d failed\n", host, port); return 1; }
 
     dcf_text_reasm_t tr; dcf_text_reasm_init(&tr);
     dcf_game_reasm_t gr; dcf_game_reasm_init(&gr);
+
+    dcf_mesh_node_t mesh;
+    bool mesh_on = strcmp(mode, "p2p") != 0;
+    if (mesh_on) {
+        dcf_mesh_init(&mesh, fd, mode, node_id, master_peer, 50);
+        for (int i = 0; i < argc; i++) {
+            if (strcmp(argv[i], "--peer") != 0 || i + 1 >= argc) continue;
+            char spec[128];
+            snprintf(spec, sizeof spec, "%s", argv[i + 1]);
+            char *at = strchr(spec, '@');
+            if (!at) continue;
+            *at = '\0';
+            char ph[64]; int pp;
+            if (parse_hostport(at + 1, ph, sizeof ph, &pp) == 0)
+                dcf_mesh_add_peer(&mesh, atoi(spec), ph, pp);
+        }
+        fprintf(stderr, "self-healing mesh: mode=%s node-id=%d master=%d peers=%d\n",
+                mode, node_id, master_peer, mesh.n_peers);
+        struct timeval tv = {0, 250000}; /* 250 ms recv timeout so the loop ticks */
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+    }
     fprintf(stderr, "dcfnode listening on %s:%d (Ctrl-C to stop)\n", host, port);
 
+    uint64_t last_tick = dcf_mesh_now_us();
     for (;;) {
         uint8_t dg[2048];
         struct sockaddr_in from;
         socklen_t fl = sizeof(from);
         ssize_t r = recvfrom(fd, dg, sizeof(dg), 0, (struct sockaddr *)&from, &fl);
-        if (r < 0) break;
-        char fip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &from.sin_addr, fip, sizeof fip);
-
-        uint8_t mt; uint32_t seq, plen; uint64_t ts; const uint8_t *p;
-        if (!dcf_proto_deserialize(dg, (size_t)r, &mt, &seq, &ts, &p, &plen)) continue;
-
-        if (mt == DCF_MSG_TEXT_DCF && plen == DCF_FRAME_SIZE) {
-            dcf_text_packet_t msg;
-            if (dcf_text_reasm_push(&tr, p, &msg) == DCF_TEXT_REASM_MESSAGE)
-                printf("text from %s on ch 0x%04X: %.*s\n", fip, msg.dst, msg.payload_len, msg.payload);
-        } else if (mt == DCF_MSG_GAME_DCF && plen == DCF_FRAME_SIZE) {
-            dcf_game_packet_t pkt;
-            if (dcf_game_reasm_push(&gr, p, &pkt) == DCF_GAME_REASM_PACKET)
-                printf("game from %s: type=%u %u bytes (packet %u)\n", fip, pkt.msg_type_id, pkt.payload_len, pkt.packet_id);
-        } else if (mt == DCF_MSG_POSITION && plen == 12) {
-            uint32_t xi = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
-            uint32_t yi = ((uint32_t)p[4] << 24) | ((uint32_t)p[5] << 16) | ((uint32_t)p[6] << 8) | p[7];
-            uint32_t zi = ((uint32_t)p[8] << 24) | ((uint32_t)p[9] << 16) | ((uint32_t)p[10] << 8) | p[11];
-            float x, y, z;
-            memcpy(&x, &xi, 4); memcpy(&y, &yi, 4); memcpy(&z, &zi, 4);
-            printf("position from %s: (%.2f, %.2f, %.2f)\n", fip, x, y, z);
+        if (r > 0) {
+            char fip[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &from.sin_addr, fip, sizeof fip);
+            uint8_t mt; uint32_t seq, plen; uint64_t ts; const uint8_t *p;
+            if (dcf_proto_deserialize(dg, (size_t)r, &mt, &seq, &ts, &p, &plen)) {
+                if (mt == DCF_MSG_PING) {
+                    uint8_t pb[DCF_PROTO_HEADER_LEN];
+                    size_t n = dcf_proto_serialize(DCF_MSG_PONG, seq, ts, NULL, 0, pb);
+                    sendto(fd, pb, n, 0, (struct sockaddr *)&from, fl);
+                } else if (mt == DCF_MSG_PONG && mesh_on) {
+                    uint64_t now = dcf_mesh_now_us();
+                    dcf_mesh_on_pong(&mesh, &from, ts < now ? (int)((now - ts) / 1000) : 0);
+                } else if (mt == DCF_MSG_MESH && mesh_on) {
+                    dcf_mesh_on_control(&mesh, p, (int)plen, &from);
+                } else if (mt == DCF_MSG_TEXT_DCF && plen == DCF_FRAME_SIZE) {
+                    dcf_text_packet_t msg;
+                    if (dcf_text_reasm_push(&tr, p, &msg) == DCF_TEXT_REASM_MESSAGE)
+                        printf("text from %s on ch 0x%04X: %.*s\n", fip, msg.dst, msg.payload_len, msg.payload);
+                } else if (mt == DCF_MSG_GAME_DCF && plen == DCF_FRAME_SIZE) {
+                    dcf_game_packet_t pkt;
+                    if (dcf_game_reasm_push(&gr, p, &pkt) == DCF_GAME_REASM_PACKET)
+                        printf("game from %s: type=%u %u bytes (packet %u)\n", fip, pkt.msg_type_id, pkt.payload_len, pkt.packet_id);
+                } else if (mt == DCF_MSG_POSITION && plen == 12) {
+                    uint32_t xi = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
+                    uint32_t yi = ((uint32_t)p[4] << 24) | ((uint32_t)p[5] << 16) | ((uint32_t)p[6] << 8) | p[7];
+                    uint32_t zi = ((uint32_t)p[8] << 24) | ((uint32_t)p[9] << 16) | ((uint32_t)p[10] << 8) | p[11];
+                    float x, y, z;
+                    memcpy(&x, &xi, 4); memcpy(&y, &yi, 4); memcpy(&z, &zi, 4);
+                    printf("position from %s: (%.2f, %.2f, %.2f)\n", fip, x, y, z);
+                }
+            }
+            fflush(stdout);
+        } else if (!mesh_on) {
+            break; /* blocking recv error in non-mesh mode */
         }
-        fflush(stdout);
+        if (mesh_on) {
+            uint64_t now = dcf_mesh_now_us();
+            if (now - last_tick >= 1000000) { dcf_mesh_tick(&mesh); last_tick = now; }
+        }
     }
     close(fd);
     return 0;
@@ -307,7 +351,8 @@ static void usage(void) {
     fprintf(stderr,
         "dcfnode — DCF C SDK node\n\n"
         "  version\n"
-        "  start         [--bind host:port]\n"
+        "  start         [--bind host:port] [--mode p2p|auto|master] [--node-id N]\n"
+        "                [--master PEER_ID] [--peer id@host:port ...]\n"
         "  send-text     --peer host:port --channel NAME --text S\n"
         "  send-game     --peer host:port --channel-id N --hex BYTES [--type T]\n"
         "  send-position --peer host:port --x X --y Y --z Z\n"

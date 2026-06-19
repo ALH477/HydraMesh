@@ -127,7 +127,7 @@ static inline int dcf_mesh_elect(int n, const int edges[][3], int n_edges,
 #define DCF_MESH_REPORT  0
 #define DCF_MESH_ROLE    1
 #define DCF_MESH_VERSION 1
-#define DCF_MSG_MESH     11
+/* (the ProtoMessage transport type DCF_MSG_MESH=11 lives in the node layer, dcf_proto.h) */
 
 /* Serialise a REPORT; peers[n_peers][3] = {peer_id, status, rtt}. Returns length. */
 static inline int dcf_mesh_pack_report(int node_id, const int peers[][3], int n_peers, uint8_t *out) {
