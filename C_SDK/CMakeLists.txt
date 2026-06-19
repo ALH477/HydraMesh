@@ -356,6 +356,11 @@ if(DCF_BUILD_NODE)
         add_executable(test_proto_certify tests/test_proto_certify.c)
         target_include_directories(test_proto_certify PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/node)
         add_test(NAME proto_certify COMMAND test_proto_certify)
+
+        add_executable(test_modulation_certify tests/test_modulation_certify.c)
+        target_include_directories(test_modulation_certify PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../codec)
+        add_test(NAME modulation_certify COMMAND test_modulation_certify
+                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..)
     endif()
 endif()
 
