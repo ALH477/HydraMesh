@@ -5,9 +5,11 @@
 
 use alloc::boxed::Box;
 use heapless::consts::*;
-use heapless::{FnvIndexMap, String};
+use heapless::{FnvIndexMap, String, Vec};
 
 pub type Path = String<U32>;
+/// Maximum number of results returned by [`PathTrie::search`].
+pub type SearchCap = U8;
 
 #[derive(Default)]
 pub struct TrieNode {
@@ -86,6 +88,45 @@ impl PathTrie {
         }
         true
     }
+
+    /// Every stored path that begins with `prefix` (up to [`SearchCap`] results).
+    /// Replaces the original `trie_search` + `trie_collect_paths`.
+    pub fn search(&self, prefix: &str) -> Vec<Path, SearchCap> {
+        let mut out: Vec<Path, SearchCap> = Vec::new();
+        let mut acc: Vec<char, U32> = Vec::new();
+        Self::collect(&self.root, &mut acc, prefix, &mut out);
+        out
+    }
+
+    fn collect(
+        node: &TrieNode,
+        acc: &mut Vec<char, U32>,
+        prefix: &str,
+        out: &mut Vec<Path, SearchCap>,
+    ) {
+        if node.document_id.is_some() {
+            // `acc` holds the reversed-key chars (root->node); the original path is
+            // their reverse.
+            let mut p: Path = String::new();
+            let mut ok = true;
+            for &c in acc.iter().rev() {
+                if p.push(c).is_err() {
+                    ok = false;
+                    break;
+                }
+            }
+            if ok && p.as_str().starts_with(prefix) {
+                let _ = out.push(p);
+            }
+        }
+        for (ch, child) in &node.children {
+            if acc.push(*ch).is_err() {
+                continue;
+            }
+            Self::collect(&**child, acc, prefix, out);
+            acc.pop();
+        }
+    }
 }
 
 #[cfg(test)]
@@ -127,5 +168,21 @@ mod tests {
         assert!(t.any_with_suffix("host"));
         assert!(t.any_with_suffix("/peers/peer2"));
         assert!(!t.any_with_suffix("nope"));
+    }
+
+    #[test]
+    fn prefix_search() {
+        let mut t = PathTrie::new();
+        t.insert("/peers/host", 1);
+        t.insert("/peers/peer2", 2);
+        t.insert("/config", 3);
+        let found = t.search("/peers/");
+        let mut peers: heapless::Vec<&str, U8> = found.iter().map(|p| p.as_str()).collect();
+        peers.sort_unstable();
+        assert_eq!(&peers[..], &["/peers/host", "/peers/peer2"]);
+        let cfg = t.search("/config");
+        assert_eq!(cfg.len(), 1);
+        assert_eq!(cfg[0].as_str(), "/config");
+        assert_eq!(t.search("/none").len(), 0);
     }
 }

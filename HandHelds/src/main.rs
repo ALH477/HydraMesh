@@ -10,13 +10,12 @@ extern crate alloc;
 // Certified DeModFrame + SuperPack wire quantum, sourced from the portable,
 // host-tested core crate (see `core/`; also provides proto/routing/streamdb,
 // the verified replacements for this file's inline envelope/Dijkstra/trie).
-use dcf_handheld_core::wire;
+use dcf_handheld_core::{streamdb, wire};
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use alloc::vec;
 use core::ffi::{c_char, c_int, c_long, c_uint, c_void, c_uchar};
-use core::mem;
 use core::panic::PanicInfo;
 use byteorder::{ByteOrder, LittleEndian};
 use crc::Crc;
@@ -634,35 +633,21 @@ struct PageHeader {
     data_length: u32,
 }
 
-#[derive(Clone, Debug)]
-struct ReverseTrieNode {
-    edge: heapless::String<U32>,
-    document_id: Option<u128>,
-    children: FnvIndexMap<char, ReverseTrieNode, U8>,
-}
-
-impl Default for ReverseTrieNode {
-    fn default() -> Self {
-        Self {
-            edge: heapless::String::new(),
-            document_id: None,
-            children: FnvIndexMap::new(),
-        }
-    }
-}
+// The reverse-trie path index now lives in the host-tested core crate
+// (`dcf_handheld_core::streamdb::PathTrie`). The original inline `ReverseTrieNode`
+// was an infinitely-sized recursive type and could not compile.
 
 #[derive(Clone, Debug)]
 struct Document {
     id: u128,
     data: heapless::Vec<u8, MAX_FILE_SIZE>,
-    paths: heapless::Vec<heapless::String<U32>, U4>,
 }
 
 pub struct LibfatBackend<S: Storage> {
     storage: S,
     config: Config,
     documents: FnvIndexMap<u128, Document, U4>,
-    path_trie: ReverseTrieNode,
+    path_trie: streamdb::PathTrie,
     page_cache: LruCache<u64, heapless::Vec<u8, MAX_FILE_SIZE>>,
     quick_mode: bool,
 }
@@ -673,149 +658,14 @@ impl<S: Storage> LibfatBackend<S> {
             storage,
             config,
             documents: FnvIndexMap::new(),
-            path_trie: ReverseTrieNode::default(),
+            path_trie: streamdb::PathTrie::new(),
             page_cache: LruCache::new(NonZeroUsize::new(config.page_cache_size).unwrap()),
             quick_mode: false,
         }
     }
 
-    fn validate_path(&self, path: &str) -> Result<(), ()> {
-        if path.is_empty() || path.len() > 32 || path.contains('\0') || path.contains("//") {
-            Err(())
-        } else {
-            Ok(())
-        }
-    }
-
-    fn trie_insert(&mut self, path: &str, id: u128) -> Result<(), ()> {
-        self.validate_path(path)?;
-        let reversed: heapless::String<U32> = path.chars().rev().collect();
-        let mut current = &mut self.path_trie;
-        let mut remaining = reversed.as_str();
-        while !remaining.is_empty() {
-            let first_char = remaining.chars().next().ok_or(())?;
-            if let Some(child) = current.children.get_mut(&first_char) {
-                let edge = child.edge.as_str();
-                let common_len = edge.chars().zip(remaining.chars()).take_while(|(a, b)| a == b).count();
-                if common_len == edge.len() {
-                    remaining = &remaining[common_len..];
-                    current = child;
-                } else if common_len > 0 {
-                    let common = &edge[..common_len];
-                    let suffix = &edge[common_len..];
-                    let mut new_intermediate = ReverseTrieNode::default();
-                    new_intermediate.edge = common.into();
-                    let mut new_child = ReverseTrieNode::default();
-                    new_child.edge = suffix.into();
-                    new_child.document_id = child.document_id;
-                    new_child.children = mem::take(&mut child.children);
-                    new_intermediate.children.insert(suffix.chars().next().ok_or(())?, new_child).ok();
-                    *child = new_intermediate;
-                    current = child.children.get_mut(&suffix.chars().next().ok_or(())?).ok_or(())?;
-                    remaining = &remaining[common_len..];
-                } else {
-                    let mut new_child = ReverseTrieNode::default();
-                    new_child.edge = remaining.into();
-                    new_child.document_id = Some(id);
-                    current.children.insert(first_char, new_child).ok();
-                    return Ok(());
-                }
-            } else {
-                let mut new_child = ReverseTrieNode::default();
-                new_child.edge = remaining.into();
-                new_child.document_id = Some(id);
-                current.children.insert(first_char, new_child).ok();
-                return Ok(());
-            }
-        }
-        current.document_id = Some(id);
-        Ok(())
-    }
-
-    fn trie_delete(&mut self, path: &str) -> Result<(), ()> {
-        self.validate_path(path)?;
-        let reversed: heapless::String<U32> = path.chars().rev().collect();
-        let mut path_stack = heapless::Vec::<(char, *mut ReverseTrieNode), U8>::new();
-        let mut current = &mut self.path_trie;
-        let mut remaining = reversed.as_str();
-        while !remaining.is_empty() {
-            let first_char = remaining.chars().next().ok_or(())?;
-            if let Some(child) = current.children.get_mut(&first_char) {
-                let edge = child.edge.as_str();
-                if remaining.starts_with(edge) {
-                    path_stack.push((first_char, current as *mut ReverseTrieNode)).ok();
-                    current = child;
-                    remaining = &remaining[edge.len()..];
-                } else {
-                    return Err(());
-                }
-            } else {
-                return Err(());
-            }
-        }
-        if current.document_id.is_none() {
-            return Err(());
-        }
-        current.document_id = None;
-        while let Some((c, parent_ptr)) = path_stack.pop() {
-            let parent = unsafe { &mut *parent_ptr };
-            let current_ref = parent.children.get_mut(&c).ok_or(())?;
-            if current_ref.document_id.is_none() && current_ref.children.len() == 1 {
-                if let Some((child_char, child)) = current_ref.children.remove_entry(current_ref.children.keys().next().copied().ok_or(())?) {
-                    let mut merged_edge = heapless::String::new();
-                    merged_edge.push_str(&current_ref.edge).ok();
-                    merged_edge.push_str(&child.edge).ok();
-                    let mut merged_node = ReverseTrieNode::default();
-                    merged_node.edge = merged_edge;
-                    merged_node.document_id = child.document_id;
-                    merged_node.children = child.children;
-                    parent.children.insert(c, merged_node).ok();
-                }
-            } else if current_ref.document_id.is_none() && current_ref.children.is_empty() {
-                parent.children.remove(&c);
-            } else {
-                break;
-            }
-        }
-        Ok(())
-    }
-
-    fn trie_search(&self, prefix: &str) -> Result<heapless::Vec<heapless::String<U32>, U8>, ()> {
-        self.validate_path(prefix)?;
-        let reversed_prefix: heapless::String<U32> = prefix.chars().rev().collect();
-        let mut current = &self.path_trie;
-        let mut remaining = reversed_prefix.as_str();
-        while !remaining.is_empty() {
-            let first_char = remaining.chars().next().ok_or(())?;
-            if let Some(child) = current.children.get(&first_char) {
-                let edge = child.edge.as_str();
-                if remaining.starts_with(edge) {
-                    remaining = &remaining[edge.len()..];
-                    current = child;
-                } else {
-                    return Ok(heapless::Vec::new());
-                }
-            } else {
-                return Ok(heapless::Vec::new());
-            }
-        }
-        let mut results = heapless::Vec::<heapless::String<U32>, U8>::new();
-        self.trie_collect_paths(current, heapless::String::new(), &mut results)?;
-        let filtered = results.into_iter().filter(|p| p.starts_with(prefix)).collect::<heapless::Vec<_, U8>>();
-        Ok(filtered)
-    }
-
-    fn trie_collect_paths(&self, node: &ReverseTrieNode, current_path: heapless::String<U32>, results: &mut heapless::Vec<heapless::String<U32>, U8>) -> Result<(), ()> {
-        let mut new_path = current_path;
-        new_path.push_str(&node.edge).ok();
-        if let Some(_) = node.document_id {
-            let path: heapless::String<U32> = new_path.chars().rev().collect();
-            results.push(path).ok();
-        }
-        for (_, child) in &node.children {
-            self.trie_collect_paths(child, new_path.clone(), results)?;
-        }
-        Ok(())
+    fn get_document_id_by_path(&self, path: &str) -> Result<u128, ()> {
+        self.path_trie.get(path).ok_or(())
     }
 }
 
@@ -836,11 +686,7 @@ impl<S: Storage> Database for LibfatBackend<S> {
         let id = fake_uuid();
         let mut doc_data = heapless::Vec::new();
         doc_data.extend_from_slice(data).ok();
-        let doc = Document {
-            id,
-            data: doc_data,
-            paths: heapless::Vec::new(),
-        };
+        let doc = Document { id, data: doc_data };
         let mut buf = heapless::Vec::<u8, MAX_FILE_SIZE>::new();
         LittleEndian::write_u128(&mut buf, id).ok();
         LittleEndian::write_u32(&mut buf, data.len() as u32).ok();
@@ -858,7 +704,9 @@ impl<S: Storage> Database for LibfatBackend<S> {
         self.storage.write(handle, &final_buf, 0)?;
         self.storage.close(handle)?;
         self.documents.insert(id, doc).ok();
-        self.trie_insert(path, id)?;
+        if !self.path_trie.insert(path, id) {
+            return Err(());
+        }
         Ok(id)
     }
 
@@ -889,10 +737,8 @@ impl<S: Storage> Database for LibfatBackend<S> {
 
     fn delete(&mut self, path: &str) -> Result<(), ()> {
         let id = self.get_document_id_by_path(path)?;
-        if let Some(doc) = self.documents.remove(&id) {
-            for path in doc.paths {
-                self.trie_delete(&path)?;
-            }
+        if self.documents.remove(&id).is_some() {
+            self.path_trie.delete(path);
             let handle = self.storage.open("dcf.streamdb", "wb+")?;
             self.storage.write(handle, &[], 0)?;
             self.storage.close(handle)?;
@@ -903,7 +749,7 @@ impl<S: Storage> Database for LibfatBackend<S> {
     }
 
     fn search(&self, prefix: &str) -> Result<heapless::Vec<heapless::String<U32>, U8>, ()> {
-        self.trie_search(prefix)
+        Ok(self.path_trie.search(prefix))
     }
 
     fn flush(&self) -> Result<(), ()> {
@@ -912,28 +758,6 @@ impl<S: Storage> Database for LibfatBackend<S> {
 
     fn set_quick_mode(&mut self, enabled: bool) {
         self.quick_mode = enabled;
-    }
-
-    fn get_document_id_by_path(&self, path: &str) -> Result<u128, ()> {
-        self.validate_path(path)?;
-        let reversed: heapless::String<U32> = path.chars().rev().collect();
-        let mut current = &self.path_trie;
-        let mut remaining = reversed.as_str();
-        while !remaining.is_empty() {
-            let first_char = remaining.chars().next().ok_or(())?;
-            if let Some(child) = current.children.get(&first_char) {
-                let edge = child.edge.as_str();
-                if remaining.starts_with(edge) {
-                    remaining = &remaining[edge.len()..];
-                    current = child;
-                } else {
-                    return Err(());
-                }
-            } else {
-                return Err(());
-            }
-        }
-        current.document_id.ok_or(())
     }
 }
 
