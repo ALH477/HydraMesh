@@ -147,6 +147,35 @@ mathematically offset-QPSK — a *frequency* modulation you can detect like a *p
 - **Duty / thermal.** Enforce a **duty cycle / cool-down**; continuous bursts overheat an
   HT's tiny heatsink and drain the pack. Tune beacon cadence per scenario (Part A).
 
+## Audio routing (PipeWire / JACK / ALSA)
+
+Getting the modem audio in and out of the radio is just audio routing — DCF works with
+any Linux audio server two ways:
+
+- **File route (server-agnostic, no live-audio deps).** The numpy modem reads/writes
+  WAV, so you pipe it through whatever player/recorder your server provides:
+  ```sh
+  python3 python/modem/acoustic.py tx --text "SOS" --profile handheld --wav out.wav
+  pw-play out.wav                                  # PipeWire  (or: aplay / jack-play)
+  pw-record -d <radio-source> in.wav               # capture the radio's audio
+  python3 python/modem/acoustic.py rx --profile handheld --wav in.wav
+  ```
+  `rx` trims leading capture silence (energy onset) so a `pw-record` file aligns. RS-FEC
+  with `--fec`.
+- **Live route (real-time, low latency).** The Faust modem uses PortAudio (sounddevice),
+  which speaks **PipeWire/Pulse and JACK** through PortAudio's host APIs. PipeWire even
+  exposes a JACK-compatible API, so PortAudio's default device already flows through it:
+  ```sh
+  python3 python/modem/main.py --list-devices            # see PipeWire/JACK/Pulse ports
+  python3 python/modem/main.py tx --profile handheld --device pipewire "SOS"
+  ```
+  Patch the modem's ports to your USB audio interface (→ radio mic) and the radio's
+  capture (→ modem input) in a patchbay — **qpwgraph** (PipeWire) or **qjackctl/Carla**
+  (JACK). A USB audio interface to the radio's 3.5 mm TRRS keeps the levels clean.
+
+Both routes carry the *same* on-air framing, so a numpy/file node and a live Faust node
+interoperate over the air.
+
 ## Test ladder
 
 Climb tier by tier; do not skip — most failures are coupling/level/AGC, not the codec.

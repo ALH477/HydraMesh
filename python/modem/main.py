@@ -879,8 +879,24 @@ Examples:
                         help=f"Detection threshold (default: {DETECT_THRESHOLD})")
     parser.add_argument("--dsp", type=str, default=None,
                         help="Path to Faust DSP file")
+    parser.add_argument("--device", default=None,
+                        help="Audio device for live I/O — name or index from "
+                             "--list-devices. Pick a PipeWire/JACK/Pulse port or a USB "
+                             "interface to route to/from the radio (e.g. --device pipewire).")
+    parser.add_argument("--list-devices", action="store_true",
+                        help="List audio devices (PortAudio host APIs incl. JACK/PipeWire/Pulse) and exit")
 
     args = parser.parse_args()
+
+    if args.list_devices:
+        print(sd.query_devices())
+        return
+    if args.device is not None:
+        try:
+            sd.default.device = int(args.device)     # accept an index or a name substring
+        except ValueError:
+            sd.default.device = args.device
+        print(f"{C_DIM}Audio device: {args.device}{C_RESET}")
 
     # Find DSP file
     if args.dsp:

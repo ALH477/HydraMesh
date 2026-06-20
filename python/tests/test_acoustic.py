@@ -111,5 +111,31 @@ class TestAcousticChannel(unittest.TestCase):
         self.assertFalse(recovers(3500, 4000))           # both out of band: lost
 
 
+@unittest.skipUnless(HAVE, "numpy required for the acoustic modem")
+class TestAcousticWav(unittest.TestCase):
+    """WAV file route — the audio-server-agnostic path used over PipeWire/JACK/ALSA."""
+
+    def _tmp(self):
+        import tempfile
+        fd, path = tempfile.mkstemp(suffix=".wav")
+        os.close(fd)
+        self.addCleanup(lambda: os.path.exists(path) and os.unlink(path))
+        return path
+
+    def test_wav_roundtrip(self):
+        path = self._tmp()
+        audio, _, _ = A.frame_to_audio(FRAME, profile="handheld")
+        A.write_wav(path, audio)
+        back, fs = A.read_wav(path)
+        self.assertEqual(fs, A.FS)
+        self.assertEqual(A.decode_audio(back, profile="handheld", fs=fs)[0], FRAME)
+
+    def test_decode_tolerates_capture_silence(self):
+        # a pw-record capture has leading/trailing silence; the energy-onset trim aligns it.
+        audio, _, _ = A.frame_to_audio(FRAME, profile="handheld", fec=True)
+        padded = np.concatenate([np.zeros(7000, np.float32), audio, np.zeros(3000, np.float32)])
+        self.assertEqual(A.decode_audio(padded, profile="handheld", fec=True)[0], FRAME)
+
+
 if __name__ == "__main__":
     unittest.main()

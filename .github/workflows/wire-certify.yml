@@ -72,6 +72,9 @@ jobs:
             python3 python/modem/sdr.py rx --iq /tmp/d.cf32 --mod $mod | tee /tmp/rx.txt
             grep -q "44434621" /tmp/rx.txt && echo "dcf-sdr $mod cf32 round-trip: recovered \"DCF!\""
           done
+          python3 python/modem/acoustic.py tx --text "DCF!" --profile handheld --wav /tmp/a.wav
+          python3 python/modem/acoustic.py rx --profile handheld --wav /tmp/a.wav | tee /tmp/arx.txt
+          grep -q "44434621" /tmp/arx.txt && echo "acoustic WAV round-trip: recovered \"DCF!\""
           python3 python/modem/uplink_demo.py >/dev/null && echo "uplink_demo: ok"
 
       - name: Modulation — self-test, regenerate vectors, diff the committed copies
