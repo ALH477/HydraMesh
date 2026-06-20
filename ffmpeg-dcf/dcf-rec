@@ -45,7 +45,7 @@ CODEC_INFO = {
     al.CODEC_PCM_DIAG: ("pcm_u8", al.PCM_DIAG_RATE),
     al.CODEC_FAUST_PM: ("pm/pcm_f32le", 48000),
 }
-SUBCMDS = ("rec", "info", "split", "listen")
+SUBCMDS = ("rec", "info", "split", "listen", "stream")
 
 
 def err(msg, code=2):
@@ -294,6 +294,54 @@ def cmd_listen(args):
               file=sys.stderr)
 
 
+def cmd_stream(args):
+    """Digital radio: capture live off the wire -> per-channel HLS stream + DVR."""
+    import signal
+    import threading
+    from dcf.wiretap import Wiretap
+    from dcf.proto import ProtoMessage, MSG_AUDIO
+    from dcf.radio import RadioServer, parse_duration, parse_names
+
+    bind = split_hostport(args.bind)
+    forward = split_hostport(args.forward) if args.forward else None
+    http_addr = split_hostport(args.http) if args.http else None
+    only = None if (args.channel in (None, "auto")) else int(args.channel, 0)
+    hls_dir = args.hls_dir or os.path.join(args.archive or tempfile.mkdtemp(prefix="dcf-radio-"), "hls")
+
+    server = RadioServer(hls_dir=hls_dir, http_addr=http_addr, only_channel=only,
+                         dvr_s=parse_duration(args.dvr), archive_dir=args.archive,
+                         archive_max_mb=args.archive_max, codec=args.codec,
+                         bitrate=args.bitrate, loudnorm=args.loudnorm,
+                         live_mp3=not args.no_live_mp3, names=parse_names(args.names),
+                         log=lambda m: print(m, file=sys.stderr))
+
+    def on_capture(data, _src, _summary):
+        try:
+            msg = ProtoMessage.deserialize(data)
+        except ValueError:
+            return
+        if msg.msg_type == MSG_AUDIO and len(msg.payload) == FRAME_SIZE:
+            server.feed(msg.payload)
+
+    stop = threading.Event()
+    signal.signal(signal.SIGINT, lambda *_: stop.set())
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
+
+    tap = Wiretap(bind, forward, on_capture=on_capture, label="dcf-radio")
+    relay = f" (relaying to {args.forward})" if forward else ""
+    chan = "auto" if only is None else f"CH{only}"
+    print(f"{PROG} stream: radio on {args.bind}{relay} · channels={chan} · "
+          f"HLS dir {hls_dir} · DVR {args.dvr or '6h'} — Ctrl-C to stop", file=sys.stderr)
+    tap.start()
+    try:
+        while not stop.wait(0.5):
+            pass
+    finally:
+        tap.stop()
+        server.close()
+    print(f"\n{PROG}: radio stopped.", file=sys.stderr)
+
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog=PROG, description=__doc__,
@@ -328,6 +376,31 @@ def build_parser():
     l.add_argument("--keep", metavar="FILE.dcf", help="keep the raw capture at this path")
     l.add_argument("-y", "--yes", action="store_true", help="overwrite output")
     l.set_defaults(func=cmd_listen)
+
+    st = sub.add_parser("stream", help="digital radio: live HLS stream + DVR per channel")
+    st.add_argument("--bind", required=True, metavar="HOST:PORT", help="UDP listen address")
+    st.add_argument("--http", metavar="HOST:PORT", default="127.0.0.1:8000",
+                    help="serve the radio here (default 127.0.0.1:8000)")
+    st.add_argument("--channel", metavar="N|auto", default="auto",
+                    help="pin one channel (frame dst) or 'auto' = a station per channel")
+    st.add_argument("--dvr", metavar="DURATION", default="6h",
+                    help="rewind window kept seekable (e.g. 30m, 6h; default 6h)")
+    st.add_argument("--archive", metavar="DIR", default="./dcf-radio",
+                    help="dir for raw radio-CH<n>.dcf archives (full re-renderable past)")
+    st.add_argument("--hls-dir", metavar="DIR", help="HLS output dir (default <archive>/hls)")
+    st.add_argument("--forward", metavar="HOST:PORT",
+                    help="also relay datagrams here (transparent inline tap)")
+    st.add_argument("--codec", choices=("aac", "opus"), default="aac",
+                    help="stream codec (aac=mpegts, opus=fmp4; default aac)")
+    st.add_argument("--bitrate", default="96k", help="stream bitrate (default 96k)")
+    st.add_argument("--loudnorm", action="store_true", help="EBU R128 loudness normalize")
+    st.add_argument("--no-live-mp3", action="store_true",
+                    help="disable the low-latency /CH<n>.live.mp3 endpoint")
+    st.add_argument("--archive-max", type=int, default=512, metavar="MB",
+                    help="rotate the raw .dcf archive past this size (MB; 0=off)")
+    st.add_argument("--names", metavar="ID=NAME,...",
+                    help="friendly names for channels/peers (e.g. 0x00a1=Hermes)")
+    st.set_defaults(func=cmd_stream)
     return p
 
 

@@ -39,6 +39,22 @@ Each peer (frame `src`) becomes one stream, tagged `title="peer 0x<id>"` so
 players, `ffprobe`, and `.mka` tracks name it. `info` durations/loss come from a
 direct frame scan (accurate), not ffprobe's bitrate estimate.
 
+### `stream` — digital radio (live HLS + DVR rewind)
+
+`dcf-rec stream` (aka `dcf-radio`) captures live audio off the wire and serves a
+**live HLS stream with a DVR rewind window**, one station per frequency channel
+(frame `dst`), plus a raw `.dcf` archive of the full past. See
+`Documentation/DCF_RADIO.md`.
+
+```sh
+dcf-rec stream --bind :7100 --http 127.0.0.1:8000 --dvr 6h --archive ./radio
+#   http://127.0.0.1:8000/              player + station list
+#   http://127.0.0.1:8000/radio/CH1420.m3u8   tune in / scrub back
+```
+
+It's also wired into the node: `dcf_node.py start --mode master --radio :8000`
+serves a radio of the audio that AUTO/master node receives.
+
 This is **not a new wire format**. DCF-Audio is an *adapter* over the certified
 17-byte wire quantum; the demuxer reuses the certified C reassembler + frame codec
 (`codec/demod_audio.h`, `codec/demod_frame.h`) verbatim, so the bytes it hands

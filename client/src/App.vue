@@ -5,7 +5,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { api, on, type UiMessage, type FrameJson, type PeerDetail, type RecordingResult,
   type UiGameSnapshot, type UiGameEvent } from './ipc'
 
-const tabs = ['Connect', 'Peers', 'Messages', 'Jam', 'Game', 'Wire'] as const
+const tabs = ['Connect', 'Peers', 'Messages', 'Jam', 'Game', 'Radio', 'Wire'] as const
 const tab = ref<(typeof tabs)[number]>('Connect')
 
 const conn = reactive({ node_id: 'me', host: '0.0.0.0', port: 50551, connected: false, selfId: '' })
@@ -13,6 +13,25 @@ const peerForm = reactive({ id: '', host: '127.0.0.1', port: 50552 })
 const peers = ref<{ id: string; host: string; port: number }[]>([])
 const peerDetails = ref<PeerDetail[]>([])
 const rec = reactive({ on: false, dir: 'hydramesh-rec', result: null as RecordingResult | null })
+
+const radio = reactive({
+  on: false, bind: '0.0.0.0:7110', http: '127.0.0.1:8000',
+  archive: 'hydramesh-radio', status: 'off',
+})
+async function startRadio() {
+  try {
+    radio.status = await api.startLocalRadio(radio.bind, radio.http, radio.archive)
+    radio.on = true
+  } catch (e) { err.value = String(e) }
+}
+async function stopRadio() {
+  try { await api.stopLocalRadio(); radio.on = false; radio.status = 'off' }
+  catch (e) { err.value = String(e) }
+}
+function openRadio() {
+  const host = radio.http.replace(/^0\.0\.0\.0/, '127.0.0.1')
+  api.openUrl(`http://${host}/`).catch((e) => { err.value = String(e) })
+}
 
 const chan = reactive({ freq: 1420, passphrase: '', active: 0xffff })
 const chatText = ref('')
@@ -201,6 +220,22 @@ onMounted(async () => {
       <div class="log" style="height:90px">
         <div v-for="(e, i) in game.events" :key="i"><b>#{{ e.src }}</b>: {{ e.text }}</div>
       </div>
+    </section>
+
+    <section v-show="tab === 'Radio'">
+      <h4>Digital radio — live stream + DVR (rewind the past)</h4>
+      <p class="dim">Broadcast this mesh's audio as per-channel HLS stations, or tune in.</p>
+      <label>Tap (UDP) <input v-model="radio.bind" /></label>
+      <label>Serve (HTTP) <input v-model="radio.http" /></label>
+      <label>Archive dir <input v-model="radio.archive" /></label>
+      <div class="row">
+        <button v-if="!radio.on" @click="startRadio">● Broadcast</button>
+        <button v-else @click="stopRadio">■ Stop broadcast</button>
+        <button @click="openRadio">Open player ↗</button>
+        <span class="dim">{{ radio.status }}</span>
+      </div>
+      <p class="dim">The player (station list, tune-in, scrub-back) opens in your browser —
+        it has the best HLS/DVR support. Stations appear as peers talk on each channel.</p>
     </section>
 
     <section v-show="tab === 'Wire'">

@@ -20,6 +20,7 @@ from .proto import (
     MSG_PING,
     MSG_PONG,
     MSG_MESH,
+    MSG_AUDIO,
 )
 
 log = logging.getLogger("dcf.udp")
@@ -48,6 +49,9 @@ class DcfNode:
         self._running = False
         self._rx_thread = None
         self.mesh = None                       # optional MeshRuntime
+        # Optional MSG_AUDIO tee: on_audio(payload_17b, addr). Used by the radio
+        # (dcf_node start --radio) to stream the audio this node receives.
+        self.on_audio = None
 
     # ── peer management ──────────────────────────────────────────────────────
     def add_peer(self, peer_id, host, port):
@@ -170,5 +174,8 @@ class DcfNode:
         elif msg.msg_type == MSG_MESH:
             if self.mesh is not None:
                 self.mesh.handle_control(msg.payload, addr)
+        elif msg.msg_type == MSG_AUDIO:
+            if self.on_audio is not None:
+                self.on_audio(msg.payload, addr)
         else:
             log.debug("unhandled msg_type %d from %s", msg.msg_type, addr)

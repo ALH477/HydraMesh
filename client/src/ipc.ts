@@ -32,6 +32,11 @@ export const api = {
   startRecording: (dir: string) => invoke<void>('start_recording', { dir }),
   stopRecording: () => invoke<RecordingResult>('stop_recording'),
   recordingStatus: () => invoke<boolean>('recording_status'),
+  startLocalRadio: (bind: string, http: string, archive: string) =>
+    invoke<string>('start_local_radio', { args: { bind, http, archive } }),
+  stopLocalRadio: () => invoke<void>('stop_local_radio'),
+  radioStatus: () => invoke<boolean>('radio_status'),
+  openUrl: (url: string) => invoke<void>('open_url', { url }),
 }
 
 export interface PeerStats { last_rtt: number; avg_rtt: number; jitter: number; packets_received: number }

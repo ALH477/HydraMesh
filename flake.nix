@@ -166,9 +166,33 @@
             text = ''exec python3 ${self}/ffmpeg-dcf/dcf-rec "$@"'';
           };
 
+          # DCF-Radio: digital-radio HLS stream + DVR (rewind) per channel, captured
+          # off the wire. Convenience alias for `dcf-rec stream`. See DCF_RADIO.md.
+          dcf-radio = pkgs.writeShellApplication {
+            name = "dcf-radio";
+            runtimeInputs = [ dcf-ffmpeg pkgs.python3 ];
+            text = ''exec python3 ${self}/ffmpeg-dcf/dcf-rec stream "$@"'';
+          };
+
           # ── OCI node images (hermetic; built with `nix build .#docker-*`) ──────
           # These run like real nodes, not cert harnesses: each image's entrypoint
           # is the node binary with `start` as the default command.
+
+          # DCF-Radio service image: a long-running station that taps UDP audio and
+          # serves HLS+DVR over HTTP. `nix build .#docker-dcf-radio`.
+          docker-dcf-radio = pkgs.dockerTools.buildLayeredImage {
+            name = "alh477/dcf-radio";
+            tag = "latest";
+            contents = [ dcf-radio pkgs.cacert ];
+            config = {
+              Entrypoint = [ "${dcf-radio}/bin/dcf-radio" ];
+              Cmd = [ "--bind" "0.0.0.0:7100" "--http" "0.0.0.0:8000"
+                      "--archive" "/var/dcf-radio" "--dvr" "6h" ];
+              ExposedPorts = { "7100/udp" = { }; "8000/tcp" = { }; };
+              Labels = { "org.opencontainers.image.source" = "https://github.com/ALH477/HydraMesh"; };
+            };
+          };
+
           docker-dcf-go = pkgs.dockerTools.buildLayeredImage {
             name = "alh477/dcf-go";
             tag = "latest";
@@ -361,8 +385,10 @@
             packages = [
               protobuf pkgs.cmake pkgs.grpc pkgs.rustc pkgs.cargo pkgs.go
               pkgs.nodejs pkgs.python3 pkgs.perl pkgs.sbcl
-              # DCF-Audio -> ffmpeg recording: the `dcf` demuxer + dcf-rec wrapper.
+              # DCF-Audio -> ffmpeg recording + radio: the `dcf` demuxer, dcf-rec,
+              # and the dcf-radio (HLS + DVR) streamer.
               self.packages.${system}.dcf-ffmpeg self.packages.${system}.dcf-rec
+              self.packages.${system}.dcf-radio
             ];
             shellHook = ''
               export PROTOC=${protobuf}/bin/protoc
@@ -386,6 +412,8 @@
           comms = pkgs.mkShell {
             nativeBuildInputs = [
               pkgs.pkg-config pkgs.rustc pkgs.cargo pkgs.nodejs pkgs.cargo-tauri
+              # so the Radio tab's "Broadcast" can spawn dcf-radio off PATH
+              self.packages.${system}.dcf-radio self.packages.${system}.dcf-ffmpeg
             ];
             buildInputs = [
               # Tauri webview (Linux)

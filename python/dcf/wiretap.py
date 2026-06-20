@@ -117,6 +117,12 @@ class Wiretap:
         self.captures = []                     # list of (raw_bytes, src_addr)
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # Large receive buffer so bursty audio (a station's many small frames) isn't
+        # dropped by the kernel before the recv loop drains it.
+        try:
+            self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 * 1024 * 1024)
+        except OSError:
+            pass
         self._sock.bind((bind[0], int(bind[1])))
         self._sock.settimeout(0.5)
         self._running = False

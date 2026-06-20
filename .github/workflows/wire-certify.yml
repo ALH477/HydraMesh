@@ -45,6 +45,9 @@ jobs:
       - name: Run MCP self-test
         run: python3 python/MCP/wirelab_mcp.py --selftest
 
+      - name: Run DCF-Radio + dcf-rec unit tests (no ffmpeg needed)
+        run: python3 -m unittest python/tests/test_radio.py python/tests/test_dcf_rec.py -v
+
       - name: SuperPack — self-test, regenerate vectors, diff the committed copies
         run: |
           python3 python/MCP/superpack.py

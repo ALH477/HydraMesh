@@ -16,6 +16,7 @@ exposure that motivates a WireGuard tunnel (see Documentation/DCF_SECURITY_EXPOS
 
 import argparse
 import logging
+import os
 import sys
 import time
 
@@ -50,6 +51,22 @@ def cmd_start(args):
         node.add_peer(*_parse_peer(spec))
     if args.mode != "p2p" or args.peer:
         node.mesh = MeshRuntime(args.mode, args.node_id, args.master, args.group_threshold)
+
+    # --radio: serve a digital-radio HLS stream (+ DVR) of the audio this node hears.
+    radio = None
+    if args.radio:
+        from dcf.radio import RadioServer, parse_duration, parse_names
+        rhost, rport = _split_hostport(args.radio, "--radio")
+        hls_dir = os.path.join(args.radio_archive, "hls")
+        radio = RadioServer(hls_dir=hls_dir, http_addr=(rhost, rport),
+                            dvr_s=parse_duration(args.radio_dvr),
+                            archive_dir=args.radio_archive,
+                            names=parse_names(args.radio_names),
+                            log=lambda m: logging.info("%s", m))
+        node.on_audio = radio.feed
+        logging.info("radio: serving on http://%s:%d/ (DVR %s, archive %s)",
+                     rhost, rport, args.radio_dvr, args.radio_archive)
+
     logging.info("self-healing mesh: mode=%s node-id=%s master=%r listening on %s:%d",
                  args.mode, args.node_id, args.master, host, port)
     node.start()
@@ -61,6 +78,8 @@ def cmd_start(args):
         logging.info("shutting down")
     finally:
         node.stop()
+        if radio is not None:
+            radio.close()
 
 
 def cmd_wiretap(args):
@@ -115,6 +134,14 @@ def main(argv=None):
                    help="peer (repeatable)")
     s.add_argument("--group-threshold", type=int, default=50,
                    help="RTT threshold (ms) for status-line grouping")
+    s.add_argument("--radio", metavar="HOST:PORT",
+                   help="serve a digital-radio HLS stream (+DVR) of received audio")
+    s.add_argument("--radio-dvr", metavar="DURATION", default="6h",
+                   help="radio rewind window (e.g. 30m, 6h; default 6h)")
+    s.add_argument("--radio-archive", metavar="DIR", default="./dcf-radio",
+                   help="dir for raw radio-CH<n>.dcf archives + HLS (default ./dcf-radio)")
+    s.add_argument("--radio-names", metavar="ID=NAME,...",
+                   help="friendly names for radio channels/peers (e.g. 0x00a1=Hermes)")
     s.set_defaults(func=cmd_start)
 
     w = sub.add_parser("wiretap", help="passively capture + forward the plaintext wire")

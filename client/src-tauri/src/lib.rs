@@ -28,6 +28,7 @@ pub struct AppState {
     channel: Arc<AtomicU16>,
     jam: Mutex<Option<audio::Jam>>,
     game: Mutex<Option<Arc<game::GameSession>>>,
+    radio: Mutex<Option<std::process::Child>>, // a locally-spawned `dcf-radio` broadcaster
 }
 
 #[derive(Deserialize)]
@@ -265,6 +266,64 @@ fn metrics(state: State<AppState>) -> Result<serde_json::Value, String> {
     }))
 }
 
+#[derive(Deserialize)]
+pub struct RadioArgs {
+    bind: String,
+    http: String,
+    archive: String,
+}
+
+/// Broadcast this node's channel as a digital-radio station: spawn a local
+/// `dcf-radio` (must be on PATH — it is in the `nix develop .#comms` shell) that
+/// taps `bind`, serves HLS+DVR on `http`, and archives to `archive`.
+#[tauri::command]
+fn start_local_radio(state: State<AppState>, args: RadioArgs) -> Result<String, String> {
+    let mut g = state.radio.lock();
+    if g.as_mut().map(|c| c.try_wait().ok().flatten().is_none()).unwrap_or(false) {
+        return Err("radio already running".into());
+    }
+    let child = std::process::Command::new("dcf-radio")
+        .args(["--bind", &args.bind, "--http", &args.http, "--archive", &args.archive])
+        .spawn()
+        .map_err(|e| format!("could not start dcf-radio ({e}); is it on PATH?"))?;
+    *g = Some(child);
+    Ok(format!("broadcasting: tap {} -> http://{}/", args.bind, args.http))
+}
+
+#[tauri::command]
+fn stop_local_radio(state: State<AppState>) {
+    if let Some(mut c) = state.radio.lock().take() {
+        let _ = c.kill();
+        let _ = c.wait();
+    }
+}
+
+#[tauri::command]
+fn radio_status(state: State<AppState>) -> bool {
+    let mut g = state.radio.lock();
+    match g.as_mut() {
+        Some(c) => c.try_wait().ok().flatten().is_none(), // still running?
+        None => false,
+    }
+}
+
+/// Open a URL (a station player / .m3u8) in the system browser, which has the best
+/// HLS + DVR support — avoids bundling a player into the strict-CSP webview.
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    let prog = "xdg-open";
+    #[cfg(target_os = "macos")]
+    let prog = "open";
+    #[cfg(target_os = "windows")]
+    let prog = "explorer";
+    std::process::Command::new(prog)
+        .arg(&url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("open {url}: {e}"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let _ = env_logger::try_init();
@@ -287,7 +346,11 @@ pub fn run() {
             peers,
             start_recording,
             stop_recording,
-            recording_status
+            recording_status,
+            start_local_radio,
+            stop_local_radio,
+            radio_status,
+            open_url
         ])
         .run(tauri::generate_context!())
         .expect("error while running HydraMesh client");
