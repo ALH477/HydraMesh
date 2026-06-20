@@ -240,6 +240,12 @@ the one-command demo:
 bash python/modem/demo.sh
 ```
 
+**Going to the field** (hiking, search & rescue, disaster aid, firefighting, hunting,
+paintball/airsoft, marathon)? [`Documentation/DCF_FIELD_USE.md`](Documentation/DCF_FIELD_USE.md)
+covers the handheld-radio profile (mid-band AFSK → MSK/4-FSK, RS-FEC), the
+uplink-oriented mesh (route to whoever has the Starlink — `python3 python/modem/uplink_demo.py`),
+a tiered field-test methodology, and the legal/safety rules.
+
 > **Plaintext on the air.** The DCF wire is encryption-free by design (EAR/ITAR
 > compliance), and **RF has no WireGuard** — anything you transmit is a broadcast. Treat
 > an over-the-air link as public; apply operator-supplied, export-compliant crypto
