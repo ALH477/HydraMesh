@@ -185,6 +185,38 @@ gcc -std=c11 -I codec C_SDK/tests/test_mesh_certify.c -lm -o /tmp/mc && /tmp/mc 
 cd go && go test ./mesh/                                                         # Go
 ```
 
+## DCF-FEC (forward error correction for lossy media)
+
+The frame CRC only **detects** corruption; for RF/SDR and acoustic links that drop
+bits, DCF-FEC adds **correction**. It is an adapter *around* a frame (the 17-byte
+quantum and its 246-vector certificate are untouched): a systematic **Reed-Solomon**
+code over **GF(2⁸)** (prim `0x11D`, generator α=2, fcr=0), default `2t=16` parity →
+corrects **8 byte-errors** per codeword, plus a **block interleaver** so an RF burst
+hits ≤1 byte/codeword. Spec: `Documentation/DCF_FEC_SPEC.md`.
+
+- **Multi-codeword messages** (`encode_message`/`decode_message`): any-length payload
+  is split into N equal blocks, RS-coded, and interleaved (corrects bursts up to `N·t`
+  bytes) behind a self-protecting fixed-parity header (`[len u32 | nparity u8]`), so
+  the receiver needs nothing out-of-band. No single-codeword 239-byte limit.
+- **Certified in all 13 wire-codec languages** (Python/C/Rust/Go/Node/C++/Perl/Lua/
+  Lisp/Haskell/Java/Kotlin/Swift), byte-identical, like SuperPack. References live
+  next to each frame codec — `python/MCP/feclab_core.py`, `codec/demod_fec.h`,
+  `codec/src/fec.rs`, `go/dcf/fec.go`, … (full table in the spec). Contract:
+  `Documentation/fec_vectors.json` (+ identical `python/MCP/` copy) and
+  `codec/fec_vectors.gen.h`. Anchor: RS parity is the byte-certified half; the
+  **modem IQ/audio waveform that carries the bytes is analog/loopback-tested**, not
+  vectored.
+- Consumed by the C node modem: `dcfnode send-modem --fec` / `recv-modem` use the
+  multi-codeword layer (`C_SDK/node/dcfnode.c`, `node/dcf_modem.h`), so a frame
+  crosses a real FSK/PSK/QAM/AM medium and is *recovered*, not just dropped.
+
+```sh
+python3 python/MCP/gen_fec_vectors.py /tmp/fec.json                              # regen + verify laws
+cd codec && cargo test --test certify_fec                                        # Rust
+gcc -std=c11 -I codec C_SDK/tests/test_fec_certify.c -lm -o /tmp/fc && /tmp/fc   # C
+cd go && go test ./dcf/ -run TestFEC                                             # Go
+```
+
 ## Comms client (`client/`) — Tauri 2 end-user app
 
 A cross-platform communications client (Rust core + Vue UI) on `dcf-rust-sdk` + the
