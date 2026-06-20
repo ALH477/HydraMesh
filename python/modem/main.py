@@ -70,6 +70,15 @@ SYNC_BITS       = 8
 MARK_FREQ       = 1200.0    # Hz (bit 1)
 SPACE_FREQ      = 2200.0    # Hz (bit 0)
 
+# Per-medium profiles (see Documentation/DCF_FIELD_USE.md). "standard" is the original
+# Bell-202 AFSK; "handheld" tunes for a walkie-talkie's 300-3000 Hz band-pass + AGC +
+# squelch: both tones pulled to mid-band (off the rolloffs) and a much longer keyup
+# preamble so the receiver's AGC normalizes and squelch opens before the sync word.
+PROFILES = {
+    "standard": {"mark": 1200.0, "space": 2200.0, "preamble_bits": 80},
+    "handheld": {"mark": 1200.0, "space": 1800.0, "preamble_bits": 240},  # ~800ms keyup
+}
+
 # Detection
 DETECT_THRESHOLD    = 0.45  # confidence threshold for frame detection
 DETECT_HOLD_BITS    = 10    # hold detection for this many bit periods after drop
@@ -848,7 +857,7 @@ def find_dsp_file():
 
 
 def main():
-    global MARK_FREQ, SPACE_FREQ, DETECT_THRESHOLD
+    global MARK_FREQ, SPACE_FREQ, DETECT_THRESHOLD, PREAMBLE_BITS
     print(BANNER)
 
     parser = argparse.ArgumentParser(
@@ -861,6 +870,7 @@ Examples:
   %(prog)s loopback "Test"         TX + RX loopback test (proves S4.3)
   %(prog)s tx -r 5 "SOS"           Transmit 5 repetitions
   %(prog)s rx --mark 1500          Use 1500 Hz mark frequency
+  %(prog)s tx --profile handheld "SOS"   Walkie-talkie profile (mid-band + long keyup)
         """,
     )
     parser.add_argument("mode", choices=["tx", "rx", "loopback"],
@@ -869,10 +879,15 @@ Examples:
                         help="Message to transmit (TX/loopback modes)")
     parser.add_argument("-r", "--repeat", type=int, default=3,
                         help="Number of frame repetitions (default: 3)")
-    parser.add_argument("--mark", type=float, default=MARK_FREQ,
-                        help=f"Mark frequency in Hz (default: {MARK_FREQ})")
-    parser.add_argument("--space", type=float, default=SPACE_FREQ,
-                        help=f"Space frequency in Hz (default: {SPACE_FREQ})")
+    parser.add_argument("--profile", choices=sorted(PROFILES), default="standard",
+                        help="Medium profile: 'standard' (Bell-202) or 'handheld' "
+                             "(walkie-talkie: mid-band tones + long AGC keyup)")
+    parser.add_argument("--mark", type=float, default=None,
+                        help="Mark frequency in Hz (overrides the profile default)")
+    parser.add_argument("--space", type=float, default=None,
+                        help="Space frequency in Hz (overrides the profile default)")
+    parser.add_argument("--preamble-bits", type=int, default=None,
+                        help="Keyup preamble length in bits (overrides the profile)")
     parser.add_argument("--gain", type=float, default=-3.0,
                         help="TX gain in dB (default: -3.0)")
     parser.add_argument("--threshold", type=float, default=DETECT_THRESHOLD,
@@ -895,18 +910,23 @@ Examples:
 
     print(f"{C_DIM}DSP file: {dsp_path}{C_RESET}")
 
-    # Override globals from args (declared global at the top of main())
-    MARK_FREQ = args.mark
-    SPACE_FREQ = args.space
+    # Resolve the medium profile, then let explicit flags override it.
+    prof = PROFILES[args.profile]
+    MARK_FREQ = args.mark if args.mark is not None else prof["mark"]
+    SPACE_FREQ = args.space if args.space is not None else prof["space"]
+    PREAMBLE_BITS = args.preamble_bits if args.preamble_bits is not None else prof["preamble_bits"]
     DETECT_THRESHOLD = args.threshold
+    if args.profile != "standard" or args.mark or args.space:
+        print(f"{C_DIM}Profile: {args.profile} — {MARK_FREQ:.0f}/{SPACE_FREQ:.0f} Hz, "
+              f"{PREAMBLE_BITS}-bit keyup{C_RESET}")
 
     # Create modem
     modem_mode = "tx" if args.mode in ("tx", "loopback") else "rx"
     modem = AcousticModem(dsp_path, mode=modem_mode)
 
     # Override DSP params from CLI
-    modem.dsp.set_param("mark_freq", args.mark)
-    modem.dsp.set_param("space_freq", args.space)
+    modem.dsp.set_param("mark_freq", MARK_FREQ)
+    modem.dsp.set_param("space_freq", SPACE_FREQ)
     modem.dsp.set_param("tx_gain_db", args.gain)
 
     try:

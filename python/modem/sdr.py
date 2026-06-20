@@ -183,7 +183,8 @@ def build_parser():
     sub = p.add_subparsers(dest="cmd", required=True)
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--mod", default="gfsk",
-                        choices=["fsk", "gfsk", "psk", "qpsk", "qam", "ook", "ask", "afsk-fm"])
+                        choices=["fsk", "gfsk", "msk", "fsk4", "psk", "qpsk", "qam",
+                                 "ook", "ask", "afsk-fm"])
     common.add_argument("--sps", type=int, default=8, help="samples/symbol (digital mods)")
     common.add_argument("--soapy", metavar="driver=NAME,...", help="SoapySDR device args")
     common.add_argument("--freq", default="433.9M", help="center frequency (e.g. 433.9M)")

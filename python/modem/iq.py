@@ -21,7 +21,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "MCP"))
 import modulationlab_core as ml
 import feclab_core as fec
 
-MOD = {"fsk": ml.MOD_FSK, "gfsk": ml.MOD_FSK, "psk": ml.MOD_PSK, "qpsk": ml.MOD_PSK,
+# "msk" reuses the binary FSK symbol map (1 bit/sym); "fsk4" reuses the 2-bit PSK map
+# (4 tones, no new byte<->symbol bijection — the certified law is untouched, 4 tones is a
+# waveform choice). Both are the handheld-radio profile (Documentation/DCF_FIELD_USE.md).
+MOD = {"fsk": ml.MOD_FSK, "gfsk": ml.MOD_FSK, "msk": ml.MOD_FSK,
+       "psk": ml.MOD_PSK, "qpsk": ml.MOD_PSK, "fsk4": ml.MOD_PSK,
        "qam": ml.MOD_QAM, "ook": ml.MOD_OOK, "ask": ml.MOD_OOK, "am": ml.MOD_OOK}
 
 PREAMBLE = bytes([0xAA] * 6)     # 1010… for timing/energy
@@ -58,6 +62,35 @@ def _render_fsk(syms, sps, gaussian, dev=0.25):
         f = np.convolve(f, k, mode="same")
     phase = 2 * np.pi * np.cumsum(f)
     return np.exp(1j * phase)
+
+
+def _msk_dev(sps):
+    # MSK = binary CPFSK with modulation index h = 0.5. With f in cycles/sample over a
+    # symbol of `sps` samples, h = 2*dev*sps, so dev = 0.25/sps gives the tight, spectrally
+    # compact MSK that survives the 300-3000 Hz walkie-talkie passband.
+    return 0.25 / sps
+
+
+def _render_mfsk(syms, sps, dev_step, m=4):
+    # M-ary CPFSK: symbol index s -> tone rank ungray(s) so adjacent tones differ by one
+    # Gray bit (a tone slip costs one bit). Rank r -> frequency (2r-(m-1))*dev_step.
+    ranks = np.array([ml.ungray(int(s)) for s in syms])
+    f = np.repeat(((2 * ranks - (m - 1)) * dev_step).astype(float), sps)
+    return np.exp(1j * 2 * np.pi * np.cumsum(f))
+
+
+def _demod_mfsk(iq, sps, nsyms, dev_step, m=4):
+    # FM discriminator -> per-symbol mean -> nearest of the m known frequency centers
+    # (absolute, no DC removal: robust on the clean/loopback channel; off-air would
+    # anchor the centers to the preamble tone — see DCF_FIELD_USE.md).
+    d = np.angle(iq[1:] * np.conj(iq[:-1]))
+    d = np.concatenate([[d[0]], d])
+    centers = np.array([2 * np.pi * (2 * r - (m - 1)) * dev_step for r in range(m)])
+    syms = []
+    for n in range(nsyms):
+        mn = d[n * sps:(n + 1) * sps].mean()
+        syms.append(ml.gray(int(np.argmin(np.abs(centers - mn)))))
+    return syms
 
 
 def _render_ook(syms, sps):
@@ -131,6 +164,10 @@ def _modulate_bytes(data, mod, sps):
         return _render_qam(m, syms, sps)
     if mod in ("fsk", "gfsk"):
         return _render_fsk(syms, sps, gaussian=(mod == "gfsk"))
+    if mod == "msk":
+        return _render_fsk(syms, sps, gaussian=False, dev=_msk_dev(sps))
+    if mod == "fsk4":
+        return _render_mfsk(syms, sps, dev_step=_msk_dev(sps))
     if mod in ("ook", "ask", "am"):
         return _render_ook(syms, sps)
     raise ValueError(mod)
@@ -211,6 +248,10 @@ def iq_to_frame(iq, mod="gfsk", msglen=17, nparity=fec.RS_DEFAULT_NPARITY, sps=8
         syms = _demod_qam(m, iq, sps, nsyms)
     elif mod in ("fsk", "gfsk"):
         syms = _demod_fsk(iq, sps, nsyms)
+    elif mod == "msk":
+        syms = _demod_fsk(iq, sps, nsyms)
+    elif mod == "fsk4":
+        syms = _demod_mfsk(iq, sps, nsyms, dev_step=_msk_dev(sps))
     elif mod in ("ook", "ask", "am"):
         syms = _demod_ook(iq, sps, nsyms)
     else:

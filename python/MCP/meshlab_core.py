@@ -128,6 +128,50 @@ def select_routes(candidates):
     return [rid for (_s, _r, rid) in usable]
 
 
+# ── 4b. uplink-oriented egress routing ────────────────────────────────────────
+# A heterogeneous field mesh usually has one or a few nodes with backhaul (Starlink,
+# cellular, a ham gateway). Off-grid traffic should flow to whoever is *closest* to an
+# uplink by total RTT. We get that for free from the existing RTT-weighted dijkstra:
+# model "the uplink" as a single virtual sink node connected to each uplink-capable node
+# by an edge weighted with that node's backhaul cost, then ask, for every node v, the
+# first hop on v's shortest path to the sink. No new wire bytes, no change to dijkstra.
+def egress_routes(n, edges, uplinks):
+    """Orient an RTT-weighted mesh toward its nearest/cheapest uplink.
+
+    `edges`   : list of (u, v, w) healthy links (w = RTT ms, int > 0), as for dijkstra.
+    `uplinks` : list of (node_id, backhaul_cost_ms) — nodes that can reach the outside
+                world, each tagged with the RTT-equivalent cost of its backhaul hop.
+
+    Returns a list of length n; entry v is a dict:
+      {"next_hop": id|NO_HOP, "egress_dist": total RTT ms to the uplink|INF,
+       "uplink": uplink node id reached|NO_HOP}.
+    A node that is itself an uplink routes to itself (next_hop == v, egress_dist ==
+    its backhaul cost). Nodes with no path to any uplink get NO_HOP / INF.
+    """
+    sink = n                                   # one virtual sink = "the uplink / Internet"
+    aug = list(edges) + [(node, sink, cost) for (node, cost) in uplinks]
+    out = []
+    for v in range(n):
+        dist, next_hop = dijkstra(n + 1, aug, v)
+        d = dist[sink]
+        if d >= INF:                           # no path from v to any uplink
+            out.append({"next_hop": NO_HOP, "egress_dist": INF, "uplink": NO_HOP})
+            continue
+        hop = next_hop[sink]
+        if hop == sink:                        # v is directly an uplink -> egress locally
+            hop = v
+        # The uplink v actually reaches: the reachable uplink u whose total cost
+        # dist[u] + backhaul ties dist[sink]; lowest id on a tie (matches dijkstra's
+        # deterministic tie-break). Read off the single dijkstra run above — no re-walk.
+        reached = NO_HOP
+        for (node, cost) in uplinks:
+            if node < n and dist[node] < INF and dist[node] + cost == d:
+                if reached == NO_HOP or node < reached:
+                    reached = node
+        out.append({"next_hop": hop, "egress_dist": d, "uplink": reached})
+    return out
+
+
 # ── 5. master election / role assignment (AUTO mode) ──────────────────────────
 def elect(n, edges, relay_min_degree=2):
     """Deterministic master election + role assignment over a healthy topology.

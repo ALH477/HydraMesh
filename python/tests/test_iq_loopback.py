@@ -37,6 +37,14 @@ class TestIQLoopback(unittest.TestCase):
     def test_gfsk(self):
         ok, n = self._run("gfsk", 18); self.assertEqual(ok, n)
 
+    def test_msk(self):
+        # handheld-radio profile: binary CPFSK, modulation index 0.5 (spectrally compact).
+        ok, n = self._run("msk", 16); self.assertEqual(ok, n)
+
+    def test_fsk4(self):
+        # handheld throughput profile: 4-FSK (2 bits/symbol) over the certified 2-bit map.
+        ok, n = self._run("fsk4", 14); self.assertEqual(ok, n)
+
     def test_qpsk(self):
         ok, n = self._run("qpsk", 16); self.assertEqual(ok, n)
 
@@ -99,7 +107,7 @@ class TestIQLoopback(unittest.TestCase):
         # deliberately-unbalanced payloads + random ones
         fixed = [b"\x00\x00\x00\x00", b"\xff\xff\xff\xff", b"\x30\x30\x30\x30",
                  b"PyPI", b"\xaa\xaa\xaa\xaa", b"\x01\x00\x00\x00"]
-        for mod in ("gfsk", "qpsk", "qam", "ook"):
+        for mod in ("gfsk", "msk", "fsk4", "qpsk", "qam", "ook"):
             payloads = fixed + [bytes(rng.randrange(256) for _ in range(4))
                                 for _ in range(40)]
             for p in payloads:
