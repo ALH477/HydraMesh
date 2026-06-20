@@ -176,6 +176,35 @@ any Linux audio server two ways:
 Both routes carry the *same* on-air framing, so a numpy/file node and a live Faust node
 interoperate over the air.
 
+## Multi-transport bridge (any network shape)
+
+The same **DeModFrame** rides UDP, audio (PipeWire/JACK), SDR, or a file spool behind one
+`dcf.transport.Transport` interface, and `dcf.bridge.Bridge` relays frames *between* them
+— so you compose a node's shape from transports and bridge an **acoustic island → RF
+backbone → UDP/Starlink uplink**. Because link rates differ by orders of magnitude (Mbps
+UDP vs ~300-baud acoustic ≈ 37 B/s), **each transport has a bounded queue** that decouples
+them: a fast source can't drown a slow link, and on overflow bulk is shed while priority
+(control/mesh) frames survive. Routing is **flood** (mesh; a src/dst/seq/crc dedup set
+keeps multi-hop loop-free) or **egress** (reverse-path learning sends a unicast frame to
+the transport that reaches its dst; an off-grid dst goes to the `--uplink` transport).
+
+Reproduce locally — **no hardware** (file/loopback media):
+```sh
+# multi-hop across media: A(acoustic) -> B(acoustic->SDR) -> C(SDR); frame arrives byte-exact
+python3 python/dcf/bridge.py --demo
+
+# compose a bridge from transports (swap file/udp/audio/sdr freely):
+python3 python/dcf/bridge.py -t 'udp:bind=0.0.0.0:9100' \
+                             -t 'audio:in=/tmp/rx,out=/tmp/tx,profile=handheld' \
+                             --route egress --uplink udp --text SOS --seconds 3
+# (installed as a console command too: `pip install ./python` then `dcf-bridge --demo`)
+
+# unit tests (buffer drop/priority, per-transport round-trips, dedup, egress, multi-hop):
+python3 -m unittest python/tests/test_transport.py python/tests/test_bridge.py
+```
+Live **PipeWire/JACK** (audio transport) and **SoapySDR** (sdr transport) plug in as the
+transport I/O; the file/loopback media above are the hardware-free CI path.
+
 ## Test ladder
 
 Climb tier by tier; do not skip — most failures are coupling/level/AGC, not the codec.

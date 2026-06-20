@@ -42,6 +42,8 @@ Repository = "https://github.com/ALH477/HydraMesh"
 dcf-sdr = "dcf.modem.sdr:main"
 # Stdlib UDP self-healing mesh node (interoperates with the Go/C/Rust nodes).
 dcf-node = "dcf_node:main"
+# Bridge DeModFrames across transports (UDP / audio / SDR / file) for any network shape.
+dcf-bridge = "dcf.bridge:main"
 
 [tool.setuptools]
 # dcf_node.py is a top-level script module; the SDR modem + reference codecs ship

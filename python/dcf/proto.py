@@ -29,6 +29,7 @@ MSG_PONG = 8
 MSG_GAME_DCF = 9
 MSG_TEXT_DCF = 10
 MSG_MESH = 11  # DCF-Mesh REPORT/ROLE control for the self-healing runtime
+MSG_FRAME = 12  # a bare 17-byte DeModFrame carried as the multi-transport unit (dcf.transport)
 
 HEADER_LEN = 1 + 4 + 8 + 4  # 17
 _HEADER = struct.Struct(">BIQI")  # type, sequence, timestamp, payload_len

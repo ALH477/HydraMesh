@@ -64,9 +64,12 @@ jobs:
           diff /tmp/fec_vectors.gen.h  codec/fec_vectors.gen.h
           python3 -m unittest python/tests/test_fec.py -v
 
-      - name: SDR/IQ + acoustic + egress — loopback tests + dcf-sdr .cf32 smoke
+      - name: SDR/IQ + acoustic + egress + transport/bridge — loopback tests + smokes
         run: |
-          python3 -m unittest python/tests/test_iq_loopback.py python/tests/test_acoustic.py python/tests/test_egress.py -v
+          python3 -m unittest python/tests/test_iq_loopback.py python/tests/test_acoustic.py \
+                              python/tests/test_egress.py python/tests/test_transport.py \
+                              python/tests/test_bridge.py -v
+          python3 python/dcf/bridge.py --demo
           for mod in gfsk msk fsk4; do
             python3 python/modem/sdr.py tx --text "DCF!" --mod $mod --iq /tmp/d.cf32
             python3 python/modem/sdr.py rx --iq /tmp/d.cf32 --mod $mod | tee /tmp/rx.txt
