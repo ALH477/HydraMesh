@@ -99,6 +99,7 @@ Present today (certified or shipping):
 - **SuperPack (opt-in, lower-latency for paired sends)**: a container that packs **two** 17-byte frames into **one 32-byte** message under a single joint CRC (`34 → 32` bytes, stronger integrity). When you are already sending frames in pairs it ships them as **one datagram instead of two** — one IP/UDP header, one syscall, one packet — so paired traffic crosses the network with strictly lower per-pair overhead and latency than two separate frames. `unpack` rebuilds both frames bit-exact, so the wire certificate is untouched; **certified byte-for-byte in every wire-codec language**. See [`Documentation/SUPERPACK_SPEC.md`](Documentation/SUPERPACK_SPEC.md).
 - **Mesh nodes in six languages**: Go, Rust, and **C** speak a common **ProtoMessage/UDP** envelope (they mesh with each other); Python and Node.js share a **bare-frame + SuperPack/UDP** dialect; and **C++** is a **gRPC** node (bidirectional `MeshStream` of frames + SuperPacks + adapters, health + reflection). All ship as hermetic Nix-built Docker images (`alh477/dcf-{go,rs,c,cpp,python,nodejs}`) and are exercised together by `docker/mesh-interop-test.sh`.
 - **DCF Modem (C, "modulations across quanta mediums")**: the C node also carries frames over a **Faust-DSP modem** — FSK / OOK / PSK / QAM — across a physical medium (loopback/file now, live audio behind `DCF_MODEM_AUDIO`). The byte↔symbol mapping is **certified across Python/Rust/C**; the waveform is loopback-tested (same policy as DCF-Audio synthesis). See [`Documentation/DCF_MODEM_SPEC.md`](Documentation/DCF_MODEM_SPEC.md).
+- **Runs over UDP _or_ radio (DCF-SDR + FEC)**: a complex-baseband IQ modem (GFSK / QPSK / 16-QAM / OOK·AM / AFSK-over-FM) carries frames to a **SoapySDR** device (HackRF / RTL-SDR / Pluto / LimeSDR) or a hardware-agnostic `.cf32` file, made reliable by a **systematic Reed-Solomon + interleaver FEC** that _corrects_ the bit errors a lossy RF/acoustic link injects (not just CRC-detects them). The **RS-FEC bytes are certified byte-for-byte in all 13 wire-codec languages**; the IQ waveform is loopback-tested. See [`Documentation/DCF_SDR_SPEC.md`](Documentation/DCF_SDR_SPEC.md) and [`Documentation/DCF_FEC_SPEC.md`](Documentation/DCF_FEC_SPEC.md).
 - **Handshakeless, encryption-free design**: low-overhead framing for real-time use; encryption-free by design for EAR/ITAR export compliance.
 - **Open Source**: LGPL-3.0 (library) ensures transparency and community contributions.
 
@@ -198,6 +199,47 @@ python3 python/MCP/gen_audio_vectors.py /tmp/audio_vectors.json   # regenerate +
 cd codec && cargo test --test certify_audio                       # Rust
 gcc -std=c11 -I codec C_SDK/tests/test_audio_certify.c -lm -o /tmp/ac && /tmp/ac   # C
 ```
+
+## Over the air (DCF-SDR + FEC)
+
+HydraMesh isn't tied to IP. The **same 17-byte `DeModFrame`** that meshes over UDP can
+cross **real radio** — two laptops + two ~$25 RTL-SDRs, no internet — because two
+adapters sit under the socket:
+
+- **DCF-FEC** — a systematic **Reed-Solomon** code over GF(2⁸) (+ a block interleaver for
+  RF bursts) that **corrects** the byte-errors a lossy link injects, where the frame CRC
+  only detects them. The RS bytes are **certified byte-for-byte in all 13 wire-codec
+  languages** (like SuperPack); see [`Documentation/DCF_FEC_SPEC.md`](Documentation/DCF_FEC_SPEC.md).
+- **DCF-SDR** — an IQ modem (`python/modem/iq.py`) that renders FEC-coded frames to
+  complex baseband — **GFSK / QPSK / 16-QAM / OOK·AM / AFSK-over-FM** — for a SoapySDR
+  device or a `.cf32` file. The byte↔symbol map is certified (Python/Rust/C); the
+  waveform is loopback-tested. See [`Documentation/DCF_SDR_SPEC.md`](Documentation/DCF_SDR_SPEC.md).
+
+Send a frame over the air (or to a file) and recover it — no hardware needed for the
+`.cf32` path:
+
+```bash
+nix develop .#sdr                                                   # faust + rtl-sdr + hackrf + soapysdr
+python3 python/modem/sdr.py tx --text "DCF!" --mod gfsk --iq /tmp/d.cf32
+python3 python/modem/sdr.py rx --iq /tmp/d.cf32 --mod gfsk          # → recovers "DCF!", CRC valid
+
+# real radio (TX needs a license / ISM band):
+python3 python/modem/sdr.py tx --text "DCF!" --soapy driver=hackrf --freq 433.9M --rate 2M
+python3 python/modem/sdr.py rx --soapy driver=rtlsdr --freq 433.9M --rate 2M --secs 3
+# .cf32 also pipes straight into rtl_sdr / hackrf_transfer / GNU Radio.
+```
+
+See the whole pipeline — including FEC recovering a frame a raw link would drop — with
+the one-command demo:
+
+```bash
+bash python/modem/demo.sh
+```
+
+> **Plaintext on the air.** The DCF wire is encryption-free by design (EAR/ITAR
+> compliance), and **RF has no WireGuard** — anything you transmit is a broadcast. Treat
+> an over-the-air link as public; apply operator-supplied, export-compliant crypto
+> *above* the frame if you need confidentiality ([`Documentation/DCF_SECURITY_EXPOSURE.md`](Documentation/DCF_SECURITY_EXPOSURE.md)).
 
 ## Installation
 Clone the repository with submodules:

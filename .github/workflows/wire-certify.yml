@@ -18,7 +18,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install MCP dependency
-        run: pip install mcp
+        run: pip install mcp numpy
 
       - name: Verify wire laws and regenerate golden vectors
         run: python3 python/MCP/verify_laws.py /tmp/golden_vectors.json
@@ -63,6 +63,13 @@ jobs:
           diff /tmp/fec_vectors.json   python/MCP/fec_vectors.json
           diff /tmp/fec_vectors.gen.h  codec/fec_vectors.gen.h
           python3 -m unittest python/tests/test_fec.py -v
+
+      - name: SDR/IQ — loopback tests + dcf-sdr .cf32 round-trip smoke
+        run: |
+          python3 -m unittest python/tests/test_iq_loopback.py -v
+          python3 python/modem/sdr.py tx --text "DCF!" --mod gfsk --iq /tmp/d.cf32
+          python3 python/modem/sdr.py rx --iq /tmp/d.cf32 --mod gfsk | tee /tmp/rx.txt
+          grep -q "44434621" /tmp/rx.txt && echo "dcf-sdr cf32 round-trip: recovered \"DCF!\""
 
       - name: Modulation — self-test, regenerate vectors, diff the committed copies
         run: |
