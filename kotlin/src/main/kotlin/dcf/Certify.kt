@@ -112,6 +112,33 @@ fun main(args: Array<String>) {
     val joint = ((spz[30].toInt() and 0xFF) shl 8) or (spz[31].toInt() and 0xFF)
     fails += check(joint == 0x5B75, "SuperPack zero-core joint CRC = 0x%04X (want 0x5B75)".format(joint))
 
+    // 6. FEC adapter (Documentation/fec_vectors.json)
+    val fecJson = File(resolveFec()).readText()
+    var encOk = true; var nEnc = 0
+    for (mc in Regex("\"msg\"\\s*:\\s*\"([0-9a-fA-F]+)\"\\s*,\\s*\"code\"\\s*:\\s*\"([0-9a-fA-F]+)\"").findAll(fecJson)) {
+        nEnc++
+        if (Frame.hex(FEC.rsEncode(unhex(mc.groupValues[1]), 16)) != mc.groupValues[2].lowercase()) encOk = false
+    }
+    fails += check(nEnc > 0 && encOk, "$nEnc RS encode vectors byte-identical")
+    var decOk = true; var nDec = 0
+    for (mc in Regex("\"corrupt\"\\s*:\\s*\"([0-9a-fA-F]+)\"\\s*,\\s*\"msg\"\\s*:\\s*\"([0-9a-fA-F]+)\"\\s*,\\s*\"nerr\"\\s*:\\s*(\\d+)").findAll(fecJson)) {
+        nDec++
+        val r = FEC.rsDecode(unhex(mc.groupValues[1]), 16, 17)
+        if (Frame.hex(r.msg) != mc.groupValues[2].lowercase() || r.corrected != mc.groupValues[3].toInt()) decOk = false
+    }
+    fails += check(nDec > 0 && decOk, "$nDec corrupted codewords corrected")
+    var msgOk = true; var nMsg = 0
+    for (mc in Regex("\"len\"\\s*:\\s*\\d+\\s*,\\s*\"msg\"\\s*:\\s*\"([0-9a-fA-F]+)\"\\s*,\\s*\"blob\"\\s*:\\s*\"([0-9a-fA-F]+)\"").findAll(fecJson)) {
+        nMsg++
+        val msg = unhex(mc.groupValues[1])
+        val blob = FEC.encodeMessage(msg, 16)
+        if (Frame.hex(blob) != mc.groupValues[2].lowercase() || !FEC.decodeMessage(blob).msg.contentEquals(msg)) msgOk = false
+    }
+    fails += check(nMsg > 0 && msgOk, "$nMsg multi-codeword messages byte-identical + round-trip")
+    val bm = Regex("\"message_burst\"\\s*:\\s*\\{[\\s\\S]*?\"msg\"\\s*:\\s*\"([0-9a-fA-F]+)\"[\\s\\S]*?\"corrupt\"\\s*:\\s*\"([0-9a-fA-F]+)\"").find(fecJson)
+    val burstOk = bm != null && Frame.hex(FEC.decodeMessage(unhex(bm.groupValues[2])).msg) == bm.groupValues[1].lowercase()
+    fails += check(burstOk, "interleaved burst across codewords corrected")
+
     println()
     if (fails == 0) {
         println("ALL CHECKS PASSED — Kotlin codec cemented (${frames.size} encode + $synCount syndrome).")
@@ -154,4 +181,16 @@ private fun resolveSuper(): String {
         if (File(p).exists()) return p
     }
     error("superpack_vectors.json not found (run gen_superpack_vectors.py)")
+}
+
+private fun resolveFec(): String {
+    for (p in listOf(
+        "Documentation/fec_vectors.json",
+        "../Documentation/fec_vectors.json",
+        "../../Documentation/fec_vectors.json",
+        "python/MCP/fec_vectors.json",
+    )) {
+        if (File(p).exists()) return p
+    }
+    error("fec_vectors.json not found (run gen_fec_vectors.py)")
 }
