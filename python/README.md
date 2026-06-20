@@ -56,4 +56,4 @@ public broadcast and apply operator-supplied, export-compliant crypto *above* th
 if you need confidentiality.
 
 - Source & full docs: https://github.com/ALH477/HydraMesh
-- License: **LGPL-3.0-or-later**
+- License: **LGPL-3.0-only**

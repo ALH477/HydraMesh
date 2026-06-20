@@ -4,7 +4,7 @@
 (defsystem "hydramesh"
   :version "2.2.0"
   :author "DeMoD Framework"
-  :license "LGPL-3.0"
+  :license "LGPL-3.0-only"
   :description "DeMoD Communications Framework - Lisp Implementation"
   :long-description "HydraMesh provides UDP gaming, real-time audio, 
 and binary Protocol Buffers for low-latency networked applications."

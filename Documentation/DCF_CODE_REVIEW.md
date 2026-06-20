@@ -29,8 +29,11 @@ Everything *around* the spine has drifted, and the drift is the story:
 4. **The Lisp validity predicate was vacuous.** `crc16-ccitt` returned `#xFFFF`
    for every input *(verified)* — the integrity check certified nothing and
    every cross-language frame was rejected.
-5. **License is contradictory across the repo**, and CPack silently generates an
-   MIT placeholder — a real distribution-licensing hazard.
+5. **License was contradictory across the repo**, and CPack silently generated an
+   MIT placeholder — a real distribution-licensing hazard. **(RESOLVED)** The repo
+   is now unified to `LGPL-3.0-only` (top-level `LICENSE` is the LGPLv3 text, every
+   manifest/flake and all source SPDX headers agree), CPack points at that real
+   `LICENSE`, and GPL-3.0 stays scoped to the DOOM example only.
 6. A peripheral pile of transports is written against APIs/ABIs that no longer
    exist and **cannot compile**; they should be quarantined, not shipped.
 
@@ -278,12 +281,14 @@ past the buffer), `zigbee_transport.c` (fictional API). Move these to
 `src/transports/experimental/`, exclude from the build, and track real ports as
 issues. They are not close to compiling; patching them in place would be theater.
 
-**Unify the license.** README says LGPL, the DOOM example says GPL-3.0, the flake
-meta says MIT, and CPack auto-generates an MIT placeholder when no LICENSE exists
-— so a `cpack` artifact can ship mislicensed. Choose one (LGPL-3.0 is consistent
-with a linkable protocol library), add a real top-level `LICENSE`, set
-`CPACK_RESOURCE_FILE_LICENSE` to it, and fix the flake `meta.license`. Keep the
-GPL-3.0 notice scoped to the DOOM example only.
+**Unify the license. (RESOLVED)** Previously the README said LGPL, the DOOM example
+said GPL-3.0, the flake meta said MIT, and CPack auto-generated an MIT placeholder
+when no LICENSE existed — so a `cpack` artifact could ship mislicensed. The repo is
+now unified on `LGPL-3.0-only` (consistent with a linkable protocol library): a real
+top-level `LICENSE` exists, `CPACK_RESOURCE_FILE_LICENSE` points at it
+(`C_SDK/CMakeLists.txt`), and every flake `meta.license` (including `C_SDK/flake.nix`
+and `lisp/flake.nix`) plus all language manifests now declare `LGPL-3.0-only`. The
+GPL-3.0 notice stays scoped to the DOOM example only.
 
 **Remove the slur in the HydraMesh acknowledgments. (RESOLVED)** A line in the
 `lisp/README.md` acknowledgments section contained a slur with outsized

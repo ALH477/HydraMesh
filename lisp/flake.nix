@@ -60,7 +60,7 @@
 
           meta = with pkgs.lib; {
             description = "HydraMesh SDK executable";
-            license = licenses.lgpl3;
+            license = licenses.lgpl3Only;
             platforms = platforms.all;
           };
         };

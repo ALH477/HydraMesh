@@ -67,7 +67,7 @@
           meta = with pkgs.lib; {
             description = "DeMoD Communications Framework";
             homepage = "https://github.com/example/dcf";
-            license = licenses.mit;
+            license = licenses.lgpl3Only;
             platforms = platforms.unix;
             maintainers = [];
           };
@@ -122,7 +122,7 @@
           
           meta = with pkgs.lib; {
             description = "DCF with shared library (built with clang)";
-            license = licenses.mit;
+            license = licenses.lgpl3Only;
             platforms = platforms.unix;
           };
         };

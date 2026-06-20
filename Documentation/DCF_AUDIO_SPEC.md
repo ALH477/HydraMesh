@@ -113,6 +113,7 @@ cd codec && cargo test --test certify_audio
 | C | `codec/demod_audio.h` | `dcf_audio_packetize`, `dcf_audio_reasm_*`, `dcf_codec_get`, `dcf_pm_pack/unpack` |
 | Rust | `codec/src/audio.rs` | `packetize`, `AudioReassembler`, `codec_for`, `pm_pack/unpack` |
 | Python | `python/MCP/audiolab_core.py` | `packetize`, `AudioReassembler`, `pm_pack/unpack` |
+| Lua | `lua/dcf_audio.lua` | self-certifying L2 codec (LGPL-3.0-only, dual-licensed — see `lua/LICENSING.md`) |
 
 ## Latency budget (informative)
 

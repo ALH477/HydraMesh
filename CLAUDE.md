@@ -17,6 +17,8 @@ Read these first — they are normative:
 - `Documentation/DCF_AUDIO_SPEC.md` — collaborative audio as an adapter over it.
 - `Documentation/DCF_GAME_SPEC.md` — multiplayer game state/events as an adapter
   over it (same fragmentation scheme as audio, on `DATA` frames).
+- `Documentation/DCF_TEXT_SPEC.md` — chat / agent-to-agent UTF-8 text as an adapter
+  over it (also on `DATA` frames, but a 10-bit fragment index).
 - `Documentation/DCF_MESH_SPEC.md` — self-healing redundancy (peer-health FSM,
   REPORT/ROLE control, election + failover) as a `MsgMesh` control adapter.
 - `Documentation/DCF_SECURITY_EXPOSURE.md` — the plaintext wire's exposure and the
@@ -123,6 +125,34 @@ gcc -std=c11 -I codec C_SDK/tests/test_game_certify.c -lm -o /tmp/gc && /tmp/gc 
 SDK hookup: `DcfNode::send_game_dcf` + `reassemble_game_payload` and
 `MessageHandler::handle_game` (`rust/src/lib.rs`). Client: a **Game** tab (a 2-D
 dot-arena demo) alongside Jam/Messages in `client/`.
+
+## DCF-Text (chat / agent-to-agent text over the wire)
+
+A third adapter over `DeModFrame`, structurally like DCF-Game but tuned for larger,
+lower-rate messages: one UTF-8 message is serialised into `1 + ceil(len/4)` ordinary
+`DATA` (type 0) frames. The L2 framing is **content-agnostic and byte-certified
+across C/Rust/Python/Go**. Text and game both ride `DATA(0)` but split `seq`
+differently (text gives `frag_idx` 10 bits, game 5); there is **no in-band tag**
+distinguishing them, so a node routes a channel's frames to the one reassembler it
+runs there — never multiplex text and game on the same `dst`.
+
+- `seq = packet_id[15:10] | frag_idx[9:0]`; `frag_idx 0` = `[len_hi, len_lo, flags, 0]`
+  (big-endian length); payload ≤ **4092 B/message** (1023 frags), `packet_id` 0..63.
+- Descriptor `flags` (opaque to L2): bit0 AGENT, bit1 MORE, bit2 RELIABLE.
+- L2 references: `codec/demod_text.h` (C), `codec/src/text.rs` (Rust),
+  `python/MCP/textlab_core.py` (Python, canonical), `go/text/text.go` (Go); plus an
+  interoperable Node port `JS/nodejs/src/text.js`. Spec: `Documentation/DCF_TEXT_SPEC.md`.
+- Vectors: `Documentation/text_vectors.json` (+ identical `python/MCP/` copy) and
+  `codec/text_vectors.gen.h` (dependency-free C test).
+- Consumers: matrix-bridge **agent-to-agent** (`matrix-bridge/dcf_node.py`,
+  `dcf_text.py` re-exports `textlab_core`) and the Node/Python `DcfTextNode`.
+
+```sh
+python3 python/MCP/gen_text_vectors.py /tmp/tv.json           # regen + verify laws
+cd codec && cargo test --test certify_text                    # Rust
+gcc -std=c11 -I codec C_SDK/tests/test_text_certify.c -lm -o /tmp/tc && /tmp/tc  # C
+cd go && go test ./text/                                       # Go
+```
 
 ## DCF SuperPack (the paired-frame container)
 

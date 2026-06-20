@@ -223,7 +223,7 @@ cargo install --path .
 
 ## License
 
-LGPL-3.0 - Compatible with the main DCF mono repo.
+LGPL-3.0-only - Compatible with the main DCF mono repo.
 
 ## Related Projects
 
