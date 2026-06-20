@@ -237,4 +237,67 @@ static inline void dcf_fec_deinterleave(const uint8_t *in, size_t depth, size_t 
             cws[r * clen + c] = in[c * depth + r];
 }
 
+/* ── multi-codeword messages (any length: chunk + interleave + protected header) ─*/
+#define DCF_FEC_HDR_PARITY 16
+#define DCF_FEC_HDR_LEN    (5u + DCF_FEC_HDR_PARITY)   /* 21-byte self-protecting header */
+#ifndef DCF_FEC_MSG_MAX
+#define DCF_FEC_MSG_MAX    4096u                       /* max message length supported */
+#endif
+#define DCF_FEC_BLOB_MAX   (DCF_FEC_HDR_LEN + DCF_FEC_MSG_MAX + 64u * 255u)
+
+static inline void dcf__chunking(size_t L, uint8_t np, size_t *nchunks, size_t *k) {
+    size_t maxk = 255u - np;
+    *nchunks = (L == 0) ? 1u : (L + maxk - 1u) / maxk;
+    *k = (L == 0) ? 1u : (L + *nchunks - 1u) / *nchunks;
+}
+
+/* msg -> self-describing RS+interleave blob; returns blob length (0 if too large). */
+static inline size_t dcf_fec_encode_message(const uint8_t *msg, size_t L, uint8_t np,
+                                            uint8_t *out) {
+    dcf__gf_init();
+    if (L > DCF_FEC_MSG_MAX) return 0;
+    size_t nchunks, k;
+    dcf__chunking(L, np, &nchunks, &k);
+    size_t cwlen = k + np;
+    /* header codeword: [len u32 BE | nparity u8] under fixed HDR_PARITY */
+    uint8_t hdr[5] = {(uint8_t)(L >> 24), (uint8_t)(L >> 16), (uint8_t)(L >> 8),
+                      (uint8_t)L, np};
+    dcf_fec_encode(hdr, 5, DCF_FEC_HDR_PARITY, out);            /* 21 bytes */
+    /* build codewords from zero-padded blocks, then interleave into out+HDR_LEN */
+    static uint8_t cws[64u * 255u];
+    static uint8_t block[255u];
+    for (size_t c = 0; c < nchunks; c++) {
+        size_t off = c * k;
+        for (size_t i = 0; i < k; i++) block[i] = (off + i < L) ? msg[off + i] : 0u;
+        dcf_fec_encode(block, k, np, cws + c * cwlen);
+    }
+    dcf_fec_interleave(cws, nchunks, cwlen, out + DCF_FEC_HDR_LEN);
+    return DCF_FEC_HDR_LEN + nchunks * cwlen;
+}
+
+/* blob -> message into out (>= nchunks*k bytes); returns message length, or -1. */
+static inline int dcf_fec_decode_message(const uint8_t *blob, size_t blen, uint8_t *out) {
+    dcf__gf_init();
+    if (blen < DCF_FEC_HDR_LEN) return -1;
+    uint8_t hbuf[DCF_FEC_HDR_LEN];
+    memcpy(hbuf, blob, DCF_FEC_HDR_LEN);
+    if (dcf_fec_decode(hbuf, DCF_FEC_HDR_LEN, DCF_FEC_HDR_PARITY, 5) < 0) return -1;
+    size_t L = ((size_t)hbuf[0] << 24) | ((size_t)hbuf[1] << 16) |
+               ((size_t)hbuf[2] << 8) | hbuf[3];
+    uint8_t np = hbuf[4];
+    if (L > DCF_FEC_MSG_MAX) return -1;
+    size_t nchunks, k;
+    dcf__chunking(L, np, &nchunks, &k);
+    size_t cwlen = k + np;
+    if (blen != DCF_FEC_HDR_LEN + nchunks * cwlen) return -1;
+    static uint8_t cws[64u * 255u];
+    dcf_fec_deinterleave(blob + DCF_FEC_HDR_LEN, nchunks, cwlen, cws);
+    for (size_t c = 0; c < nchunks; c++) {
+        uint8_t *cw = cws + c * cwlen;
+        if (dcf_fec_decode(cw, cwlen, np, k) < 0) return -1;
+        memcpy(out + c * k, cw, k);                            /* last block zero-padded */
+    }
+    return (int)L;
+}
+
 #endif /* DCF_DEMOD_FEC_H */

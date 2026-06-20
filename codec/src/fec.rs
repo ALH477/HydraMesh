@@ -231,6 +231,65 @@ pub fn rs_decode(codeword: &[u8], nparity: usize, msglen: Option<usize>) -> Resu
     Ok((cw[..mlen].to_vec(), pos.len()))
 }
 
+// ── multi-codeword messages (any length: chunk + interleave + protected header) ─
+pub const HDR_PARITY: usize = 16;
+pub const HDR_LEN: usize = 5 + HDR_PARITY; // 21-byte self-protecting header
+
+fn chunking(l: usize, np: usize) -> (usize, usize) {
+    let maxk = 255 - np;
+    let nchunks = if l == 0 { 1 } else { l.div_ceil(maxk) };
+    let k = if l == 0 { 1 } else { l.div_ceil(nchunks) };
+    (nchunks, k)
+}
+
+/// Any-length message → a self-describing RS+interleave blob (corrects bursts).
+pub fn encode_message(msg: &[u8], nparity: usize) -> Vec<u8> {
+    let l = msg.len();
+    let (nchunks, k) = chunking(l, nparity);
+    let hdr = [(l >> 24) as u8, (l >> 16) as u8, (l >> 8) as u8, l as u8, nparity as u8];
+    let mut out = rs_encode(&hdr, HDR_PARITY);
+    let cws: Vec<Vec<u8>> = (0..nchunks)
+        .map(|c| {
+            let mut block = vec![0u8; k];
+            for (i, b) in block.iter_mut().enumerate() {
+                let o = c * k + i;
+                if o < l {
+                    *b = msg[o];
+                }
+            }
+            rs_encode(&block, nparity)
+        })
+        .collect();
+    out.extend_from_slice(&interleave(&cws));
+    out
+}
+
+/// Inverse of `encode_message` → (message, total_corrected) or `FecError`.
+pub fn decode_message(blob: &[u8]) -> Result<(Vec<u8>, usize), FecError> {
+    if blob.len() < HDR_LEN {
+        return Err(FecError);
+    }
+    let (hdr, _) = rs_decode(&blob[..HDR_LEN], HDR_PARITY, Some(5))?;
+    let l = ((hdr[0] as usize) << 24) | ((hdr[1] as usize) << 16)
+        | ((hdr[2] as usize) << 8) | (hdr[3] as usize);
+    let np = hdr[4] as usize;
+    let (nchunks, k) = chunking(l, np);
+    let cwlen = k + np;
+    let body = &blob[HDR_LEN..];
+    if body.len() != nchunks * cwlen {
+        return Err(FecError);
+    }
+    let mut out = Vec::new();
+    let mut total = 0;
+    for cw in deinterleave(body, nchunks, cwlen) {
+        let (block, n) = rs_decode(&cw, np, Some(k))?;
+        total += n;
+        out.extend_from_slice(&block);
+    }
+    out.truncate(l);
+    Ok((out, total))
+}
+
 // ── block interleaver ────────────────────────────────────────────────────────
 pub fn interleave(codewords: &[Vec<u8>]) -> Vec<u8> {
     if codewords.is_empty() {

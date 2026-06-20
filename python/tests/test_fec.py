@@ -47,6 +47,31 @@ class TestRS(unittest.TestCase):
                 caught += 1
         self.assertEqual(caught, 300)                    # never silently accepted
 
+    def test_multi_codeword_messages(self):
+        random.seed(3)
+        for L in (0, 1, 17, 239, 240, 500, 1000):
+            msg = bytes(random.randint(0, 255) for _ in range(L))
+            blob = fec.encode_message(msg, 16)
+            out, _ = fec.decode_message(blob)
+            self.assertEqual(out, msg, f"len {L} round-trip")
+
+    def test_message_burst_across_codewords(self):
+        msg = bytes(range(256)) * 2                  # 512 B -> multiple codewords
+        blob = bytearray(fec.encode_message(msg, 16))
+        nchunks, _k = fec._chunking(len(msg), 16)
+        for i in range(fec.HDR_LEN + 40, fec.HDR_LEN + 40 + nchunks * 8):
+            blob[i] ^= 0xFF                           # a burst the interleaver spreads
+        out, corr = fec.decode_message(bytes(blob))
+        self.assertEqual(out, msg)
+        self.assertGreater(corr, 0)
+
+    def test_protected_header(self):
+        blob = bytearray(fec.encode_message(bytes(range(100)), 16))
+        for i in range(4):
+            blob[i] ^= 0xA5                           # corrupt the self-protecting header
+        out, _ = fec.decode_message(bytes(blob))
+        self.assertEqual(out, bytes(range(100)))
+
     def test_interleaver_spreads_burst(self):
         np = 16
         cws = [fec.rs_encode(bytes([i] * 17), np) for i in range(8)]  # depth 8

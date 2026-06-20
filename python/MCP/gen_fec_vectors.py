@@ -79,6 +79,24 @@ recv = fec.deinterleave(stream, len(cws), len(cws[0]))
 assert recv == cws, "interleave round-trip"
 ok("interleaver round-trips (burst spreading verified in tests)")
 
+# ── multi-codeword messages (any length: chunk + interleave + protected header) ─
+messages = []
+for L in (17, 240, 500):                               # 1, 2, 3 codewords
+    msg = bytes(((i * 7 + 3) & 0xFF) for i in range(L))
+    blob = fec.encode_message(msg, NP)
+    out, _ = fec.decode_message(blob)
+    assert out == msg, f"message round-trip {L}"
+    messages.append({"len": L, "msg": msg.hex(), "blob": blob.hex()})
+# burst across codewords is corrected by the interleaver (deterministic burst).
+bmsg = bytes(((i * 13 + 1) & 0xFF) for i in range(500))
+bblob = bytearray(fec.encode_message(bmsg, NP))
+nchunks, _k = fec._chunking(500, NP)
+for i in range(fec.HDR_LEN + 30, fec.HDR_LEN + 30 + nchunks * T):   # ~N*t burst
+    bblob[i] ^= 0xC3
+assert fec.decode_message(bytes(bblob))[0] == bmsg
+msg_burst = {"len": 500, "msg": bmsg.hex(), "corrupt": bytes(bblob).hex()}
+ok(f"{len(messages)} multi-codeword messages (1/2/3 codewords) + a {nchunks * T}B burst corrected")
+
 # ── Pinned anchors ────────────────────────────────────────────────────────────
 gen_poly = bytes(fec.rs_generator_poly(NP))            # 17 coeffs for 2t=16
 zero_parity = fec.rs_encode(bytes(17), NP)[17:]        # parity of 17 zero bytes
@@ -89,9 +107,12 @@ print(f"  INFO  zero-frame parity = {ZERO_PARITY_HEX}")
 
 cert = {
     "field_prim": fec.GF_PRIM, "gen": fec.GF_GEN, "fcr": fec.FCR, "nparity": NP,
+    "hdr_parity": fec.HDR_PARITY,
     "anchors": {"gen_poly": GEN_POLY_HEX, "zero_frame_parity": ZERO_PARITY_HEX},
     "cases": cases,
     "correct": correct,
+    "messages": messages,
+    "message_burst": msg_burst,
 }
 
 out = sys.argv[1] if len(sys.argv) > 1 else "fec_vectors.json"
@@ -123,7 +144,13 @@ with open(hdr, "w") as h:
     for c in correct:
         h.write("  {" + carr(c["corrupt"]) + "," + carr(c["msg"]) + f",{c['nerr']}}},\n")
     h.write("};\n")
-    h.write("static const int FEC_N_FIX = (int)(sizeof(FEC_FIX)/sizeof(FEC_FIX[0]));\n")
+    h.write("static const int FEC_N_FIX = (int)(sizeof(FEC_FIX)/sizeof(FEC_FIX[0]));\n\n")
+    # One representative multi-codeword message (240 B -> 2 codewords) for the C port.
+    mc = next(m for m in messages if m["len"] == 240)
+    h.write(f"#define FEC_HDR_PARITY {fec.HDR_PARITY}\n")
+    h.write(f"#define FEC_MSG_LEN240 240\n#define FEC_BLOB_LEN240 {len(mc['blob']) // 2}\n")
+    h.write("static const uint8_t FEC_MSG240[FEC_MSG_LEN240] = " + carr(mc["msg"]) + ";\n")
+    h.write("static const uint8_t FEC_BLOB240[FEC_BLOB_LEN240] = " + carr(mc["blob"]) + ";\n")
     h.write("#endif\n")
 print(f"  INFO  wrote {hdr} ({os.path.getsize(hdr)} bytes)")
 print("ALL FEC LAWS HOLD")

@@ -210,6 +210,57 @@ def rs_decode(codeword, nparity=RS_DEFAULT_NPARITY, msglen=None):
     return fixed[:msglen], len(pos)
 
 
+# ── multi-codeword messages (any length; chunk + interleave) ───────────────────
+# A self-describing FEC blob for payloads beyond one 239-byte codeword: the message
+# is split into N equal data blocks, each RS-coded, and the N codewords are
+# interleaved so an RF burst of up to N*t bytes is corrected. A fixed-parity header
+# codeword (self-protecting) carries the length + data parity so the receiver needs
+# no out-of-band metadata.
+import math as _math
+import struct as _struct
+
+HDR_PARITY = 16                  # fixed RS parity for the 5-byte length/parity header
+HDR_LEN = 5 + HDR_PARITY         # 21-byte self-protecting header codeword
+
+
+def _chunking(msglen, nparity):
+    maxk = 255 - nparity
+    nchunks = 1 if msglen == 0 else (msglen + maxk - 1) // maxk
+    k = 1 if msglen == 0 else (msglen + nchunks - 1) // nchunks   # data bytes/block
+    return nchunks, k
+
+
+def encode_message(msg, nparity=RS_DEFAULT_NPARITY):
+    """Any-length message -> a self-describing RS+interleave blob (corrects bursts)."""
+    msg = bytes(msg)
+    nchunks, k = _chunking(len(msg), nparity)
+    padded = msg + bytes(nchunks * k - len(msg))
+    codewords = [rs_encode(padded[i * k:(i + 1) * k], nparity) for i in range(nchunks)]
+    hdr = rs_encode(_struct.pack(">IB", len(msg), nparity), HDR_PARITY)  # self-protecting
+    return hdr + interleave(codewords)
+
+
+def decode_message(blob):
+    """Inverse of encode_message -> (message bytes, total_corrected). Raises FecError."""
+    blob = bytes(blob)
+    if len(blob) < HDR_LEN:
+        raise FecError("short FEC blob")
+    hdr, _hc = rs_decode(blob[:HDR_LEN], HDR_PARITY, 5)
+    msglen, nparity = _struct.unpack(">IB", hdr)
+    nchunks, k = _chunking(msglen, nparity)
+    cwlen = k + nparity
+    body = blob[HDR_LEN:]
+    if len(body) != nchunks * cwlen:
+        raise FecError("FEC blob length mismatch")
+    out = bytearray()
+    total = 0
+    for cw in deinterleave(body, nchunks, cwlen):
+        block, nc = rs_decode(cw, nparity, k)
+        total += nc
+        out += block
+    return bytes(out[:msglen]), total
+
+
 # ── block interleaver (spreads RF burst errors across codewords) ───────────────
 def interleave(codewords):
     """List of equal-length codewords -> column-major byte stream. A burst of <= D

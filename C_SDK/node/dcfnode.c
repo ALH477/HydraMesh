@@ -312,25 +312,27 @@ static int cmd_send_modem(int argc, char **argv) {
     if (hx) len = unhex(hx, data, sizeof data);
     else { const char *t = text ? text : "modem over different mediums"; len = strlen(t); memcpy(data, t, len); }
 
-    static uint8_t coded[1280];
+    /* Multi-codeword FEC: any-length payload -> chunked, interleaved, RS-coded blob
+     * behind a self-protecting header (codec/demod_fec.h). */
+    static uint8_t coded[DCF_FEC_BLOB_MAX];
     const uint8_t *modbytes = data;
     size_t clen = len;
     if (fec) {
-        if (len + nparity > 255) { fprintf(stderr, "--fec supports up to %d bytes\n", 255 - nparity); return 2; }
-        dcf_fec_encode(data, len, nparity, coded);   /* coded = data ++ parity */
-        clen = len + nparity; modbytes = coded;
+        size_t bl = dcf_fec_encode_message(data, len, nparity, coded);
+        if (bl == 0) { fprintf(stderr, "--fec: payload too large (max %u bytes)\n", DCF_FEC_MSG_MAX); return 2; }
+        clen = bl; modbytes = coded;
     }
 
-    static uint8_t syms[8192];
+    static uint8_t syms[16384];
     size_t nsyms = dcf_modulate((uint8_t)mod, modbytes, clen, syms, sizeof syms);
-    static double samples[8192 * DCF_MODEM_SPS];
+    static double samples[16384 * DCF_MODEM_SPS];
     size_t ns = dcf_modem_render((uint8_t)mod, syms, nsyms, samples, sizeof(samples) / sizeof(samples[0]));
 
     FILE *f = fopen(medium, "wb");
     if (!f) { fprintf(stderr, "open %s failed\n", medium); return 1; }
     uint8_t hdr[14]; memcpy(hdr, "DCFM", 4); hdr[4] = (uint8_t)mod;
     put_u32_be(hdr + 5, (uint32_t)clen); put_u32_be(hdr + 9, (uint32_t)ns);
-    hdr[13] = nparity;                               /* 0 = no FEC */
+    hdr[13] = (uint8_t)(fec ? 1 : 0);               /* 0 = no FEC; blob self-describes parity */
     fwrite(hdr, 1, sizeof hdr, f);
     fwrite(samples, sizeof(double), ns, f);
     fclose(f);
@@ -350,28 +352,28 @@ static int cmd_recv_modem(int argc, char **argv) {
     }
     uint8_t mod = hdr[4];
     uint32_t nbytes = get_u32_be(hdr + 5), ns = get_u32_be(hdr + 9);
-    uint8_t nparity = hdr[13];
-    static double samples[8192 * DCF_MODEM_SPS];
+    uint8_t fec_flag = hdr[13];
+    static double samples[16384 * DCF_MODEM_SPS];
     if (ns > sizeof(samples) / sizeof(samples[0])) { fclose(f); return 1; }
     if (fread(samples, sizeof(double), ns, f) != ns) { fclose(f); return 1; }
     fclose(f);
 
-    static uint8_t syms[8192];
+    static uint8_t syms[16384];
     size_t rn = dcf_modem_recover(mod, samples, ns, syms, sizeof syms);
-    uint8_t out[1024];
+    static uint8_t out[DCF_FEC_BLOB_MAX];
     if (nbytes > sizeof out) return 1;
     dcf_demodulate(mod, syms, rn, out, nbytes);
 
-    if (nparity > 0) {
-        uint32_t msglen = nbytes - nparity;
-        int r = dcf_fec_decode(out, nbytes, nparity, msglen);   /* corrects in place */
-        if (r < 0) {
-            printf("demodulated %s medium: RS-FEC uncorrectable (%u-byte codeword)\n",
+    if (fec_flag) {
+        static uint8_t msg[1024];
+        int L = dcf_fec_decode_message(out, nbytes, msg);
+        if (L < 0) {
+            printf("demodulated %s medium: RS-FEC uncorrectable (%u-byte blob)\n",
                    modem_name(mod), nbytes);
             return 0;
         }
-        printf("demodulated %s medium (RS-FEC ok): %u bytes: %.*s\n",
-               modem_name(mod), msglen, (int)msglen, out);
+        printf("demodulated %s medium (RS-FEC ok): %d bytes: %.*s\n",
+               modem_name(mod), L, (int)L, msg);
     } else {
         printf("demodulated %s medium: %u bytes: %.*s\n", modem_name(mod), nbytes, (int)nbytes, out);
     }

@@ -3,7 +3,10 @@
 //! the cross-language golden vectors (Documentation/fec_vectors.json). Passing this
 //! == byte-agreement with the Python + C references (encode) and the correction law.
 
-use dcf_wire_codec::fec::{deinterleave, interleave, rs_decode, rs_encode, RS_DEFAULT_NPARITY};
+use dcf_wire_codec::fec::{
+    decode_message, deinterleave, encode_message, interleave, rs_decode, rs_encode,
+    RS_DEFAULT_NPARITY,
+};
 use serde::Deserialize;
 use std::path::Path;
 
@@ -12,6 +15,19 @@ struct Vectors {
     nparity: usize,
     cases: Vec<Case>,
     correct: Vec<Fix>,
+    messages: Vec<Msg>,
+    message_burst: MsgBurst,
+}
+#[derive(Deserialize)]
+struct Msg {
+    len: usize,
+    msg: String,
+    blob: String,
+}
+#[derive(Deserialize)]
+struct MsgBurst {
+    msg: String,
+    corrupt: String,
 }
 #[derive(Deserialize)]
 struct Case {
@@ -83,6 +99,26 @@ fn correction_property() {
         over[k * 2] ^= 0x33;
     }
     assert!(rs_decode(&over, np, Some(17)).is_err());
+}
+
+#[test]
+fn message_matches_golden() {
+    let v = load();
+    for (i, m) in v.messages.iter().enumerate() {
+        let msg = hex(&m.msg);
+        let blob = encode_message(&msg, v.nparity);
+        assert_eq!(blob, hex(&m.blob), "message blob mismatch case {i}");
+        let (out, _) = decode_message(&blob).expect("decode");
+        assert_eq!(out, msg, "message round-trip case {i} (len {})", m.len);
+    }
+}
+
+#[test]
+fn message_burst_corrected() {
+    let v = load();
+    let (out, n) = decode_message(&hex(&v.message_burst.corrupt)).expect("burst decode");
+    assert_eq!(out, hex(&v.message_burst.msg));
+    assert!(n > 0, "expected corrections");
 }
 
 #[test]

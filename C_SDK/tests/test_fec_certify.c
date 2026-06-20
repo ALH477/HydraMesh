@@ -59,6 +59,22 @@ int main(void) {
     }
     printf("  PASS: interleaver round-trip\n");
 
+    /* 5. multi-codeword message: golden blob byte-identical + round-trip + burst. */
+    {
+        uint8_t blob[FEC_BLOB_LEN240];
+        size_t bl = dcf_fec_encode_message(FEC_MSG240, FEC_MSG_LEN240, FEC_NPARITY, blob);
+        CHECK(bl == FEC_BLOB_LEN240, "message blob length");
+        CHECK(memcmp(blob, FEC_BLOB240, FEC_BLOB_LEN240) == 0, "message blob mismatch");
+        uint8_t got[FEC_MSG_LEN240 + 256];
+        int L = dcf_fec_decode_message(blob, bl, got);
+        CHECK(L == FEC_MSG_LEN240 && memcmp(got, FEC_MSG240, FEC_MSG_LEN240) == 0, "message round-trip");
+        /* a burst across the interleaved codewords (> t) is still corrected */
+        for (int b = 0; b < 16; b++) blob[FEC_HDR_PARITY + 5 + 30 + b] ^= 0xC3;
+        L = dcf_fec_decode_message(blob, bl, got);
+        CHECK(L == FEC_MSG_LEN240 && memcmp(got, FEC_MSG240, FEC_MSG_LEN240) == 0, "message burst recover");
+    }
+    printf("  PASS: multi-codeword message (golden blob + round-trip + burst)\n");
+
     if (fails == 0) printf("ALL FEC CERT TESTS PASSED\n");
     else printf("%d FAILURE(S)\n", fails);
     return fails ? 1 : 0;

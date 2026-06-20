@@ -24,13 +24,29 @@ and golden-vectored across Python/C/Rust (like SuperPack).
   column-major, so a burst of ≤ D consecutive bytes hits ≤ 1 byte per codeword —
   burst errors become correctable random errors.
 
-## References (byte-identical)
+## Multi-codeword messages (any length)
+
+A single codeword covers ≤ 239 data bytes. For longer payloads, `encode_message`
+splits the message into N equal blocks, RS-codes each, and **interleaves** the N
+codewords so an RF burst of up to `N·t` bytes is corrected (it spreads to ≤ t per
+codeword). A fixed-parity, self-protecting **header codeword** (`[len u32 | parity
+u8]`, 21 bytes) carries the metadata so the receiver needs nothing out-of-band:
+
+```
+blob = RS_hdr( len | nparity )  ++  interleave( RS(block_0) … RS(block_{N-1}) )
+```
+
+`dcfnode send-modem --fec` uses this for arbitrary payloads (no 239-byte limit);
+the burst tolerance scales with the message length.
+
+## References (byte-identical across Python / C / Rust / Go)
 
 | Lang | File | Entry points |
 |------|------|------|
-| Python | `python/MCP/feclab_core.py` | `rs_encode`, `rs_decode`, `interleave`, `deinterleave` |
-| C | `codec/demod_fec.h` | `dcf_fec_encode`, `dcf_fec_decode`, `dcf_fec_interleave` |
-| Rust | `codec/src/fec.rs` | `rs_encode`, `rs_decode`, `interleave` |
+| Python | `python/MCP/feclab_core.py` | `rs_encode/decode`, `interleave`, `encode_message`, `decode_message` |
+| C | `codec/demod_fec.h` | `dcf_fec_encode/decode`, `dcf_fec_encode_message`, `dcf_fec_decode_message` |
+| Rust | `codec/src/fec.rs` | `rs_encode/decode`, `encode_message`, `decode_message` |
+| Go | `go/dcf/fec.go` | `RSEncode/RSDecode`, `EncodeMessage`, `DecodeMessage` |
 
 ## Certification
 
