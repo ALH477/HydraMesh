@@ -40,6 +40,7 @@ from pathlib import Path
 import numpy as np
 
 from faust_jit import FaustJIT  # extracted Faust JIT compiler
+import acoustic_frame as _af     # shared on-air framing (interop with the numpy modem)
 
 try:
     import sounddevice as sd
@@ -70,14 +71,12 @@ SYNC_BITS       = 8
 MARK_FREQ       = 1200.0    # Hz (bit 1)
 SPACE_FREQ      = 2200.0    # Hz (bit 0)
 
-# Per-medium profiles (see Documentation/DCF_FIELD_USE.md). "standard" is the original
-# Bell-202 AFSK; "handheld" tunes for a walkie-talkie's 300-3000 Hz band-pass + AGC +
-# squelch: both tones pulled to mid-band (off the rolloffs) and a much longer keyup
-# preamble so the receiver's AGC normalizes and squelch opens before the sync word.
-PROFILES = {
-    "standard": {"mark": 1200.0, "space": 2200.0, "preamble_bits": 80},
-    "handheld": {"mark": 1200.0, "space": 1800.0, "preamble_bits": 240},  # ~800ms keyup
-}
+# Per-medium profiles (see Documentation/DCF_FIELD_USE.md). Shared with the numpy modem
+# via acoustic_frame.PROFILES so both modems agree on tones/baud/preamble: "standard" is
+# the original Bell-202 AFSK; "handheld" tunes for a walkie-talkie's 300-3000 Hz band-pass
+# + AGC (both tones mid-band off the rolloffs, a much longer keyup preamble so the
+# receiver's AGC normalizes and squelch opens before the sync word).
+PROFILES = _af.PROFILES
 
 # Detection
 DETECT_THRESHOLD    = 0.45  # confidence threshold for frame detection
@@ -201,25 +200,11 @@ def encode_frame_bits(frame):
     """
     Encode a DCF frame into the on-air bit sequence:
         [preamble] [sync] [frame_data] [crc] [postamble]
+
+    Delegates to the shared acoustic_frame.encode_bits so this is byte-identical to what
+    the numpy modem (acoustic.py) puts on air — that is what makes the two interoperable.
     """
-    frame_bytes = frame.encode()
-    crc = DCFFrame.crc8(frame_bytes)
-
-    bits = []
-    # Preamble: alternating 01 pattern for clock/energy establishment
-    for i in range(PREAMBLE_BITS):
-        bits.append(i % 2)
-    # Sync word: 0x7E = 01111110
-    bits.extend(bytes_to_bits(bytes([SYNC_WORD])))
-    # Frame data
-    bits.extend(bytes_to_bits(frame_bytes))
-    # CRC
-    bits.extend(bytes_to_bits(bytes([crc])))
-    # Postamble: short alternating pattern then silence
-    for i in range(16):
-        bits.append(i % 2)
-
-    return bits
+    return _af.encode_bits(frame.encode(), fec_mode=False, preamble_bits=PREAMBLE_BITS)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -857,7 +842,7 @@ def find_dsp_file():
 
 
 def main():
-    global MARK_FREQ, SPACE_FREQ, DETECT_THRESHOLD, PREAMBLE_BITS
+    global MARK_FREQ, SPACE_FREQ, DETECT_THRESHOLD, PREAMBLE_BITS, BAUD_RATE, SAMPLES_PER_BIT
     print(BANNER)
 
     parser = argparse.ArgumentParser(
@@ -915,6 +900,8 @@ Examples:
     MARK_FREQ = args.mark if args.mark is not None else prof["mark"]
     SPACE_FREQ = args.space if args.space is not None else prof["space"]
     PREAMBLE_BITS = args.preamble_bits if args.preamble_bits is not None else prof["preamble_bits"]
+    BAUD_RATE = prof["baud"]                       # shared with the numpy modem
+    SAMPLES_PER_BIT = int(SAMPLE_RATE / BAUD_RATE)
     DETECT_THRESHOLD = args.threshold
     if args.profile != "standard" or args.mark or args.space:
         print(f"{C_DIM}Profile: {args.profile} — {MARK_FREQ:.0f}/{SPACE_FREQ:.0f} Hz, "

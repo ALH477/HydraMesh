@@ -64,12 +64,15 @@ jobs:
           diff /tmp/fec_vectors.gen.h  codec/fec_vectors.gen.h
           python3 -m unittest python/tests/test_fec.py -v
 
-      - name: SDR/IQ — loopback tests + dcf-sdr .cf32 round-trip smoke
+      - name: SDR/IQ + acoustic + egress — loopback tests + dcf-sdr .cf32 smoke
         run: |
-          python3 -m unittest python/tests/test_iq_loopback.py -v
-          python3 python/modem/sdr.py tx --text "DCF!" --mod gfsk --iq /tmp/d.cf32
-          python3 python/modem/sdr.py rx --iq /tmp/d.cf32 --mod gfsk | tee /tmp/rx.txt
-          grep -q "44434621" /tmp/rx.txt && echo "dcf-sdr cf32 round-trip: recovered \"DCF!\""
+          python3 -m unittest python/tests/test_iq_loopback.py python/tests/test_acoustic.py python/tests/test_egress.py -v
+          for mod in gfsk msk fsk4; do
+            python3 python/modem/sdr.py tx --text "DCF!" --mod $mod --iq /tmp/d.cf32
+            python3 python/modem/sdr.py rx --iq /tmp/d.cf32 --mod $mod | tee /tmp/rx.txt
+            grep -q "44434621" /tmp/rx.txt && echo "dcf-sdr $mod cf32 round-trip: recovered \"DCF!\""
+          done
+          python3 python/modem/uplink_demo.py >/dev/null && echo "uplink_demo: ok"
 
       - name: Modulation — self-test, regenerate vectors, diff the committed copies
         run: |

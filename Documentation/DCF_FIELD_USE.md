@@ -109,11 +109,19 @@ gating. Design to its constraints, not around them:
 
 What ships today:
 
-- **Acoustic (walkie-talkie audio)** — `python/modem/main.py` has a **`--profile handheld`**:
-  tones re-centered to **1200/1800 Hz** (both mid-band) and a **240-bit (~800 ms) keyup
-  preamble**. (Acoustic MSK/4-FSK is a future step; the acoustic waveform is Faust AFSK.)
-- **SDR / IQ baseband** — `python/modem/iq.py` + `dcf-sdr` add **`--mod msk`** and
-  **`--mod fsk4`** (plus `gfsk`), all RS-FEC-wrapped and loopback-tested.
+- **Acoustic (walkie-talkie audio)** — two **interoperable** modems. The real-time
+  `python/modem/main.py` (JIT Faust FSK DSP) and the pure-numpy `python/modem/acoustic.py`
+  both build the on-air bit stream from one shared module, **`python/modem/acoustic_frame.py`**,
+  and share the same `PROFILES` tones/baud — so a frame sent by either is decodable by the
+  other (verified byte-for-byte). Continuous-phase **AFSK at 300 baud**; the **handheld**
+  profile pulls both tones to **1200/1800 Hz** (mid-band) with a **240-bit (~800 ms) keyup
+  preamble** for AGC settle / squelch open. Payload is `frame + crc8` by default (the
+  deployed format) or the certified **RS codeword** with `fec=True`. The numpy modem ships
+  a **modelled radio channel** (`walkie_channel`: 300–3000 Hz band-pass + AGC + noise) so
+  the profile is testable without hardware.
+- **SDR / IQ baseband** — `python/modem/iq.py` + `dcf-sdr` add **`--mod msk`** (MSK,
+  modulation index 0.5) and **`--mod fsk4`** (plus `gfsk`), all RS-FEC-wrapped and
+  loopback-tested. (MSK/4-FSK live on the IQ path; the acoustic path is AFSK.)
 
 MSK is the elegant middle: continuous-phase FSK with modulation index 0.5 is
 mathematically offset-QPSK — a *frequency* modulation you can detect like a *phase* one
@@ -146,6 +154,7 @@ Climb tier by tier; do not skip — most failures are coupling/level/AGC, not th
 | Tier | Setup | Command | Pass criteria |
 |---|---|---|---|
 | **T1 — bench loopback** | no radio; software channel | `python3 python/modem/sdr.py tx --text "DCF!" --mod msk --iq /tmp/d.cf32 && python3 python/modem/sdr.py rx --iq /tmp/d.cf32 --mod msk` | frame recovered, CRC valid |
+| **T1 — modelled radio channel** | no hardware; numpy band-pass + AGC + noise | `python3 python/modem/acoustic.py` | handheld AFSK frame recovered (crc8 + fec) through the 300–3000 Hz + AGC channel |
 | **T1b — acoustic loopback** | speaker→mic, one box | `python3 python/modem/main.py loopback --profile handheld "DCF field test"` | mark/space **SNR report** + frame recovered |
 | **T2 — wired coupling** | DAC→radio mic, radio speaker→ADC, cable | tx on radio A, rx on radio B, **PER over ≥100 frames** | PER < 1% with FEC at nominal level |
 | **T3 — same-room OTA** | two HTs, low power, open squelch | as T2, vary TX gain | find the level window; PER < 5% |
