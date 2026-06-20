@@ -251,6 +251,9 @@ jobs:
       - name: Certify the Lua SuperPack container
         run: lua5.4 lua/dcf_superpack.lua
 
+      - name: Certify the Lua FEC adapter
+        run: lua5.4 lua/dcf_fec.lua
+
       - name: Smoke the rendezvous CLI
         run: lua5.4 lua/dcf_jam.lua --passphrase ci-jam --codec pcm --blocks 20
 
@@ -406,4 +409,4 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y sbcl
 
       - name: Certify the Lisp DeModFrame wire codec (dependency-free, no Quicklisp)
-        run: sbcl --non-interactive --load lisp/src/wire.lisp
+        run: sbcl --non-interactive --load lisp/src/wire.lisp --load lisp/src/fec.lisp
