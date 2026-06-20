@@ -101,13 +101,15 @@ def _demod_fsk(iq, sps, nsyms):
     # FM discriminator: instantaneous frequency = angle(x[n] * conj(x[n-1])).
     d = np.angle(iq[1:] * np.conj(iq[:-1]))
     d = np.concatenate([[d[0]], d])
-    use = d[: nsyms * sps] if nsyms * sps <= len(d) else d
-    d = d - np.mean(use)                                   # remove carrier-offset DC
-    syms = []
-    for n in range(nsyms):
-        seg = d[n * sps:(n + 1) * sps]
-        syms.append(1 if seg.mean() > 0 else 0)
-    return syms
+    means = np.array([d[n * sps:(n + 1) * sps].mean() for n in range(nsyms)])
+    if len(means) == 0:
+        return []
+    # Slice against the MIDPOINT of the mark/space clusters, not the data mean. A
+    # global-mean threshold drifts with bit balance, so unbalanced payloads (e.g. a
+    # run of identical bytes) misdecode; the cluster midpoint is both balance- and
+    # carrier-offset-robust — the 0xAA preamble guarantees both tones are present.
+    thr = (means.max() + means.min()) / 2.0
+    return [1 if m > thr else 0 for m in means]
 
 
 def _demod_ook(iq, sps, nsyms):

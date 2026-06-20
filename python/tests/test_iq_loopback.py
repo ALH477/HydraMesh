@@ -89,6 +89,27 @@ class TestIQLoopback(unittest.TestCase):
                     sync_ok += 1
             self.assertGreaterEqual(sync_ok, 19, f"{mod} off-air sync {sync_ok}/20")
 
+    def test_payload_independence(self):
+        """Decoding must not depend on payload bit-balance. A single golden frame
+        hid a data-mean FSK slicer bug that dropped unbalanced payloads (all-0x00,
+        all-0xFF, runs of one byte); fuzz many frames per modulation and demand 100%
+        clean recovery."""
+        import random
+        rng = random.Random(7)
+        # deliberately-unbalanced payloads + random ones
+        fixed = [b"\x00\x00\x00\x00", b"\xff\xff\xff\xff", b"\x30\x30\x30\x30",
+                 b"PyPI", b"\xaa\xaa\xaa\xaa", b"\x01\x00\x00\x00"]
+        for mod in ("gfsk", "qpsk", "qam", "ook"):
+            payloads = fixed + [bytes(rng.randrange(256) for _ in range(4))
+                                for _ in range(40)]
+            for p in payloads:
+                fr = encode(3, rng.randrange(0x10000), rng.randrange(0x10000),
+                            rng.randrange(0x10000), p, rng.randrange(0x1000000))
+                s = iq.frame_to_iq(fr, mod=mod, sps=8)
+                r = iq.iq_to_frame(s, mod=mod, sps=8)
+                self.assertTrue(r and r[0] == fr,
+                                f"{mod} dropped payload {p.hex()} (frame {fr.hex()})")
+
     def test_cf32_roundtrip(self):
         import tempfile
         s = iq.frame_to_iq(FRAME, mod="gfsk", sps=8)
