@@ -344,6 +344,9 @@ jobs:
       - name: Certify the Node.js SuperPack container
         run: node JS/nodejs/test/certify_superpack.js
 
+      - name: Certify the Node.js FEC adapter
+        run: node JS/nodejs/test/certify_fec.js
+
   certify-perl:
     runs-on: ubuntu-latest
     steps:
@@ -374,6 +377,11 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -I cpp/include -o /tmp/cpp_superpack cpp/tests/certify_superpack.cpp
           /tmp/cpp_superpack
+
+      - name: Certify the C++ FEC adapter
+        run: |
+          g++ -std=c++17 -Wall -Wextra -I cpp/include -o /tmp/cpp_fec cpp/tests/certify_fec.cpp
+          /tmp/cpp_fec
 
   certify-swift:
     runs-on: ubuntu-latest

@@ -39,7 +39,7 @@ blob = RS_hdr( len | nparity )  ++  interleave( RS(block_0) … RS(block_{N-1}) 
 `dcfnode send-modem --fec` uses this for arbitrary payloads (no 239-byte limit);
 the burst tolerance scales with the message length.
 
-## References (byte-identical across Python / C / Rust / Go)
+## References (byte-identical across Python / C / Rust / Go / Node / C++)
 
 | Lang | File | Entry points |
 |------|------|------|
@@ -47,6 +47,13 @@ the burst tolerance scales with the message length.
 | C | `codec/demod_fec.h` | `dcf_fec_encode/decode`, `dcf_fec_encode_message`, `dcf_fec_decode_message` |
 | Rust | `codec/src/fec.rs` | `rs_encode/decode`, `encode_message`, `decode_message` |
 | Go | `go/dcf/fec.go` | `RSEncode/RSDecode`, `EncodeMessage`, `DecodeMessage` |
+| Node | `JS/nodejs/src/fec.js` | `rsEncode/rsDecode`, `encodeMessage`, `decodeMessage` |
+| C++ | `cpp/include/dcf/fec.hpp` | `dcf::fec::rs_encode/rs_decode`, `encode_message`, `decode_message` |
+
+Each language has a cert that diffs against `Documentation/fec_vectors.json`
+(`python/tests/test_fec.py`, `codec/tests/certify_fec.rs`,
+`C_SDK/tests/test_fec_certify.c`, `go/dcf/fec_certify_test.go`,
+`JS/nodejs/test/certify_fec.js`, `cpp/tests/certify_fec.cpp`), all wired into CI.
 
 ## Certification
 
