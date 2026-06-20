@@ -13,8 +13,10 @@ build-type:         Simple
 library
     exposed-modules:  DCF.Transport.FrameSpec
                       DCF.Transport.SuperPack
+                      DCF.Transport.FEC
     hs-source-dirs:   src
     build-depends:    base >=4.11 && <5
+                    , array
     default-language: Haskell2010
     ghc-options:      -Wall
 

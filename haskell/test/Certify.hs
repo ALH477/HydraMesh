@@ -25,6 +25,7 @@ import           System.Exit          (exitFailure, exitSuccess)
 
 import           DCF.Transport.FrameSpec
 import           DCF.Transport.SuperPack (isSuperPack, packSuper, unpackSuper)
+import           DCF.Transport.FEC       (rsEncode, rsDecode, encodeMessage, decodeMessage)
 
 main :: IO ()
 main = do
@@ -98,6 +99,33 @@ main = do
                    bad "superpack zero-core anchor /= 0x5B75"
     Left e    -> bad ("superpack zero-core: " ++ e)
 
+  -- 6. FEC adapter (Documentation/fec_vectors.json)
+  fecPath <- findFec
+  fecRaw  <- BL.readFile fecPath
+  let fecRoot  = fromMaybe (error ("cannot parse JSON: " ++ fecPath)) (decode fecRaw :: Maybe Value)
+      np       = numInt (look "nparity" fecRoot)
+  forM_ (zip [0 :: Int ..] (arr (look "cases" fecRoot))) $ \(i, o) -> do
+    let m = hexBytes (T.unpack (str (look "msg" o)))
+    unless (bytesHex (rsEncode m np) == T.unpack (str (look "code" o))) $
+      bad ("fec encode[" ++ show i ++ "]")
+  forM_ (zip [0 :: Int ..] (arr (look "correct" fecRoot))) $ \(i, o) -> do
+    let cor = hexBytes (T.unpack (str (look "corrupt" o)))
+    case rsDecode cor np (Just 17) of
+      Right (m, _) -> unless (bytesHex m == T.unpack (str (look "msg" o))) $ bad ("fec decode[" ++ show i ++ "]")
+      Left e       -> bad ("fec decode[" ++ show i ++ "]: " ++ e)
+  forM_ (zip [0 :: Int ..] (arr (look "messages" fecRoot))) $ \(i, o) -> do
+    let m    = hexBytes (T.unpack (str (look "msg" o)))
+        blob = encodeMessage m np
+    unless (bytesHex blob == T.unpack (str (look "blob" o))) $ bad ("fec message[" ++ show i ++ "] blob")
+    case decodeMessage blob of
+      Right (mm, _) -> unless (mm == m) $ bad ("fec message[" ++ show i ++ "] roundtrip")
+      Left e        -> bad ("fec message[" ++ show i ++ "]: " ++ e)
+  let burst = look "message_burst" fecRoot
+  case decodeMessage (hexBytes (T.unpack (str (look "corrupt" burst)))) of
+    Right (mm, _) -> unless (bytesHex mm == T.unpack (str (look "msg" burst))) $ bad "fec burst"
+    Left e        -> bad ("fec burst: " ++ e)
+  ok "FEC: encode + correct + multi-codeword messages + burst (byte-identical)"
+
   n <- readIORef fails
   putStrLn ""
   if n == 0
@@ -124,6 +152,14 @@ findSuper = go [ "../Documentation/superpack_vectors.json"
                , "../python/MCP/superpack_vectors.json" ]
   where
     go []       = error "superpack_vectors.json not found (run gen_superpack_vectors.py)"
+    go (p : ps) = do e <- doesFileExist p; if e then return p else go ps
+
+findFec :: IO FilePath
+findFec = go [ "../Documentation/fec_vectors.json"
+             , "Documentation/fec_vectors.json"
+             , "../python/MCP/fec_vectors.json" ]
+  where
+    go []       = error "fec_vectors.json not found (run gen_fec_vectors.py)"
     go (p : ps) = do e <- doesFileExist p; if e then return p else go ps
 
 look :: Key -> Value -> Value
