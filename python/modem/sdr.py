@@ -169,7 +169,8 @@ def _decode_bursts(sig, args):
         burst = sig[i:j]
         r = (iqmod.afsk_fm_demodulate(burst, int(round(48000 / 1200)), len(burst) // 40)
              if args.mod == "afsk-fm"
-             else iqmod.iq_to_frame(burst, mod=args.mod, sps=args.sps))
+             # sync=True: recover carrier-offset/timing/phase for real off-air captures.
+             else iqmod.iq_to_frame(burst, mod=args.mod, sps=args.sps, sync=True))
         if r:
             frames.append(r)
         i = j + 1

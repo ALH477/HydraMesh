@@ -45,15 +45,28 @@ dcf-sdr rx --soapy driver=rtlsdr --freq 433.9M --rate 2M --mod gfsk --secs 3 --o
 `hackrf_transfer`, and GNU Radio. SoapySDR is a **soft dependency**: files and the
 software loopback work without hardware or the python bindings.
 
+## Receiver synchronization
+
+`rx` / `iq_to_frame(sync=True)` recovers a real off-air burst, not just clean
+loopback:
+- **Energy onset** locates the burst after the leading delay.
+- **Carrier-frequency offset (CFO)** is estimated from the preamble (constant-symbol
+  autocorrelation for PSK/QAM; FM-discriminator DC removal for FSK/AFSK) and removed.
+- **Symbol timing / frame start** by cross-correlating the known preamble+sync.
+- **Static phase** for coherent PSK/QAM from the known preamble.
+
+Tested under CFO + timing delay + AWGN: every modulation recovers ~20/20 where naive
+demod gets 0/20 (`python/tests/test_iq_loopback.py::test_offair_sync`).
+
 ## Status & limits
 
-- **Certified-clean**: the `.cf32`/software-loopback path (TX IQ → AWGN → RX) and
-  the round-trip `tx --dcf … | rx --out …` are byte-exact and tested
-  (`python/tests/test_iq_loopback.py`, every modulation through AWGN + FEC margin).
-- **Real off-air RX** needs carrier-frequency and symbol-timing recovery; the
-  burst/timing recovery in `rx` is intentionally simple (good for the loopback and
-  strong signals) — proper synchronization is a future addition. The FEC and the
-  byte↔symbol map are the certified, hardware-independent contract.
+- **Certified-clean**: the `.cf32`/software-loopback path and the round-trip
+  `tx --dcf … | rx --out …` are byte-exact; off-air-style captures decode via the
+  synchronizer above. The FEC + byte↔symbol map are the certified, hardware-
+  independent contract; the waveform/sync are loopback-tested.
+- Synchronization is single-burst and assumes a moderate CFO (≲1% of the sample
+  rate) and integer-sample timing; very low SNR, large CFO, fading, or
+  back-to-back bursts at speed want a tracking loop (future).
 - A **Faust** IQ modulator (`codec/faust/dcf_rf_modulator.dsp`, committed-codegen)
   is a planned addition; the numpy renderer is the current functional reference.
 

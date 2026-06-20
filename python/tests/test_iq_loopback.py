@@ -70,6 +70,25 @@ class TestIQLoopback(unittest.TestCase):
         # FEC should recover the large majority even at a marginal SNR.
         self.assertGreaterEqual(recovered, 50)
 
+    def test_offair_sync(self):
+        """Carrier-frequency offset + symbol-timing delay + AWGN: the synchronizer
+        (sync=True) recovers where naive demod fails — the off-air path."""
+        for mod, cfo, snr in [("gfsk", 8e-4, 18), ("qpsk", 6e-4, 18),
+                              ("qam", 3e-4, 30), ("ook", 0.0, 16)]:
+            np.random.seed(4)
+            sync_ok = 0
+            for _ in range(20):
+                s = iq.frame_to_iq(FRAME, mod=mod, sps=8)
+                n = len(s)
+                rx = s * np.exp(2j * np.pi * cfo * np.arange(n))
+                rx = np.concatenate([np.zeros(np.random.randint(3, 30), np.complex64),
+                                     rx, np.zeros(40, np.complex64)])
+                rx = iq.awgn(rx, snr)
+                r = iq.iq_to_frame(rx, mod=mod, sps=8, sync=True)
+                if r and r[0] == FRAME:
+                    sync_ok += 1
+            self.assertGreaterEqual(sync_ok, 19, f"{mod} off-air sync {sync_ok}/20")
+
     def test_cf32_roundtrip(self):
         import tempfile
         s = iq.frame_to_iq(FRAME, mod="gfsk", sps=8)

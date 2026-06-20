@@ -101,6 +101,8 @@ def _demod_fsk(iq, sps, nsyms):
     # FM discriminator: instantaneous frequency = angle(x[n] * conj(x[n-1])).
     d = np.angle(iq[1:] * np.conj(iq[:-1]))
     d = np.concatenate([[d[0]], d])
+    use = d[: nsyms * sps] if nsyms * sps <= len(d) else d
+    d = d - np.mean(use)                                   # remove carrier-offset DC
     syms = []
     for n in range(nsyms):
         seg = d[n * sps:(n + 1) * sps]
@@ -117,31 +119,89 @@ def _demod_ook(iq, sps, nsyms):
 
 
 # ── high-level frame TX/RX (FEC + framing + IQ) ───────────────────────────────
+def _modulate_bytes(data, mod, sps):
+    """Render an arbitrary byte stream to complex baseband (no FEC/framing)."""
+    m = MOD[mod]
+    syms = _bytes_to_symbols(m, data)
+    if mod in ("psk", "qpsk"):
+        return _render_psk(m, syms, sps)
+    if mod == "qam":
+        return _render_qam(m, syms, sps)
+    if mod in ("fsk", "gfsk"):
+        return _render_fsk(syms, sps, gaussian=(mod == "gfsk"))
+    if mod in ("ook", "ask", "am"):
+        return _render_ook(syms, sps)
+    raise ValueError(mod)
+
+
 def frame_to_iq(frame, mod="gfsk", nparity=fec.RS_DEFAULT_NPARITY, sps=8):
     """DeModFrame bytes -> complex64 IQ (preamble + sync + RS codeword)."""
-    m = MOD[mod]
     code = fec.rs_encode(bytes(frame), nparity)
-    stream = PREAMBLE + SYNC + code
-    syms = _bytes_to_symbols(m, stream)
-    if mod in ("psk", "qpsk"):
-        iq = _render_psk(m, syms, sps)
-    elif mod == "qam":
-        iq = _render_qam(m, syms, sps)
-    elif mod in ("fsk", "gfsk"):
-        iq = _render_fsk(syms, sps, gaussian=(mod == "gfsk"))
-    elif mod in ("ook", "ask", "am"):
-        iq = _render_ook(syms, sps)
-    else:
-        raise ValueError(mod)
-    return iq.astype(np.complex64)
+    return _modulate_bytes(PREAMBLE + SYNC + code, mod, sps).astype(np.complex64)
 
 
-def iq_to_frame(iq, mod="gfsk", msglen=17, nparity=fec.RS_DEFAULT_NPARITY, sps=8):
-    """Complex IQ -> (frame bytes, n_corrected) or None if undecodable."""
+# ── receiver synchronization (carrier-freq offset, timing, phase) ─────────────
+def _estimate_cfo(iq, sps):
+    """Coarse carrier-frequency offset (cycles/sample) from the preamble's self-
+    similarity — the 0xAA/constant-symbol preamble autocorrelates at lag=sps."""
+    w = iq[: max(2 * sps, min(len(iq), 64 * sps))]
+    if len(w) <= sps:
+        return 0.0
+    acc = np.sum(w[sps:] * np.conj(w[:-sps]))
+    return float(np.angle(acc) / (2 * np.pi * sps))
+
+
+def _derotate(iq, foff):
+    return iq * np.exp(-2j * np.pi * foff * np.arange(len(iq)))
+
+
+def _find_start(iq, ref):
+    """Symbol-timing/frame start via preamble cross-correlation (argmax |corr|)."""
+    if len(iq) < len(ref):
+        return 0
+    c = np.correlate(iq, ref, mode="valid")
+    return int(np.argmax(np.abs(c)))
+
+
+def _energy_onset(iq):
+    """First sample where the burst rises out of the noise/leading delay."""
+    m = np.abs(iq)
+    if len(m) == 0:
+        return 0
+    thr = max(0.05, m.max() * 0.3)
+    return int(np.argmax(m > thr))
+
+
+def _synchronize(iq, mod, sps):
+    """Return the burst aligned to the preamble, CFO- and phase-corrected."""
+    ref = _modulate_bytes(PREAMBLE + SYNC, mod, sps)
+    if mod in ("psk", "qpsk", "qam"):
+        # CFO from JUST the (constant-symbol) preamble window after energy onset.
+        onset = _energy_onset(iq)
+        pre_len = len(PREAMBLE) * 8 // ml.BITS_PER_SYMBOL[MOD[mod]] * sps
+        win = iq[onset:onset + pre_len]
+        iq = _derotate(iq, _estimate_cfo(win, sps))
+        start = _find_start(iq, ref)
+        seg = iq[start:start + len(ref)]
+        if len(seg) == len(ref):                            # static phase from known preamble
+            phi = np.angle(np.vdot(ref, seg))
+            iq = iq * np.exp(-1j * phi)
+        return iq[start:]
+    if mod in ("fsk", "gfsk"):
+        return iq[_find_start(iq, ref):]                    # FSK CFO handled in demod (DC)
+    return iq[_find_start(np.abs(iq).astype(complex), np.abs(ref).astype(complex)):]
+
+
+def iq_to_frame(iq, mod="gfsk", msglen=17, nparity=fec.RS_DEFAULT_NPARITY, sps=8, sync=False):
+    """Complex IQ -> (frame bytes, n_corrected) or None if undecodable. With
+    sync=True, recover carrier-frequency offset, symbol timing, and phase first
+    (for real off-air captures, not just clean loopback)."""
     m = MOD[mod]
+    iq = np.asarray(iq)
+    if sync:
+        iq = _synchronize(iq, mod, sps)
     nbytes = len(PREAMBLE) + len(SYNC) + msglen + nparity
     nsyms = (nbytes * 8 + ml.BITS_PER_SYMBOL[m] - 1) // ml.BITS_PER_SYMBOL[m]
-    iq = np.asarray(iq)
     nsyms = min(nsyms, len(iq) // sps)
     if mod in ("psk", "qpsk"):
         syms = _demod_psk(m, iq, sps, nsyms)
