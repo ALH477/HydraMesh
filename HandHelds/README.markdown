@@ -1,6 +1,6 @@
 # DCF Framework for Cross-Platform Multiplayer Games (Nintendo DSi & Sony PSP)
 
-![License: GPL-3.0](https://img.shields.io/badge/License-GPL%20v3-blue.svg)
+![License: LGPL-3.0-only](https://img.shields.io/badge/License-LGPL%20v3-blue.svg)
 ![Rust](https://img.shields.io/badge/Rust-Nightly-orange.svg)
 ![Platforms: DSi, PSP](https://img.shields.io/badge/Platforms-DSi%2C%20PSP-green.svg)
 ![Build Status](https://img.shields.io/badge/Build-Production%20Ready-brightgreen.svg)
@@ -175,13 +175,28 @@ framework.add_middleware(|msg, dir| {
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Contributions welcome for new games, PSP improvements, or optimizations!
 
+## Wire compatibility
+
+Network traffic uses the certified DCF **wire quantum** — the 17-byte `DeModFrame`
+and the 32-byte **SuperPack** paired-frame container — implemented `core`-only in
+[`src/wire.rs`](src/wire.rs), byte-identical to the mono-repo references
+(`codec/frame.rs`, `codec/src/superpack.rs`). Each game/chat message is fragmented
+into ordinary `DATA` frames (DCF-Game L2 framing), and adjacent frames are packed
+into one SuperPack datagram for a lower-latency paired send. `wire::selftest()` runs
+at boot and asserts the cross-language anchors (`crc16("123456789") == 0x29B1`,
+`crc16(0^15) == 0x4EC3`, zero-core SuperPack joint CRC `== 0x5B75`), so handheld
+traffic is on-air compatible with the rest of the HydraMesh mesh. See
+`Documentation/WIRE_QUANTUM_SPEC.md` and `Documentation/SUPERPACK_SPEC.md`.
+
 ## License
 
-This project is licensed under the [GNU General Public License v3.0 (GPL-3.0)](LICENSE). See the [LICENSE](LICENSE) file for details.
+This project is licensed under the **GNU Lesser General Public License v3.0
+(LGPL-3.0-only)**, matching the DCF / HydraMesh mono-repo. See the repository
+`LICENSE` / `LICENSING.md` for details.
 
 ## Acknowledgments
 
-- **DeMoD LLC**: Core development and original DCF/StreamDB design (GPL-3.0 licensed mono-repo at [github.com/ALH477/DeMoD-Communication-Framework](https://github.com/ALH477/DeMoD-Communication-Framework)).
+- **DeMoD LLC**: Core development and original DCF/StreamDB design (LGPL-3.0-only mono-repo at [github.com/ALH477/DeMoD-Communication-Framework](https://github.com/ALH477/DeMoD-Communication-Framework)).
 - **Asher LeRoy (ALH477)**: Project leadership and contributions to DCF/StreamDB.
 - **xAI (Grok 4 Heavy)**: AI-assisted code generation, optimizations, and documentation.
 

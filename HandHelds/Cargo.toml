@@ -1,11 +1,12 @@
+# SPDX-License-Identifier: LGPL-3.0-only
 [package]
 name = "dcf-framework"
 version = "0.1.0"
-edition = "2025"
-license = "GPL-3.0"
+edition = "2021"
+license = "LGPL-3.0-only"
 description = "DCF Framework for Cross-Compatible Multiplayer Games on Nintendo DSi and Sony PSP"
 repository = "https://github.com/ALH477/DCF-Handheld-Framework"
-readme = "README.md"
+readme = "README.markdown"
 authors = ["DeMoD LLC", "xAI (Grok 4 Heavy)"]
 keywords = ["dcf", "streamdb", "multiplayer", "dsi", "psp"]
 categories = ["embedded", "game-engines", "network-programming"]
@@ -13,7 +14,8 @@ categories = ["embedded", "game-engines", "network-programming"]
 [dependencies]
 libnds = { git = "https://github.com/oxcabe/libnds-rs", optional = true }
 psp = { git = "https://github.com/overdrivenpotato/rust-psp", optional = true }
-heapless = "0.8"
+# 0.7 API (heapless::consts / typenum sizes) is what this crate's source uses.
+heapless = "0.7"
 lru = { version = "0.12", default-features = false }
 crc = { version = "3.2", default-features = false }
 byteorder = { version = "1.5", default-features = false }

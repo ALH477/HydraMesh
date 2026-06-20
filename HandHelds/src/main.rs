@@ -1,9 +1,14 @@
-// src/main.rs
+// SPDX-License-Identifier: LGPL-3.0-only
+// src/main.rs — DCF handheld framework (Nintendo DSi / Sony PSP crossplay)
+// DeMoD LLC | LGPL-3.0-only
 #![no_std]
 #![no_main]
 #![feature(alloc_error_handler, core_intrinsics)]
 
 extern crate alloc;
+
+// Certified DeModFrame + SuperPack wire quantum (core-only, no_std).
+mod wire;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -1144,6 +1149,7 @@ struct DcfFramework<N: Network, S: Storage, G: Gui> {
     message_buffer: heapless::String<U32>,
     pending_acks: FnvIndexMap<u32, heapless::Vec<u8, MAX_MSG_LEN>, U4>,
     game: Option<Box<dyn Game>>,
+    reasm: wire::Reassembler,
 }
 
 impl<N: Network, S: Storage, G: Gui> DcfFramework<N, S, G> {
@@ -1164,6 +1170,7 @@ impl<N: Network, S: Storage, G: Gui> DcfFramework<N, S, G> {
             message_buffer: heapless::String::new(),
             pending_acks: FnvIndexMap::new(),
             game: None,
+            reasm: wire::Reassembler::new(),
         };
         framework.game = Some(Box::new(TicTacToe::new(&framework.config.node_id)));
         framework
@@ -1172,6 +1179,11 @@ impl<N: Network, S: Storage, G: Gui> DcfFramework<N, S, G> {
     fn start(&mut self) -> Result<(), ()> {
         self.net.init()?;
         self.gui.init()?;
+        // Fail fast if our wire codec disagrees with the certified mesh anchors.
+        if !wire::selftest() {
+            self.gui.print("WIRE SELFTEST FAILED");
+            return Err(());
+        }
         self.socket = self.net.bind_udp(self.config.port)?;
         self.load_config()?;
         self.join_room("tictactoe_room");
@@ -1229,6 +1241,46 @@ impl<N: Network, S: Storage, G: Gui> DcfFramework<N, S, G> {
         }
     }
 
+    /// 16-bit source id for the wire `src` field: the certified CRC-16 of our
+    /// node id (the same hash DCF uses for channel rendezvous).
+    fn node_src(&self) -> u16 {
+        wire::crc16_ccitt(self.config.node_id.as_bytes())
+    }
+
+    /// Serialise `data` into certified `DeModFrame` `DATA` frames and put them on
+    /// the wire, packing each adjacent pair into one 32-byte SuperPack (one
+    /// datagram instead of two) for the lower-latency paired send. This is the
+    /// on-air format shared with the rest of the HydraMesh mesh.
+    fn send_framed(&self, data: &[u8], packet_id: u16) {
+        let len = core::cmp::min(data.len(), wire::MAX_PAYLOAD);
+        let mut frames = [[0u8; wire::FRAME_SIZE]; wire::MAX_FRAMES];
+        let n = match wire::packetize(
+            &data[..len],
+            packet_id,
+            self.node_src(),
+            wire::BROADCAST,
+            0,
+            0, // msg_type_id (opaque to L2)
+            0, // flags
+            &mut frames,
+        ) {
+            Ok(n) => n,
+            Err(_) => return,
+        };
+        let mut i = 0;
+        while i < n {
+            if i + 1 < n {
+                if let Ok(sp) = wire::pack(&frames[i], &frames[i + 1]) {
+                    self.send_raw(&sp);
+                    i += 2;
+                    continue;
+                }
+            }
+            self.send_raw(&frames[i]);
+            i += 1;
+        }
+    }
+
     fn send(&mut self, mut msg: DcfMessage) {
         msg.sequence = self.metrics.entry("sequence".into()).or_insert(0);
         msg = self.apply_middlewares(msg, Dir::Send).unwrap_or(msg);
@@ -1244,7 +1296,8 @@ impl<N: Network, S: Storage, G: Gui> DcfFramework<N, S, G> {
         buf.extend_from_slice(msg.redundancy_path.as_bytes()).ok();
         buf.push(0).ok();
         buf.extend_from_slice(msg.group_id.as_bytes()).ok();
-        self.send_raw(&buf);
+        // On-air via the certified DeModFrame / SuperPack quantum.
+        self.send_framed(&buf, (msg.sequence & 0x07FF) as u16);
         if msg.sync {
             self.pending_acks.insert(msg.sequence, buf).ok();
             *self.metrics.entry("sends".into()).or_insert(0) += 1;
@@ -1254,7 +1307,28 @@ impl<N: Network, S: Storage, G: Gui> DcfFramework<N, S, G> {
     fn receive(&mut self) -> Option<DcfMessage> {
         let mut buf = [0u8; MAX_MSG_LEN];
         let (len, from) = self.net.recv_udp(&mut buf).ok()?;
-        let data = &buf[0..len];
+        let raw = &buf[0..len];
+        // DeModFrame / SuperPack path: reassemble framed game/chat traffic back
+        // into the message envelope. Bootstrap control strings (JOIN/HELLO/PING/
+        // ACK/FILE) stay plaintext and fall through unchanged.
+        let mut env = [0u8; wire::MAX_PAYLOAD];
+        let framed = if wire::is_superpack(raw) {
+            match wire::unpack(raw) {
+                Ok((fa, fb)) => {
+                    let a = self.reasm.push(&fa, &mut env);
+                    self.reasm.push(&fb, &mut env).or(a)
+                }
+                Err(_) => None,
+            }
+        } else if raw.len() == wire::FRAME_SIZE && wire::Frame::is_valid(raw) {
+            self.reasm.push(raw, &mut env)
+        } else {
+            None
+        };
+        let data: &[u8] = match framed {
+            Some(l) => &env[..l],
+            None => raw,
+        };
         if data.starts_with(b"JOIN:") {
             let room = heapless::String::<U32>::from_utf8(data[5..].to_vec()).ok()?;
             if !self.config.peers.contains(&from) {
@@ -1495,7 +1569,7 @@ impl<N: Network, S: Storage, G: Gui> DcfFramework<N, S, G> {
             }
             if retry_timer >= TIMEOUT_MS {
                 for (seq, data) in &self.pending_acks {
-                    self.send_raw(data);
+                    self.send_framed(data, (*seq & 0x07FF) as u16);
                 }
                 retry_timer = 0;
             }
