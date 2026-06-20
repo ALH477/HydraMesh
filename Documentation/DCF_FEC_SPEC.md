@@ -8,7 +8,7 @@ bursts. It is an *adapter around* the 17-byte `DeModFrame` — the frame and its
 RS recovers it, then the frame CRC validates.
 
 This is a **certified** adapter: encode + the correction law are byte-deterministic
-and golden-vectored across Python/C/Rust (like SuperPack).
+and golden-vectored across **all thirteen wire-codec languages** (like SuperPack).
 
 ## Code
 
@@ -39,21 +39,26 @@ blob = RS_hdr( len | nparity )  ++  interleave( RS(block_0) … RS(block_{N-1}) 
 `dcfnode send-modem --fec` uses this for arbitrary payloads (no 239-byte limit);
 the burst tolerance scales with the message length.
 
-## References (byte-identical across Python / C / Rust / Go / Node / C++)
+## References (byte-identical across all 13 wire-codec languages)
 
-| Lang | File | Entry points |
-|------|------|------|
-| Python | `python/MCP/feclab_core.py` | `rs_encode/decode`, `interleave`, `encode_message`, `decode_message` |
-| C | `codec/demod_fec.h` | `dcf_fec_encode/decode`, `dcf_fec_encode_message`, `dcf_fec_decode_message` |
-| Rust | `codec/src/fec.rs` | `rs_encode/decode`, `encode_message`, `decode_message` |
-| Go | `go/dcf/fec.go` | `RSEncode/RSDecode`, `EncodeMessage`, `DecodeMessage` |
-| Node | `JS/nodejs/src/fec.js` | `rsEncode/rsDecode`, `encodeMessage`, `decodeMessage` |
-| C++ | `cpp/include/dcf/fec.hpp` | `dcf::fec::rs_encode/rs_decode`, `encode_message`, `decode_message` |
+| Lang | File | Entry points | Cert |
+|------|------|------|------|
+| Python | `python/MCP/feclab_core.py` | `rs_encode/decode`, `encode_message`, `decode_message` | `python/tests/test_fec.py` |
+| C | `codec/demod_fec.h` | `dcf_fec_encode/decode`, `dcf_fec_encode_message`, `dcf_fec_decode_message` | `C_SDK/tests/test_fec_certify.c` |
+| Rust | `codec/src/fec.rs` | `rs_encode/decode`, `encode_message`, `decode_message` | `codec/tests/certify_fec.rs` |
+| Go | `go/dcf/fec.go` | `RSEncode/RSDecode`, `EncodeMessage`, `DecodeMessage` | `go/dcf/fec_certify_test.go` |
+| Node | `JS/nodejs/src/fec.js` | `rsEncode/rsDecode`, `encodeMessage`, `decodeMessage` | `JS/nodejs/test/certify_fec.js` |
+| C++ | `cpp/include/dcf/fec.hpp` | `dcf::fec::rs_encode/rs_decode`, `encode_message`, `decode_message` | `cpp/tests/certify_fec.cpp` |
+| Perl | `perl/lib/DCF/FEC.pm` | `rs_encode/rs_decode`, `encode_message`, `decode_message` | `perl/t/fec.t` |
+| Lua | `lua/dcf_fec.lua` | `rs_encode/rs_decode`, `encode_message`, `decode_message` | self-cert on load |
+| Lisp | `lisp/src/fec.lisp` | `rs-encode/rs-decode`, `encode-message`, `decode-message` | self-cert on load |
+| Haskell | `haskell/src/DCF/Transport/FEC.hs` | `rsEncode/rsDecode`, `encodeMessage`, `decodeMessage` | `haskell/test/Certify.hs` |
+| Java | `java/com/demod/dcf/FEC.java` | `rsEncode/rsDecode`, `encodeMessage`, `decodeMessage` | `java/com/demod/dcf/FECCertify.java` |
+| Kotlin | `kotlin/src/main/kotlin/dcf/FEC.kt` | `FEC.rsEncode/rsDecode`, `encodeMessage`, `decodeMessage` | `kotlin/.../Certify.kt` |
+| Swift | `swift/Sources/DCFWire/FEC.swift` | `rsEncode/rsDecode`, `encodeMessage`, `decodeMessage` | `swift/Tests/.../FECCertifyTests.swift` |
 
-Each language has a cert that diffs against `Documentation/fec_vectors.json`
-(`python/tests/test_fec.py`, `codec/tests/certify_fec.rs`,
-`C_SDK/tests/test_fec_certify.c`, `go/dcf/fec_certify_test.go`,
-`JS/nodejs/test/certify_fec.js`, `cpp/tests/certify_fec.cpp`), all wired into CI.
+Every cert diffs against `Documentation/fec_vectors.json` (encode, multi-codeword
+message blobs, and the correction law); all are wired into `wire-certify.yml`.
 
 ## Certification
 
