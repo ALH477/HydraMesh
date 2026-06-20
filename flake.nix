@@ -174,6 +174,15 @@
             text = ''exec python3 ${self}/ffmpeg-dcf/dcf-rec stream "$@"'';
           };
 
+          # DCF-SDR: carry DeModFrames over radio with Reed-Solomon FEC -> SoapySDR
+          # or .cf32 IQ (GFSK/QPSK/QAM/OOK/AFSK-over-FM). See DCF_SDR_SPEC.md.
+          # numpy covers .cf32 + loopback; `nix develop .#sdr` adds the SDR tools.
+          dcf-sdr = pkgs.writeShellApplication {
+            name = "dcf-sdr";
+            runtimeInputs = [ (pkgs.python3.withPackages (ps: [ ps.numpy ])) ];
+            text = ''exec python3 ${self}/python/modem/sdr.py "$@"'';
+          };
+
           # ── OCI node images (hermetic; built with `nix build .#docker-*`) ──────
           # These run like real nodes, not cert harnesses: each image's entrypoint
           # is the node binary with `start` as the default command.
@@ -394,6 +403,20 @@
               export PROTOC=${protobuf}/bin/protoc
             '';
             meta.description = "Dev shell for DCF mono repo";
+          };
+
+          # SDR / RF: Faust + SDR tooling + dcf-sdr. Pipe .cf32 to rtl_sdr /
+          # hackrf_transfer / GNU Radio, or drive a SoapySDR device. See DCF_SDR_SPEC.md.
+          sdr = pkgs.mkShell {
+            packages = [
+              pkgs.faust pkgs.rtl-sdr pkgs.hackrf pkgs.soapysdr
+              (pkgs.python3.withPackages (ps: [ ps.numpy ]))
+              self.packages.${system}.dcf-sdr
+            ];
+            shellHook = ''
+              echo "◈ DCF-SDR shell — dcf-sdr tx/rx; .cf32 <-> rtl_sdr / hackrf_transfer"
+            '';
+            meta.description = "DCF SDR/RF dev shell (FEC modem + SoapySDR)";
           };
 
           lisp = pkgs.mkShell {

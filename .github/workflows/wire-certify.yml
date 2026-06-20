@@ -56,6 +56,14 @@ jobs:
           diff /tmp/superpack_vectors.json   python/MCP/superpack_vectors.json
           diff /tmp/superpack_vectors.gen.h  codec/superpack_vectors.gen.h
 
+      - name: FEC — regenerate Reed-Solomon vectors, diff the committed copies, test
+        run: |
+          python3 python/MCP/gen_fec_vectors.py /tmp/fec_vectors.json
+          diff /tmp/fec_vectors.json   Documentation/fec_vectors.json
+          diff /tmp/fec_vectors.json   python/MCP/fec_vectors.json
+          diff /tmp/fec_vectors.gen.h  codec/fec_vectors.gen.h
+          python3 -m unittest python/tests/test_fec.py -v
+
       - name: Modulation — self-test, regenerate vectors, diff the committed copies
         run: |
           python3 python/MCP/modulationlab_core.py
@@ -90,6 +98,11 @@ jobs:
           gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_superpack_certify C_SDK/tests/test_superpack_certify.c -lm
           /tmp/test_superpack_certify
 
+      - name: Build and run C FEC (Reed-Solomon) certification
+        run: |
+          gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_fec_certify C_SDK/tests/test_fec_certify.c
+          /tmp/test_fec_certify
+
       - name: Build and run C modulation + mesh certification + node/modem (cmake)
         run: |
           gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_modulation_certify C_SDK/tests/test_modulation_certify.c
@@ -115,6 +128,7 @@ jobs:
           cargo test --test certify_superpack
           cargo test --test certify_modulation
           cargo test --test certify_mesh
+          cargo test --test certify_fec
 
   certify-audio:
     runs-on: ubuntu-latest

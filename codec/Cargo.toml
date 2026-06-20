@@ -32,6 +32,10 @@ path = "tests/certify.rs"
 name = "certify_audio"
 path = "tests/certify_audio.rs"
 
+[[test]]
+name = "certify_fec"
+path = "tests/certify_fec.rs"
+
 [[example]]
 name = "jam_loopback"
 path = "examples/jam_loopback.rs"
