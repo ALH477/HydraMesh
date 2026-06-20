@@ -368,6 +368,12 @@ if(DCF_BUILD_NODE)
         target_link_libraries(test_modem_loopback PRIVATE m)
         add_test(NAME modem_loopback COMMAND test_modem_loopback)
 
+        add_executable(test_modem_fec tests/test_modem_fec.c)
+        target_include_directories(test_modem_fec PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/node ${CMAKE_CURRENT_SOURCE_DIR}/../codec)
+        target_link_libraries(test_modem_fec PRIVATE m)
+        add_test(NAME modem_fec COMMAND test_modem_fec)
+
         add_executable(test_mesh_certify tests/test_mesh_certify.c)
         target_include_directories(test_mesh_certify PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../codec)
         add_test(NAME mesh_certify COMMAND test_mesh_certify)

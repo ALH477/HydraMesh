@@ -31,6 +31,7 @@
 #include "demod_game.h"
 #include "demod_text.h"
 #include "demod_modulation.h"
+#include "demod_fec.h"
 #include "dcf_modem.h"
 #include "dcf_proto.h"
 #include "dcf_mesh_runtime.h"
@@ -301,24 +302,40 @@ static int cmd_send_modem(int argc, char **argv) {
     int mod = modem_id(modn);
     if (mod < 0) { fprintf(stderr, "--modulation must be fsk|ook|psk|qam\n"); return 2; }
 
+    /* --fec: wrap the payload in Reed-Solomon so the medium can CORRECT errors,
+     * not just detect them (codec/demod_fec.h). Single-codeword (<=239 B) in v1. */
+    int fec = 0;
+    for (int i = 0; i < argc; i++) if (!strcmp(argv[i], "--fec")) fec = 1;
+    uint8_t nparity = fec ? (uint8_t)atoi(opt(argc, argv, "--parity", "16")) : 0;
+
     uint8_t data[1024]; size_t len;
     if (hx) len = unhex(hx, data, sizeof data);
     else { const char *t = text ? text : "modem over different mediums"; len = strlen(t); memcpy(data, t, len); }
 
+    static uint8_t coded[1280];
+    const uint8_t *modbytes = data;
+    size_t clen = len;
+    if (fec) {
+        if (len + nparity > 255) { fprintf(stderr, "--fec supports up to %d bytes\n", 255 - nparity); return 2; }
+        dcf_fec_encode(data, len, nparity, coded);   /* coded = data ++ parity */
+        clen = len + nparity; modbytes = coded;
+    }
+
     static uint8_t syms[8192];
-    size_t nsyms = dcf_modulate((uint8_t)mod, data, len, syms, sizeof syms);
+    size_t nsyms = dcf_modulate((uint8_t)mod, modbytes, clen, syms, sizeof syms);
     static double samples[8192 * DCF_MODEM_SPS];
     size_t ns = dcf_modem_render((uint8_t)mod, syms, nsyms, samples, sizeof(samples) / sizeof(samples[0]));
 
     FILE *f = fopen(medium, "wb");
     if (!f) { fprintf(stderr, "open %s failed\n", medium); return 1; }
-    uint8_t hdr[13]; memcpy(hdr, "DCFM", 4); hdr[4] = (uint8_t)mod;
-    put_u32_be(hdr + 5, (uint32_t)len); put_u32_be(hdr + 9, (uint32_t)ns);
+    uint8_t hdr[14]; memcpy(hdr, "DCFM", 4); hdr[4] = (uint8_t)mod;
+    put_u32_be(hdr + 5, (uint32_t)clen); put_u32_be(hdr + 9, (uint32_t)ns);
+    hdr[13] = nparity;                               /* 0 = no FEC */
     fwrite(hdr, 1, sizeof hdr, f);
     fwrite(samples, sizeof(double), ns, f);
     fclose(f);
-    printf("modulated %zu bytes -> %zu %s symbols -> %zu samples on medium %s\n",
-           len, nsyms, modem_name((uint8_t)mod), ns, medium);
+    printf("modulated %zu bytes%s -> %zu %s symbols -> %zu samples on medium %s\n",
+           len, fec ? " (RS-FEC)" : "", nsyms, modem_name((uint8_t)mod), ns, medium);
     return 0;
 }
 
@@ -327,12 +344,13 @@ static int cmd_recv_modem(int argc, char **argv) {
     if (!medium) { fprintf(stderr, "--medium PATH required\n"); return 2; }
     FILE *f = fopen(medium, "rb");
     if (!f) { fprintf(stderr, "open %s failed\n", medium); return 1; }
-    uint8_t hdr[13];
+    uint8_t hdr[14];
     if (fread(hdr, 1, sizeof hdr, f) != sizeof hdr || memcmp(hdr, "DCFM", 4) != 0) {
         fprintf(stderr, "not a DCFM medium\n"); fclose(f); return 1;
     }
     uint8_t mod = hdr[4];
     uint32_t nbytes = get_u32_be(hdr + 5), ns = get_u32_be(hdr + 9);
+    uint8_t nparity = hdr[13];
     static double samples[8192 * DCF_MODEM_SPS];
     if (ns > sizeof(samples) / sizeof(samples[0])) { fclose(f); return 1; }
     if (fread(samples, sizeof(double), ns, f) != ns) { fclose(f); return 1; }
@@ -343,7 +361,20 @@ static int cmd_recv_modem(int argc, char **argv) {
     uint8_t out[1024];
     if (nbytes > sizeof out) return 1;
     dcf_demodulate(mod, syms, rn, out, nbytes);
-    printf("demodulated %s medium: %u bytes: %.*s\n", modem_name(mod), nbytes, (int)nbytes, out);
+
+    if (nparity > 0) {
+        uint32_t msglen = nbytes - nparity;
+        int r = dcf_fec_decode(out, nbytes, nparity, msglen);   /* corrects in place */
+        if (r < 0) {
+            printf("demodulated %s medium: RS-FEC uncorrectable (%u-byte codeword)\n",
+                   modem_name(mod), nbytes);
+            return 0;
+        }
+        printf("demodulated %s medium (RS-FEC ok): %u bytes: %.*s\n",
+               modem_name(mod), msglen, (int)msglen, out);
+    } else {
+        printf("demodulated %s medium: %u bytes: %.*s\n", modem_name(mod), nbytes, (int)nbytes, out);
+    }
     return 0;
 }
 
@@ -356,7 +387,7 @@ static void usage(void) {
         "  send-text     --peer host:port --channel NAME --text S\n"
         "  send-game     --peer host:port --channel-id N --hex BYTES [--type T]\n"
         "  send-position --peer host:port --x X --y Y --z Z\n"
-        "  send-modem    --medium PATH --modulation fsk|ook|psk|qam [--text S | --hex B]\n"
+        "  send-modem    --medium PATH --modulation fsk|ook|psk|qam [--text S | --hex B] [--fec [--parity N]]\n"
         "  recv-modem    --medium PATH\n");
 }
 

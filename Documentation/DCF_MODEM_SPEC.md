@@ -64,6 +64,20 @@ The modem transport reads/writes a sample stream from a **medium**:
 - **live audio** (`DCF_MODEM_AUDIO`, default OFF) — a PortAudio/ALSA backend rendering
   `dcf_modem.dsp` over speaker↔mic, the open-air path of `python/modem/`.
 
+The medium header carries a trailing `nparity` byte (`"DCFM" | mod | nbytes |
+nsamples | nparity | f64[]`; `nparity=0` = no FEC).
+
+## Forward error correction (`--fec`)
+
+A real channel corrupts symbols. `dcfnode send-modem --fec [--parity N]` wraps the
+payload in the certified Reed-Solomon code (`DCF_FEC_SPEC.md`, default 2t=16 →
+corrects 8 byte-errors) before modulation; `recv-modem` RS-decodes after demod and
+reports `RS-FEC ok` (recovered) or `RS-FEC uncorrectable` (never silent garbage).
+This turns the detect-only modem into a **correcting** link — what makes it usable
+over lossy RF/acoustic media. Verified per modulation in
+`C_SDK/tests/test_modem_fec.c` (corrupt symbols → RS recovers the frame). The
+byte↔symbol map and RS code are certified; the waveform is loopback-tested.
+
 ## Certification
 
 `Documentation/modulation_vectors.json` (+ identical `python/MCP/` copy) and

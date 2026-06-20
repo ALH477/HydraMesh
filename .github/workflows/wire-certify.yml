@@ -110,8 +110,8 @@ jobs:
           gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_mesh_certify C_SDK/tests/test_mesh_certify.c
           /tmp/test_mesh_certify
           cmake -S C_SDK -B /tmp/cbuild -DDCF_BUILD_NODE=ON -DDCF_BUILD_TESTS=ON -DDCF_BUILD_EXAMPLES=OFF
-          cmake --build /tmp/cbuild --target dcfnode test_proto_certify test_modulation_certify test_mesh_certify test_modem_loopback
-          ctest --test-dir /tmp/cbuild -R "proto_certify|modulation_certify|mesh_certify|modem_loopback" --output-on-failure
+          cmake --build /tmp/cbuild --target dcfnode test_proto_certify test_modulation_certify test_mesh_certify test_modem_loopback test_modem_fec
+          ctest --test-dir /tmp/cbuild -R "proto_certify|modulation_certify|mesh_certify|modem_loopback|modem_fec" --output-on-failure
 
   certify-rust:
     runs-on: ubuntu-latest
