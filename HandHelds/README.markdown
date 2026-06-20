@@ -175,18 +175,37 @@ framework.add_middleware(|msg, dir| {
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Contributions welcome for new games, PSP improvements, or optimizations!
 
+## Architecture: portable core vs. platform shell
+
+The crate is split so the protocol logic is verifiable without a devkitPro toolchain:
+
+- **`core/` (`dcf-handheld-core`)** — the platform-independent, `no_std + alloc`
+  core, **host-tested with plain `cargo test`** (no nightly, no devkit):
+  - `wire`     — the certified 17-byte `DeModFrame` + 32-byte `SuperPack` quantum,
+    byte-identical to the mono-repo references (`codec/frame.rs`,
+    `codec/src/superpack.rs`); `wire::selftest()` pins the cross-language anchors
+    (`crc16("123456789")==0x29B1`, `crc16(0^15)==0x4EC3`, zero-core SuperPack joint
+    CRC `==0x5B75`).
+  - `proto`    — the app message-envelope (de)serialiser.
+  - `routing`  — Dijkstra self-healing next-hop selection.
+  - `streamdb` — the reverse-trie path index (path → document id).
+
+  ```sh
+  cd core && cargo test     # 16 tests, all green, no devkitPro required
+  ```
+
+- **`src/` (`dcf-framework`)** — the DSi/PSP binary: WiFi/storage/GUI FFI glue on
+  top of the verified core. Building the flashable `.nds` / `.prx` needs the
+  devkitPro + rust-psp toolchain and is **not** exercised by the host tests above.
+
 ## Wire compatibility
 
-Network traffic uses the certified DCF **wire quantum** — the 17-byte `DeModFrame`
-and the 32-byte **SuperPack** paired-frame container — implemented `core`-only in
-[`src/wire.rs`](src/wire.rs), byte-identical to the mono-repo references
-(`codec/frame.rs`, `codec/src/superpack.rs`). Each game/chat message is fragmented
-into ordinary `DATA` frames (DCF-Game L2 framing), and adjacent frames are packed
-into one SuperPack datagram for a lower-latency paired send. `wire::selftest()` runs
-at boot and asserts the cross-language anchors (`crc16("123456789") == 0x29B1`,
-`crc16(0^15) == 0x4EC3`, zero-core SuperPack joint CRC `== 0x5B75`), so handheld
-traffic is on-air compatible with the rest of the HydraMesh mesh. See
-`Documentation/WIRE_QUANTUM_SPEC.md` and `Documentation/SUPERPACK_SPEC.md`.
+Network traffic uses the certified DCF **wire quantum** ([`core/src/wire.rs`](core/src/wire.rs)):
+each game/chat message is fragmented into ordinary `DATA` frames (DCF-Game L2
+framing), and adjacent frames are packed into one **SuperPack** datagram for a
+lower-latency paired send, so handheld traffic is on-air compatible with the rest of
+the HydraMesh mesh. See `Documentation/WIRE_QUANTUM_SPEC.md` and
+`Documentation/SUPERPACK_SPEC.md`.
 
 ## License
 

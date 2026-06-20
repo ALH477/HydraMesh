@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: LGPL-3.0-only
+[package]
+name = "dcf-handheld-core"
+version = "0.1.0"
+edition = "2021"
+license = "LGPL-3.0-only"
+description = "Portable, host-testable core of the DCF handheld framework: certified DeModFrame/SuperPack wire codec, message envelope, routing, and the StreamDB path trie. no_std + alloc."
+repository = "https://github.com/ALH477/DCF-Handheld-Framework"
+
+# Own workspace root so it stays host-testable independently of the platform
+# binary crate (which depends on unresolvable devkitPro git crates).
+[workspace]
+
+[dependencies]
+heapless = "0.6"
+byteorder = { version = "1.5", default-features = false }

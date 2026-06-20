@@ -7,8 +7,10 @@
 
 extern crate alloc;
 
-// Certified DeModFrame + SuperPack wire quantum (core-only, no_std).
-mod wire;
+// Certified DeModFrame + SuperPack wire quantum, sourced from the portable,
+// host-tested core crate (see `core/`; also provides proto/routing/streamdb,
+// the verified replacements for this file's inline envelope/Dijkstra/trie).
+use dcf_handheld_core::wire;
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -209,6 +211,7 @@ impl Network for DsiNetwork {
 }
 
 #[cfg(feature = "dsi")]
+#[derive(Clone, Copy)]
 struct DsiStorage;
 
 #[cfg(feature = "dsi")]
@@ -443,6 +446,7 @@ impl Network for PspNetwork {
 }
 
 #[cfg(feature = "psp")]
+#[derive(Clone, Copy)]
 struct PspStorage;
 
 #[cfg(feature = "psp")]
@@ -606,11 +610,7 @@ impl Gui for PspGui {
     }
 }
 
-// StreamDB Constants and Types
-const DEFAULT_PAGE_RAW_SIZE: u64 = 512;
-const DEFAULT_PAGE_HEADER_SIZE: u64 = 8;
-const CRC_HASHER: Crc<u32> = Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
-
+// StreamDB Types (page constants are defined once near the top of the file).
 #[derive(Clone, Copy)]
 pub struct Config {
     page_size: u64,
@@ -980,7 +980,7 @@ impl<S: Storage> Database for StreamDb<S> {
 }
 
 // DCF Structures
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct DcfMessage {
     sender: heapless::String<U32>,
     recipient: heapless::String<U32>,
@@ -1152,12 +1152,14 @@ struct DcfFramework<N: Network, S: Storage, G: Gui> {
     reasm: wire::Reassembler,
 }
 
-impl<N: Network, S: Storage, G: Gui> DcfFramework<N, S, G> {
+impl<N: Network, S: Storage + Clone, G: Gui> DcfFramework<N, S, G> {
     fn new(net: N, storage: S, gui: G, config: DcfConfig) -> Self {
-        let db = StreamDb::new(storage);
+        // The StreamDB and the framework each own a storage handle (the DSi/PSP
+        // backends are zero-sized unit structs, so the clone is free).
+        let db = StreamDb::new(storage.clone());
         let mut framework = Self {
             net,
-            storage: config.storage,
+            storage,
             gui,
             config,
             middlewares: heapless::Vec::new(),
@@ -1209,7 +1211,7 @@ impl<N: Network, S: Storage, G: Gui> DcfFramework<N, S, G> {
         if parts.len() >= 3 {
             self.config.node_id = parts[0].clone();
             self.config.peers = parts[1].split(',').map(|s| s.into()).collect();
-            self.config.current_room = parts[2].clone();
+            self.current_room = parts[2].clone(); // current_room lives on the framework, not DcfConfig
         }
         Ok(())
     }

@@ -12,10 +12,12 @@ keywords = ["dcf", "streamdb", "multiplayer", "dsi", "psp"]
 categories = ["embedded", "game-engines", "network-programming"]
 
 [dependencies]
+# Portable, host-tested core (wire/proto/routing/streamdb). See core/.
+dcf-handheld-core = { path = "core" }
 libnds = { git = "https://github.com/oxcabe/libnds-rs", optional = true }
 psp = { git = "https://github.com/overdrivenpotato/rust-psp", optional = true }
-# 0.7 API (heapless::consts / typenum sizes) is what this crate's source uses.
-heapless = "0.7"
+# 0.6 API (heapless::consts / typenum sizes) is what this crate's source uses.
+heapless = "0.6"
 lru = { version = "0.12", default-features = false }
 crc = { version = "3.2", default-features = false }
 byteorder = { version = "1.5", default-features = false }
@@ -24,8 +26,8 @@ byteorder = { version = "1.5", default-features = false }
 cc = "1.0"  # For linking platform-specific C libraries if needed (e.g., custom FFI builds)
 
 [features]
-dsi = ["libnds"]
-psp = ["psp"]
+dsi = ["dep:libnds"]
+psp = ["dep:psp"]
 
 [profile.release]
 opt-level = "z"  # Smallest code size
