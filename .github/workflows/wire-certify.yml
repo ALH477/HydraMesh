@@ -168,8 +168,11 @@ jobs:
             faust -lang c -cn DcfPmCodec codec/faust/dcf_pm_codec.dsp -o /tmp/dcf_pm_faust.c
             diff /tmp/dcf_pm_faust.c codec/faust/dcf_pm_faust.c \
               && echo "Faust C: committed == regenerated"
+            faust -lang c -cn DcfRfModulator codec/faust/dcf_rf_modulator.dsp -o /tmp/dcf_rf_modulator.gen.c
+            diff /tmp/dcf_rf_modulator.gen.c codec/faust/dcf_rf_modulator.gen.c \
+              && echo "Faust RF modulator C: committed == regenerated"
           else
-            echo "faust not installed — skipping PM synthesis regeneration check"
+            echo "faust not installed — skipping Faust regeneration check"
           fi
 
   certify-game:

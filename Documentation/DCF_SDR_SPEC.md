@@ -67,8 +67,10 @@ demod gets 0/20 (`python/tests/test_iq_loopback.py::test_offair_sync`).
 - Synchronization is single-burst and assumes a moderate CFO (≲1% of the sample
   rate) and integer-sample timing; very low SNR, large CFO, fading, or
   back-to-back bursts at speed want a tracking loop (future).
-- A **Faust** IQ modulator (`codec/faust/dcf_rf_modulator.dsp`, committed-codegen)
-  is a planned addition; the numpy renderer is the current functional reference.
+- A **Faust** IQ modulator (`codec/faust/dcf_rf_modulator.dsp` → committed
+  `dcf_rf_modulator.gen.c`, CI diff-checked like the PM synth) is the normative I/Q
+  waveform spec (CPFSK / OOK / QPSK / 16-QAM, 2-output I,Q); the numpy renderer in
+  `python/modem/iq.py` is the functional reference + demodulator.
 
 ## Legal & security
 
