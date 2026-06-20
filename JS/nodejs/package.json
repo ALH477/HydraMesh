@@ -1,22 +1,40 @@
 {
   "name": "@demod/dcf-wire",
   "version": "0.3.0",
-  "description": "DeMoD DCF 17-byte DeModFrame wire codec — certified Node.js binding",
+  "description": "DeMoD DCF 17-byte DeModFrame wire codec + SuperPack + Reed-Solomon FEC — certified Node.js binding",
   "license": "LGPL-3.0-only",
   "author": "DeMoD LLC",
   "main": "src/frame.js",
+  "keywords": [
+    "dcf",
+    "hydramesh",
+    "mesh",
+    "wire-protocol",
+    "codec",
+    "reed-solomon",
+    "fec",
+    "superpack",
+    "crc16",
+    "networking"
+  ],
   "files": [
     "src/frame.js",
-    "src/superpack.js"
+    "src/superpack.js",
+    "src/fec.js"
   ],
   "scripts": {
-    "certify": "node test/certify.js && node test/certify_superpack.js",
+    "certify": "node test/certify.js && node test/certify_superpack.js && node test/certify_fec.js",
     "certify:superpack": "node test/certify_superpack.js",
-    "test": "node test/certify.js && node test/certify_superpack.js"
+    "certify:fec": "node test/certify_fec.js",
+    "test": "node test/certify.js && node test/certify_superpack.js && node test/certify_fec.js"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/ALH477/HydraMesh.git"
+  },
+  "homepage": "https://github.com/ALH477/HydraMesh#readme",
+  "bugs": {
+    "url": "https://github.com/ALH477/HydraMesh/issues"
   },
   "engines": {
     "node": ">=14"

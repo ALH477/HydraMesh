@@ -19,8 +19,12 @@ import sys
 import threading
 import time
 
-# The certified primitives live in python/MCP — pure functions, no deps.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "MCP"))
+# The certified primitives live in MCP — pure functions, no deps. From source MCP is a
+# sibling (../MCP); once packaged it ships nested under dcf (./MCP). Try both.
+for _mcp in (os.path.join(os.path.dirname(__file__), "..", "MCP"),
+             os.path.join(os.path.dirname(__file__), "MCP")):
+    if os.path.isdir(_mcp):
+        sys.path.insert(0, _mcp)
 import meshlab_core as mesh  # noqa: E402
 
 log = logging.getLogger("dcf.mesh")

@@ -34,7 +34,11 @@ from .proto import (
     MSG_POSITION,
 )
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "MCP"))
+# MCP is a sibling from source (../MCP) and nested under dcf once packaged (./MCP).
+for _mcp in (os.path.join(os.path.dirname(__file__), "..", "MCP"),
+             os.path.join(os.path.dirname(__file__), "MCP")):
+    if os.path.isdir(_mcp):
+        sys.path.insert(0, _mcp)
 import meshlab_core as mesh  # noqa: E402
 
 log = logging.getLogger("dcf.wiretap")

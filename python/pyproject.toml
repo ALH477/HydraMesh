@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: LGPL-3.0-only
+# Packaging for the DeMoD Communications Framework (DCF / HydraMesh) Python SDK.
+# Build a wheel:   cd python && python3 -m build
+# Install locally: pip install ./python            (add [grpc] for the gRPC client)
+# Publish:         see RELEASING.md (needs a PyPI token; not run by CI).
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "demod-dcf"
+version = "0.3.0"
+description = "DeMoD Communications Framework (DCF / HydraMesh) — the certified 17-byte wire quantum, a stdlib UDP self-healing mesh node, and a Reed-Solomon-FEC SDR modem (mesh over UDP *or* radio)."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "LGPL-3.0-or-later" }
+authors = [{ name = "DeMoD LLC", email = "demodllc@gmail.com" }]
+keywords = ["mesh", "networking", "udp", "p2p", "sdr", "radio", "reed-solomon", "fec", "protocol", "ham-radio"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Telecommunications Industry",
+  "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Communications :: Ham Radio",
+  "Topic :: System :: Networking",
+]
+dependencies = ["numpy>=1.21"]
+
+[project.optional-dependencies]
+# The gRPC client/master (dcf.client / dcf.master) and config tooling.
+grpc = ["grpcio", "grpcio-tools", "protobuf", "click", "jsonschema", "networkx"]
+
+[project.urls]
+Homepage = "https://github.com/ALH477/HydraMesh"
+Documentation = "https://github.com/ALH477/HydraMesh/tree/main/Documentation"
+Repository = "https://github.com/ALH477/HydraMesh"
+
+[project.scripts]
+# Mesh over radio: frame -> RS-FEC -> IQ -> SoapySDR / .cf32 -> frame.
+dcf-sdr = "dcf.modem.sdr:main"
+# Stdlib UDP self-healing mesh node (interoperates with the Go/C/Rust nodes).
+dcf-node = "dcf_node:main"
+
+[tool.setuptools]
+# dcf_node.py is a top-level script module; the SDR modem + reference codecs ship
+# *under* the dcf package (dcf.modem, dcf.MCP) so their sibling-relative sys.path
+# resolution works identically from-source and once installed.
+py-modules = ["dcf_node"]
+packages = ["dcf", "dcf.modem", "dcf.MCP"]
+
+[tool.setuptools.package-dir]
+"dcf" = "dcf"
+"dcf.modem" = "modem"
+"dcf.MCP" = "MCP"

@@ -202,6 +202,10 @@ gcc -std=c11 -I codec C_SDK/tests/test_audio_certify.c -lm -o /tmp/ac && /tmp/ac
 
 ## Over the air (DCF-SDR + FEC)
 
+![DCF-SDR demo: a frame crosses an RS-FEC + GFSK IQ link to a .cf32 file and back, and FEC corrects byte-errors a CRC can only detect](Documentation/media/dcf-sdr-demo.gif)
+
+*(regenerate with `nix run nixpkgs#vhs -- Documentation/media/dcf-sdr-demo.tape` from `nix develop .#sdr`.)*
+
 HydraMesh isn't tied to IP. The **same 17-byte `DeModFrame`** that meshes over UDP can
 cross **real radio** — two laptops + two ~$25 RTL-SDRs, no internet — because two
 adapters sit under the socket:
