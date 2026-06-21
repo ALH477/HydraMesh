@@ -9,6 +9,7 @@ export interface FrameJson {
   version: number; frame_type: string; seq: number; src: number; dst: number; payload: string; ts_us: number
 }
 export interface UiMessage { from: string; text: string; channel: number }
+export interface UiAudioLevel { dir: 'rx' | 'tx'; src: number; channel: number }
 export interface UiGameSnapshot { src: number; x: number; y: number; channel: number }
 export interface UiGameEvent { src: number; text: string; channel: number }
 
