@@ -69,6 +69,36 @@
             meta.mainProgram = "dcfcpp";
           };
 
+          # C++ node with the Steam-compatible transport on the open
+          # GameNetworkingSockets (BSD-3) — Valve's same ISteamNetworkingSockets API
+          # the Steamworks SDK exposes, so this same dcfcpp recompiles against the
+          # proprietary SDK (DCF_CPP_STEAM, developer-supplied) for SDR relay +
+          # lobbies. `serve-gns` is the dedicated-server hub; `connect-gns` a client.
+          # See Documentation/DCF_STEAM_SPEC.md. NOTE: nixpkgs GNS 1.4.1 ships
+          # without WebRTC/ICE, so internet NAT-punch P2P needs the Steam SDR backend
+          # or a WebRTC-enabled GNS; LAN/direct + hub forwarding work here.
+          dcf-cpp-gns = pkgs.stdenv.mkDerivation {
+            pname = "dcf-cpp-gns";
+            version = "0.3.0";
+            src = self + "/cpp";
+            nativeBuildInputs = [ pkgs.cmake pkgs.pkg-config ];
+            buildInputs = [ pkgs.gamenetworkingsockets pkgs.protobuf pkgs.openssl ];
+            cmakeFlags = [
+              "-DDCF_CPP_GRPC=OFF"
+              "-DDCF_CPP_GNS=ON"
+              "-DDCF_GNS_INCLUDE_DIR=${pkgs.gamenetworkingsockets}/include/GameNetworkingSockets"
+              "-DDCF_GNS_LIB_DIR=${pkgs.gamenetworkingsockets}/lib"
+            ];
+            buildPhase = "cmake --build . --target dcfcpp -j$NIX_BUILD_CORES";
+            installPhase = ''
+              mkdir -p $out/bin
+              cp dcfcpp $out/bin/dcfcpp
+            '';
+            meta.description = "DCF C++ Steam-compatible node (GameNetworkingSockets)";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
+            meta.mainProgram = "dcfcpp";
+          };
+
           # Go SDK — builds the dcfnode CLI (a real UDP DeModFrame node, the Go
           # analogue of the Rust `dcf` binary). The module is stdlib-only (no
           # external deps, no gRPC/proto), so vendorHash = null.
@@ -269,6 +299,22 @@
               Entrypoint = [ "${dcf-cpp}/bin/dcfcpp" ];
               Cmd = [ "serve" ];
               ExposedPorts = { "50051/tcp" = { }; };
+              Labels = { "org.opencontainers.image.source" = "https://github.com/ALH477/HydraMesh"; };
+            };
+          };
+
+          # Steam-compatible dedicated-server image: the GameNetworkingSockets hub.
+          # `nix build .#docker-dcf-gns`. Clients connect with `dcfcpp connect-gns
+          # --peer host:27015`. Steam SDR/lobbies need the developer-supplied
+          # Steamworks build (cpp/Dockerfile.steam), not this hermetic image.
+          docker-dcf-gns = pkgs.dockerTools.buildLayeredImage {
+            name = "alh477/dcf-gns";
+            tag = "latest";
+            contents = [ dcf-cpp-gns pkgs.cacert ];
+            config = {
+              Entrypoint = [ "${dcf-cpp-gns}/bin/dcfcpp" ];
+              Cmd = [ "serve-gns" "--port" "27015" ];
+              ExposedPorts = { "27015/udp" = { }; };
               Labels = { "org.opencontainers.image.source" = "https://github.com/ALH477/HydraMesh"; };
             };
           };

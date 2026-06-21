@@ -300,6 +300,42 @@ Both ship as hermetic Nix node images: `nix build .#docker-dcf-c` /
 `.#docker-dcf-cpp` (entrypoints `dcfnode start` / `dcfcpp serve`); pushed via
 `docker/build-and-push.sh` and exercised by `docker/mesh-interop-test.sh`.
 
+## DCF-Steam (Steam-compatible multiplayer transport)
+
+A **transport** under the wire (not a new format): `dcfcpp` also speaks Valve's
+`ISteamNetworkingSockets` — Steam **P2P** for clients and **dedicated servers** that
+are the Docker containers / runtime. Spec: `Documentation/DCF_STEAM_SPEC.md`.
+
+- **One API, two backends** (same source recompiles): **GNS** — the open
+  GameNetworkingSockets (BSD-3, nixpkgs `gamenetworkingsockets`), default + hermetic,
+  built/tested in CI; **Steamworks** — the proprietary SDK (opt-in, developer-supplied)
+  adds SDR relay, lobbies, server browser. Backends differ in ~6 calls behind
+  `#if DCF_CPP_STEAM`; the send/recv/hub/framing path is shared, so the GNS build
+  exercises the Steam build's wire logic.
+- **Roles:** `dcfcpp serve-gns` / `serve-steam` = dedicated-server **hub** (forwards
+  each DCF frame to the other clients, preserving reliability); `connect-gns
+  --peer host:port` / `connect-steam --peer <identity>` = client/P2P. Transport
+  datagram = `[flags u8][DCF payload]`, bit0 RELIABLE → `k_nSteamNetworkingSend_Reliable`.
+- **Mappings:** DCF-Game `FLAG_RELIABLE`→reliable send; `dst` channel ↔ lobby;
+  `src_id` ↔ SteamID slot (via `GMSG_JOIN`). Transport crypto (GNS/Steam AES) sits
+  **beneath** the codec — the DCF payload stays plaintext (`DCF_SECURITY_EXPOSURE.md`).
+- **References:** `cpp/include/dcf/{transport,net_steam}.hpp`, `cpp/src/net_steam.cpp`,
+  `cpp/src/steam_{gameserver,lobby}.cpp` (`#ifdef DCF_CPP_STEAM`). Image:
+  `nix build .#docker-dcf-gns` (entrypoint `dcfcpp serve-gns`, `27015/udp`); Steam
+  server image `cpp/Dockerfile.steam` (non-hermetic).
+- **Licensing:** GNS is BSD-3 (redistributable). The **Steamworks SDK is proprietary
+  and NOT redistributable** — never commit/vendor it; only `redistributable_bin/`
+  ships in object form; no `steam_appid.txt` in prod. Enforced by `cpp/.gitignore`
+  and a `DCF_CPP_STEAM` CMake warning.
+
+```sh
+nix build .#dcf-cpp-gns        # open backend (hermetic)
+cd cpp && cmake -B build -DDCF_CPP_GRPC=OFF -DDCF_CPP_GNS=ON \
+  -DDCF_GNS_INCLUDE_DIR=$(nix eval --raw nixpkgs#gamenetworkingsockets)/include/GameNetworkingSockets \
+  -DDCF_GNS_LIB_DIR=$(nix eval --raw nixpkgs#gamenetworkingsockets)/lib && \
+  cmake --build build --target dcfcpp && (cd build && ctest -R gns_loopback)
+```
+
 ## Per-language build & test
 
 | Dir | Build | Test |

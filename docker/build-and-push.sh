@@ -22,6 +22,8 @@
 #   dcf-python, dcf-nodejs  — bare DeModFrame + SuperPack/UDP (mesh with each other)
 #   dcf-c                   — also a Faust-DSP modem (send-modem/recv-modem over a medium)
 #   dcf-cpp                 — a gRPC node (bidi MeshStream)
+#   dcf-gns                 — Steam-compatible dedicated server (GameNetworkingSockets
+#                             hub: serve-gns; clients connect-gns). See DCF_STEAM_SPEC.md.
 #
 # Builds run at low priority with capped cores (nice + --cores) so they don't
 # saturate the machine. Set NICE=0 to disable.
@@ -56,6 +58,7 @@ case "$target" in
   dcf-nodejs) build_one dcf-nodejs docker-dcf-nodejs ;;
   dcf-c)      build_one dcf-c      docker-dcf-c ;;
   dcf-cpp)    build_one dcf-cpp    docker-dcf-cpp ;;
+  dcf-gns)    build_one dcf-gns    docker-dcf-gns ;;
   all)
     build_one dcf-go     docker-dcf-go
     build_one dcf-rs     docker-dcf-rust
@@ -63,7 +66,8 @@ case "$target" in
     build_one dcf-nodejs docker-dcf-nodejs
     build_one dcf-c      docker-dcf-c
     build_one dcf-cpp    docker-dcf-cpp
+    build_one dcf-gns    docker-dcf-gns
     ;;
-  *) echo "unknown target: $target (dcf-go|dcf-rs|dcf-python|dcf-nodejs|dcf-c|dcf-cpp|all)"; exit 2 ;;
+  *) echo "unknown target: $target (dcf-go|dcf-rs|dcf-python|dcf-nodejs|dcf-c|dcf-cpp|dcf-gns|all)"; exit 2 ;;
 esac
 echo "DONE"
