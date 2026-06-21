@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: LGPL-3.0-only
+# dcf-codec-wasm — wasm-bindgen surface over the certified `dcf-wire-codec`.
+# The browser owns the DCF protocol (encode / packetize / reassemble / channel)
+# in WebAssembly; only raw datagrams cross to the WS↔UDP bridge. No `opus`/`pm`
+# features (those pull C/FFI and won't target wasm32). Byte-identical to the
+# native codec — see web/certify/certify_wasm.mjs against the golden vectors.
+[package]
+name = "dcf-codec-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "LGPL-3.0-only"
+publish = false
+
+[lib]
+# cdylib → the .wasm; rlib → lets native tooling/tests link it too.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+dcf-wire-codec = { path = "../codec", default-features = false }
+wasm-bindgen = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+
+[profile.release]
+# Small wasm: optimize for size, fat LTO. wasm-opt runs in the build step.
+opt-level = "s"
+lto = true

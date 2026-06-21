@@ -336,6 +336,30 @@ cd cpp && cmake -B build -DDCF_CPP_GRPC=OFF -DDCF_CPP_GNS=ON \
   cmake --build build --target dcfcpp && (cd build && ctest -R gns_loopback)
 ```
 
+## DCF-WASM (browser comms client)
+
+The certified `codec/` compiled to `wasm32` (`codec-wasm/`, a wasm-bindgen
+surface) drives the **same** redesigned comms UI (`client/src/App.vue`, shared via
+an `@ipc` alias) in the browser, delivered as **one self-contained `index.html`**
+(`web/`, base64-inlined wasm). Browsers can't open UDP, so a stateless WS↔UDP
+relay (`web/bridge/`, `dcf-ws-bridge`) carries opaque datagrams to the plaintext
+mesh — the codec runs in the browser, not the bridge. It speaks the bare-frame
+dialect of `JS/nodejs/src/node.js` (frames batched into SuperPacks, rendezvous on
+`dst`): Messages = DCF-Text on the active channel, Arena = DCF-Game on `active^1`,
+Jam = DCF-Audio PCM-diag (CTRL). Host-only Recording/Radio/Opus are gated off via
+`api.capabilities`. Spec: `Documentation/DCF_WASM_SPEC.md`. Deploy behind
+WireGuard (`DCF_SECURITY_EXPOSURE.md`).
+
+```sh
+nix develop .#wasm
+cd web && npm install && npm run build   # → web/dist/index.html (one file)
+npm run certify                          # WASM byte-identical to golden vectors
+cargo run --manifest-path bridge/Cargo.toml -- --listen 127.0.0.1:7000
+```
+
+The WASM links the same `dcf-wire-codec` as the native certs, so it stays
+byte-identical to the 246-vector wire certificate + adapter vectors.
+
 ## Per-language build & test
 
 | Dir | Build | Test |

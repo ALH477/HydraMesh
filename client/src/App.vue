@@ -10,7 +10,12 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { api, on, type UiMessage, type FrameJson, type PeerDetail, type RecordingResult,
-  type UiGameSnapshot, type UiGameEvent, type UiAudioLevel } from './ipc'
+  type UiGameSnapshot, type UiGameEvent, type UiAudioLevel } from '@ipc'
+
+// Transport capabilities — the desktop build has everything; the web/WASM build
+// turns off host-only features (multitrack recording, HLS radio, Opus). The
+// shared shell hides those bits rather than offering dead controls.
+const caps = api.capabilities
 
 // ── navigation ───────────────────────────────────────────────────────────
 type ViewId = 'messages' | 'jam' | 'arena' | 'radio' | 'wire'
@@ -21,6 +26,8 @@ const NAV: { id: ViewId; label: string; glyph: string }[] = [
   { id: 'radio', label: 'Radio', glyph: '❂' },
   { id: 'wire', label: 'Wire', glyph: '⌗' },
 ]
+// Hide nav entries the transport can't serve (Radio is host-only).
+const navItems = computed(() => NAV.filter((it) => it.id !== 'radio' || caps.radio))
 const view = ref<ViewId>('messages')
 
 // ── connection / identity ────────────────────────────────────────────────
@@ -80,6 +87,8 @@ function fmtTime(ts: number) { return new Date(ts).toLocaleTimeString([], { hour
 // ── jam (audio) ──────────────────────────────────────────────────────────
 const jam = reactive({ codec: 'opus', running: false })
 const CODECS = [{ id: 'opus', label: 'Opus' }, { id: 'pcm', label: 'PCM-diag' }, { id: 'pm', label: 'Faust-PM' }]
+// In a transport without host codecs (web/WASM), only PCM-diag is available.
+const codecs = computed(() => CODECS.filter((c) => c.id === 'pcm' || caps.opus))
 // The node emits one audio-level tick per arriving packet (per source). We map
 // each tick to a meter that decays — real signal where there is real traffic.
 const levels = reactive({ self: 0, peers: {} as Record<number, number> })
@@ -255,6 +264,7 @@ watch([() => view.value, () => conn.connected], async ([v, c]) => {
 })
 
 onMounted(async () => {
+  if (!caps.opus && jam.codec !== 'pcm') jam.codec = 'pcm' // web build: PCM-diag only
   await on<UiMessage>('message', (m) => { messages.value.push({ ...m, ts: Date.now(), state: null }); scrollLog() })
   await on<UiAudioLevel>('audio-level', (l) => { if (l.dir === 'tx') levels.self = 1; else levels.peers[l.src] = 1 })
   await on<UiGameSnapshot>('game-snapshot', (s) => { game.others[s.src] = { x: s.x, y: s.y, t: Date.now() } })
@@ -376,7 +386,7 @@ onMounted(async () => {
 
           <!-- nav -->
           <nav class="nav">
-            <button v-for="it in NAV" :key="it.id" class="nav-item" :class="{ on: view === it.id }" @click="view = it.id">
+            <button v-for="it in navItems" :key="it.id" class="nav-item" :class="{ on: view === it.id }" @click="view = it.id">
               <span class="nav-glyph">{{ it.glyph }}</span><span>{{ it.label }}</span>
             </button>
           </nav>
@@ -422,7 +432,7 @@ onMounted(async () => {
               <div class="card">
                 <div class="lbl">// Transport</div>
                 <div class="codec-row">
-                  <button v-for="c in CODECS" :key="c.id" class="codec-btn" :class="{ on: jam.codec === c.id }" @click="jam.codec = c.id">{{ c.label }}</button>
+                  <button v-for="c in codecs" :key="c.id" class="codec-btn" :class="{ on: jam.codec === c.id }" @click="jam.codec = c.id">{{ c.label }}</button>
                 </div>
                 <button class="btn btn-block" :class="jam.running ? 'btn-destructive' : 'btn-primary'" :disabled="!conn.connected" @click="toggleJam">{{ jam.running ? 'Stop jam' : 'Start jam' }}</button>
                 <p v-if="!conn.connected" class="hint">Connect first to open the mic.</p>
@@ -436,7 +446,7 @@ onMounted(async () => {
                 </div>
               </div>
             </div>
-            <div class="card mt">
+            <div v-if="caps.recording" class="card mt">
               <div class="card-head">
                 <div class="lbl">// Multitrack record · sample-synced · ffmpeg on stop</div>
                 <span v-if="recState === 'recording'" class="rec-tick">● REC</span>
@@ -477,7 +487,7 @@ onMounted(async () => {
           </section>
 
           <!-- RADIO -->
-          <section v-else-if="view === 'radio'">
+          <section v-else-if="view === 'radio' && caps.radio">
             <div class="panel-head">
               <div><h2>Radio</h2><p class="sub">Broadcast this mesh as per-channel HLS stations · live + DVR</p></div>
               <span class="badge" :class="radio.on ? 'success' : 'neutral'"><span class="bdot" :class="{ glow: radio.on }" />{{ radio.on ? 'on air' : 'off' }}</span>

@@ -13,7 +13,12 @@ export interface UiAudioLevel { dir: 'rx' | 'tx'; src: number; channel: number }
 export interface UiGameSnapshot { src: number; x: number; y: number; channel: number }
 export interface UiGameEvent { src: number; text: string; channel: number }
 
+// What this transport can do. The desktop app has the host audio/ffmpeg stack,
+// so everything is available; the web build overrides these (see web/src/wasm-ipc.ts).
+export const capabilities = { recording: true, radio: true, opus: true }
+
 export const api = {
+  capabilities,
   connect: (node_id: string, host: string, port: number, peers: PeerArg[]) =>
     invoke<string>('connect', { args: { node_id, host, port, peers } }),
   disconnect: () => invoke<void>('disconnect'),

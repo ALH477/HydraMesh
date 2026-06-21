@@ -1,0 +1,25 @@
+{
+  "name": "hydramesh-web",
+  "private": true,
+  "version": "0.1.0",
+  "license": "LGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "wasm": "wasm-pack build ../codec-wasm --target web --out-dir ../web/src/wasm --out-name dcf_codec_wasm && node scripts/inline-wasm.mjs",
+    "typecheck": "vue-tsc --noEmit",
+    "build": "npm run wasm && vite build",
+    "dev": "vite",
+    "certify": "node certify/certify_wasm.mjs",
+    "test:loopback": "node certify/loopback_test.mjs"
+  },
+  "dependencies": {
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5",
+    "typescript": "^5.4",
+    "vite": "^5",
+    "vite-plugin-singlefile": "^2",
+    "vue-tsc": "^2"
+  }
+}

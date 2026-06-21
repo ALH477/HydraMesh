@@ -5,12 +5,12 @@
     "moduleResolution": "bundler",
     "strict": true,
     "jsx": "preserve",
-    "lib": ["ES2020", "DOM"],
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {
-      "@ipc": ["./src/ipc.ts"]
+      "@ipc": ["./src/wasm-ipc.ts"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.vue"]
+  "include": ["src/**/*.ts", "src/**/*.vue", "../client/src/App.vue"]
 }

@@ -4,12 +4,19 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    # Rust toolchain with the wasm32-unknown-unknown target (for the browser
+    # WASM codec — plain nixpkgs rustc ships host std only). See the `.#wasm` shell.
+    rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs { inherit system; };
+        pkgs = import nixpkgs { inherit system; overlays = [ rust-overlay.overlays.default ]; };
+        # Toolchain with the wasm target bundled in, for codec-wasm + the web build.
+        rustWasm = pkgs.rust-bin.stable.latest.default.override {
+          targets = [ "wasm32-unknown-unknown" ];
+        };
         protobuf = pkgs.protobuf;
         # Shared proto generation function
         generateProtos = lang: outDir: flags: pkgs.runCommand "dcf-protos-${lang}" {} ''
@@ -154,6 +161,22 @@
             meta.description = "DCF Rust SDK node (dcf binary)";
             meta.license = pkgs.lib.licenses.lgpl3Only;
             meta.mainProgram = "dcf";
+          };
+
+          # WS↔UDP bridge for the browser WASM client (web/bridge/). A stateless
+          # relay — it shuttles opaque datagrams; the DCF codec runs in the browser.
+          # Deploy behind WireGuard (the wire is plaintext). See DCF_WASM_SPEC.md.
+          dcf-ws-bridge = pkgs.rustPlatform.buildRustPackage {
+            pname = "dcf-ws-bridge";
+            version = "0.1.0";
+            src = self;
+            cargoRoot = "web/bridge";
+            buildAndTestSubdir = "web/bridge";
+            cargoLock.lockFile = self + "/web/bridge/Cargo.lock";
+            doCheck = false;
+            meta.description = "DCF browser-client WebSocket↔UDP bridge";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
+            meta.mainProgram = "dcf-ws-bridge";
           };
 
           # FFmpeg with the native DCF-Audio demuxer built in. DCF-Audio is an
@@ -496,6 +519,25 @@
               echo "◈ HydraMesh comms client — cd client && npm install && cargo tauri dev"
             '';
             meta.description = "HydraMesh Tauri comms client dev shell";
+          };
+
+          # Browser WASM client (codec-wasm/ + web/) and the WS↔UDP bridge.
+          #   nix develop .#wasm
+          #   (cd web && npm install && npm run build)   # → web/dist/index.html (one file)
+          #   node web/certify/certify_wasm.mjs           # byte-cert vs golden vectors
+          #   cargo run --manifest-path web/bridge/Cargo.toml -- --listen 127.0.0.1:7000
+          wasm = pkgs.mkShell {
+            packages = [
+              rustWasm pkgs.wasm-pack pkgs.wasm-bindgen-cli pkgs.binaryen
+              pkgs.nodejs pkgs.pkg-config
+            ];
+            shellHook = ''
+              echo "◈ HydraMesh WASM shell"
+              echo "  cd web && npm install && npm run build   # single inlined index.html"
+              echo "  npm --prefix web run certify             # cert WASM vs golden vectors"
+              echo "  cargo run --manifest-path web/bridge/Cargo.toml -- --listen 127.0.0.1:7000"
+            '';
+            meta.description = "HydraMesh browser WASM client + WS↔UDP bridge dev shell";
           };
         };
       }

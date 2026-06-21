@@ -146,6 +146,27 @@ jobs:
           cargo test --test certify_mesh
           cargo test --test certify_fec
 
+  certify-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust + wasm target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build the WASM codec
+        run: |
+          wasm-pack build codec-wasm --target web --out-dir ../web/src/wasm --out-name dcf_codec_wasm
+          node web/scripts/inline-wasm.mjs
+
+      - name: Certify WASM is byte-identical to the golden vectors
+        run: node web/certify/certify_wasm.mjs
+
   certify-audio:
     runs-on: ubuntu-latest
     steps:
