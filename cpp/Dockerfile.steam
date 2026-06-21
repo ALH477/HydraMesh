@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: LGPL-3.0-only
+#
+# Steamworks dedicated-server image for dcfcpp (SDR relay + server browser + lobbies).
+# This is NOT hermetic and is NOT a flake output, because the Steamworks SDK is
+# proprietary and may not be redistributed (see Documentation/DCF_STEAM_SPEC.md).
+#
+# ── Steamworks SDK Access Agreement — your obligations ───────────────────────
+#   • You must download the Steamworks SDK yourself under your partner account.
+#   • Do NOT commit/vendor the SDK source. Only the contents of
+#     `redistributable_bin/` (libsteam_api.so, steamclient.so) may ship, in object
+#     form, with the built server — which is exactly what this image bundles.
+#   • Do NOT ship `steam_appid.txt` in a production image (it is for local dev only;
+#     the depot supplies the App ID at runtime). `.gitignore` already excludes both.
+#
+# ── Build (developer-supplied SDK; from the repo root) ───────────────────────
+#   # 1. put the SDK at cpp/steamworks_sdk/ (its `public/` + `redistributable_bin/`)
+#   # 2. build dcfcpp with the Steam backend:
+#   #    cmake -S cpp -B cpp/build-steam -DDCF_CPP_GRPC=OFF -DDCF_CPP_STEAM=ON \
+#   #          -DDCF_STEAMWORKS_SDK=$PWD/cpp/steamworks_sdk
+#   #    cmake --build cpp/build-steam --target dcfcpp
+#   # 3. docker build -f cpp/Dockerfile.steam \
+#   #       --build-arg SDK=cpp/steamworks_sdk -t dcf-steam .
+#
+# ── Run (dedicated server) ───────────────────────────────────────────────────
+#   docker run -e DCF_STEAM_GSLT=<your-login-token> -p 16000:16000/udp dcf-steam \
+#     serve-steam --port 16000 --node-id my-server
+#   # omit DCF_STEAM_GSLT to use anonymous login.
+
+FROM debian:bookworm-slim
+
+ARG SDK=cpp/steamworks_sdk
+ARG BUILD=cpp/build-steam
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libc6 ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Only the redistributable binaries — never the SDK source/headers.
+COPY ${SDK}/redistributable_bin/linux64/ /usr/lib/dcf-steam/
+COPY ${BUILD}/dcfcpp /usr/local/bin/dcfcpp
+
+ENV LD_LIBRARY_PATH=/usr/lib/dcf-steam
+EXPOSE 16000/udp
+ENTRYPOINT ["/usr/local/bin/dcfcpp"]
+CMD ["serve-steam", "--port", "16000"]

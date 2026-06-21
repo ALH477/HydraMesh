@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: LGPL-3.0-only
+#
+# A Steam-compatible DCF dedicated server (the GameNetworkingSockets hub). Clients
+# connect with `dcfcpp connect-gns --peer <host>:27015`. Build the image first:
+#   nix build .#docker-dcf-gns && docker load < result
+# Then:  docker compose -f node/docker-compose.gns.yml up
+#
+# This is the open/hermetic backend (LAN/direct + hub forwarding). For Steam SDR
+# relay + lobbies + server browser, build the developer-supplied Steamworks image
+# (cpp/Dockerfile.steam) instead. See Documentation/DCF_STEAM_SPEC.md.
+services:
+  dcf-gns:
+    image: alh477/dcf-gns:latest
+    hostname: dcf-gns
+    restart: unless-stopped
+    command: ["serve-gns", "--port", "27015", "--node-id", "dcf-gns-hub"]
+    ports:
+      - "27015:27015/udp"   # GameNetworkingSockets (UDP); deploy behind WireGuard
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: "256M" }

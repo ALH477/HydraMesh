@@ -1,0 +1,14 @@
+# Steamworks SDK Access Agreement: the proprietary SDK is NOT redistributable and
+# must never be committed/vendored. Keep developer-supplied SDK + build artifacts
+# out of the repo. Only `redistributable_bin/` may SHIP (in object form) with a
+# built server image — not in source control. See Documentation/DCF_STEAM_SPEC.md.
+steamworks_sdk/
+steamworks-sdk/
+sdk/
+**/steam_appid.txt
+redistributable_bin/
+*.acf
+
+# CMake build trees
+build/
+build-*/
