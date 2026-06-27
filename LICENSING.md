@@ -28,6 +28,15 @@ DeMoD LLC on request. Dual-licensing is currently **scoped to Lua only**. DeMoD 
 copyright holder and may extend dual-licensing to other components in the future; until then,
 the rest of the tree is LGPL-3.0-only.
 
+## HydraModem — LGPL-3.0-only
+
+The [`hydramodem/`](hydramodem/) directory is a self-contained acoustic M-FSK modem that carries
+the 17-byte `DeModFrame` *opaquely* (a transport beneath the wire quantum). It originated as a
+standalone Apache-2.0 release; on integration into this monorepo DeMoD LLC — its sole copyright
+holder — **relicensed it to `LGPL-3.0-only`**, consistent with the rest of the tree
+(`hydramodem/LICENSE`, `hydramodem/NOTICE`). Repo-specific glue under `hydramodem/dcf-tools/`
+carries the standard `LGPL-3.0-only` SPDX header.
+
 ## Export compliance
 
 DCF is **encryption-free by design** to remain outside EAR/ITAR licensing requirements; see

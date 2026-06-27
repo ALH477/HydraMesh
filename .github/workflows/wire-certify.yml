@@ -129,6 +129,28 @@ jobs:
           cmake --build /tmp/cbuild --target dcfnode test_proto_certify test_modulation_certify test_mesh_certify test_modem_loopback test_modem_fec
           ctest --test-dir /tmp/cbuild -R "proto_certify|modulation_certify|mesh_certify|modem_loopback|modem_fec" --output-on-failure
 
+  certify-hydramodem:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: HydraModem — full suite (unit/fuzz/stream/channel/loopback) + sanitizers
+        run: |
+          cd hydramodem
+          make check
+          make asan
+
+      - name: HydraModem — DCF interop (a real DeModFrame survives TX->RX byte-exact)
+        run: |
+          cd hydramodem/dcf-tools
+          ./build.sh
+          ./build/dcf_loopback
+
+      - name: HydraModem — Faust DSP compile-check (only if faust is available)
+        continue-on-error: true
+        run: |
+          if command -v faust >/dev/null 2>&1; then cd hydramodem && make validate; else echo "faust not installed; skipping"; fi
+
   certify-rust:
     runs-on: ubuntu-latest
     steps:

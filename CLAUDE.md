@@ -336,6 +336,39 @@ cd cpp && cmake -B build -DDCF_CPP_GRPC=OFF -DDCF_CPP_GNS=ON \
   cmake --build build --target dcfcpp && (cd build && ctest -R gns_loopback)
 ```
 
+## HydraModem (acoustic M-FSK transport)
+
+A self-contained **C acoustic modem** (`hydramodem/`, LGPL-3.0, DeMoD LLC — relicensed from
+Apache-2.0 on integration) that carries the 17-byte `DeModFrame` over **sound** — a transport *beneath* the wire quantum, like
+UDP/Steam: it transports the frame **opaquely** (never parses it), so the 246-vector wire
+certificate is **untouched**. Its on-air frame is `[preamble][sync 0x2DD4][interleave(conv(
+payload + CRC16))]`; the CRC is the same CRC-16/CCITT-FALSE the tree certifies (anchor `0x29B1`).
+
+It is materially more capable than the toy `C_SDK/node/dcf_modem.h` (16 samples/symbol, no
+acquisition): continuous-phase **M-FSK** (binary default; 4/8/16-ary validated), preamble+sync
+acquisition, **symbol-timing recovery to ±3000 ppm**, soft-Viterbi conv FEC + block interleaver,
+one-shot **and** streaming RX. Two DSP backends behind `src/hydra_dsp.h`: a portable C reference
+(`hydra_dsp_ref.c`, default `make`, zero deps) and the compiled Faust backend (`make faust`).
+The default profile (48 kHz, 1000 baud, tones 2000/3000 Hz) is a **near-field / low-reverb /
+cabled** link. Cross-compiles to RISC-V (StarFive JH7110); runs real-time on one U74 core.
+
+- Upstream sources under `hydramodem/{src,faust,examples,tests,docs}` are unmodified except for
+  the license relicense (LICENSE/NOTICE/README/`faust` header → LGPL-3.0); repo glue lives in
+  `hydramodem/dcf-tools/`: `dcf_loopback.c` (interop — a real
+  `DeModFrame` from `codec/demod_frame.h` survives TX→RX byte-exact, wire CRC valid, all FEC
+  modes), `tx_campaign.c`/`rx_campaign.c` (streaming-RX PER harness keyed by a per-frame
+  counter), and `field-test.sh` (cabled-link PER over two ALSA devices — the `DCF_FIELD_USE.md`
+  **T2** tier, pass = PER < 1% with FEC). Nix: `nix build .#hydramodem`; CI job
+  `certify-hydramodem` in `wire-certify.yml`.
+
+```sh
+cd hydramodem && make check && make asan          # full suite (CRC 0x29B1, FEC, timing, fuzz)
+make validate && make faust-check                 # Faust DSP == reference (needs faust)
+dcf-tools/build.sh && dcf-tools/build/dcf_loopback # DCF interop (byte-exact, wire CRC valid)
+# cabled hardware PER over two interfaces (run per direction):
+dcf-tools/field-test.sh --tx-dev plughw:3,0 --rx-dev plughw:4,0 -n 200 --keep OUT
+```
+
 ## DCF-WASM (browser comms client)
 
 The certified `codec/` compiled to `wasm32` (`codec-wasm/`, a wasm-bindgen

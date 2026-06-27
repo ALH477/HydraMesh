@@ -1,0 +1,157 @@
+//############################### demod_modem.lib ###############################
+// DeMoD Faust Modem Library
+// -----------------------------------------------------------------------------
+// Per-sample DSP for an acoustic M-FSK physical layer that transports HydraMesh
+// DCF frames (17 opaque bytes) over an audio channel (44.1 / 48 kHz).
+//
+// SCOPE (deliberate): this library owns ONLY the continuous, sample-synchronous
+// signal path -- the half of a modem that Faust is good at:
+//
+//     TX:  instantaneous-frequency signal  ->  continuous-phase carrier
+//     RX:  acoustic signal                 ->  per-tone energy (mag^2) bank
+//
+// Everything variable-length / data-dependent / packet-shaped (framing, sync
+// search, bit<->symbol packing, CRC, FEC, the DCF wire format, symbol timing)
+// lives in the C layer (src/). That split is the whole point: Faust cannot
+// express variable-rate output, data-dependent control flow, or true multirate,
+// so we do not try to force it to.
+//
+// The C reference DSP in src/hydra_dsp_ref.c mirrors these functions 1:1, so
+// validating the algorithm in C validates exactly what this library compiles to.
+//
+// DeMoD SKILL notes:
+//   * fi.dcblocker on the TX output (mandated; one biquad, harmless).
+//   * si.smoo on any continuous control parameter (TX gain).
+//   * Pade[3,2] rational-tanh saturator provided as a utility (tanhpade) but
+//     NOT wired into the single-tone TX hot path: a unit-amplitude sine cannot
+//     clip, so saturating it is a measurable no-op. It is here for the optional
+//     summed-preamble / multi-carrier case. (Same judgement the feasibility
+//     report applied to OU LFOs: do not cargo-cult a primitive where it is inert.)
+//   * Compile -double -ftz 2 for deployment (see BUILD.md). Tone correlators and
+//     the phase accumulator want double precision on long runs.
+// -----------------------------------------------------------------------------
+declare name        "DeMoD Modem Library";
+declare version     "0.1.0";
+declare author      "DeMoD LLC";
+declare license     "LGPL-3.0-only";
+declare description "Acoustic M-FSK physical-layer DSP for HydraMesh / DCF transport.";
+
+import("stdfaust.lib");
+
+//==============================================================================
+// 1. PHASE ACCUMULATOR  (the shared core of FM synthesis AND FSK modulation)
+//==============================================================================
+
+//--------------------------------- phase01 ------------------------------------
+// Continuous-phase accumulator. `freq` is an instantaneous-frequency *signal*
+// in Hz (not a constant): it is driven sample-by-sample by the C layer, one
+// frequency value per output sample.
+//
+// Output: normalized phase in [0, 1). Phase stays continuous across abrupt
+// frequency changes -- that continuity is exactly what makes the modulator a
+// *continuous-phase* FSK (CPFSK), which keeps the transmitted spectrum compact.
+//
+// (Structurally identical to os.phasor; inlined here so the library is
+//  self-contained and the C reference can mirror it exactly.)
+phase01(freq) = freq / float(ma.SR) : (+ : ma.decimal) ~ _;
+
+//==============================================================================
+// 2. TRANSMITTER  (instantaneous frequency signal -> carrier sample)
+//==============================================================================
+
+//---------------------------------- cpfsk -------------------------------------
+// Continuous-phase FSK / general FM core. Takes an instantaneous-frequency
+// signal (Hz), returns a unit-amplitude sine. For M-FSK the C layer simply
+// holds `freq` at the active tone for one symbol period; phase continuity is
+// automatic. This single function also IS an FM/PM synthesis oscillator -- the
+// only difference from sound design is the source and index of the modulator.
+cpfsk(freq) = phase01(freq) : *(2.0 * ma.PI) : sin;
+
+//---------------------------------- txout -------------------------------------
+// TX output conditioning: smoothed gain + mandated DC blocker, with headroom.
+// `gain` is a control (0..1). si.smoo de-zippers it; fi.dcblocker removes any
+// residual DC from truncated tone bursts.
+txout(gain) = *(si.smoo(gain)) : fi.dcblocker;
+
+//==============================================================================
+// 3. RECEIVER  (acoustic signal -> per-tone energy bank, non-coherent)
+//==============================================================================
+// Non-coherent quadrature correlator (a.k.a. product detector / I-Q energy
+// detector). For each tone we mix the input against a local sine and cosine at
+// the tone frequency, lowpass each arm (an integrate-and-dump approximation
+// matched to the symbol rate), and return I^2 + Q^2. No carrier recovery is
+// required -- ideal for FSK, and a clean fit for Faust's always-on model.
+//
+// `lpCut` should be ~ baud/2. Local oscillators are built from the same phase
+// accumulator (constant freq) so there is zero dependency on os.* oscillator
+// naming and the C reference can match bit-for-bit in structure.
+
+lo_sin(fc) = phase01(fc) : *(2.0 * ma.PI) : sin;
+lo_cos(fc) = phase01(fc) : *(2.0 * ma.PI) : cos;
+
+//------------------------------- tone_energy ----------------------------------
+// Energy of a single tone at fc (compile-time-constant Hz). 1 input -> 1 output.
+tone_energy(fc, lpCut) = _ <: armI, armQ : magsq
+with {
+    armI  = *(lo_sin(fc)) : fi.lowpass(2, lpCut);
+    armQ  = *(lo_cos(fc)) : fi.lowpass(2, lpCut);
+    magsq(i, q) = i*i + q*q;
+};
+
+//-------------------------------- tonebank ------------------------------------
+// Bank of N tone-energy detectors at base + k*spacing, k in [0, N).
+// 1 input (acoustic) -> N outputs (per-tone mag^2). The C layer reads these N
+// streams and, at each symbol centre, takes argmax -> tone index -> bits.
+//   N, base, spacing, lpCut are all compile-time constants (a fixed profile).
+// Kept for the pure-Faust self-test and simple/legacy hard-decision use.
+tonebank(N, base, spacing, lpCut) =
+    _ <: par(k, N, tone_energy(base + float(k) * spacing, lpCut));
+
+//--------------------------------- tone_iq ------------------------------------
+// Raw quadrature down-conversion for one tone: I = x*cos(2*pi*fc), Q = x*sin.
+// NO lowpass here -- the production receiver does a per-symbol integrate-and-dump
+// in C, which is the matched filter for a rectangular-envelope tone and also
+// rejects the 2*fc image (one symbol spans an integer number of carrier cycles
+// because the tones are integer multiples of the baud). 1 input -> 2 outputs.
+tone_iq(fc) = _ <: (*(lo_cos(fc))), (*(lo_sin(fc)));
+
+//------------------------------- tonebank_iq ----------------------------------
+// Bank of N quadrature down-converters. 1 input -> 2N outputs, interleaved per
+// tone: I_0, Q_0, I_1, Q_1, ..., I_(N-1), Q_(N-1). This is the production RX
+// front end; the C layer integrates each (I,Q) over a symbol on the tracked
+// timing grid to form the non-coherent decision statistic I^2 + Q^2 and the
+// soft per-bit metrics fed to the Viterbi decoder.
+tonebank_iq(N, base, spacing) =
+    _ <: par(k, N, tone_iq(base + float(k) * spacing));
+
+//==============================================================================
+// 4. UTILITIES
+//==============================================================================
+
+//-------------------------------- tanhpade ------------------------------------
+// Pade[3,2] rational approximation of tanh, odd, accurate on roughly [-3, 3].
+// Coefficients from matching the tanh Taylor series:
+//   tanh(x) ~ x*(1 + x^2/15) / (1 + (2/5)x^2)
+// Input is clamped to the accurate region; output clamped to [-1, 1] so the
+// slight edge overshoot of the [3,2] form cannot exceed full scale. Provided as
+// a building block for optional drive / summed-signal limiting (NOT in the
+// default single-tone TX path, where it would be inert).
+tanhpade(x) = num / den : max(-1.0) : min(1.0)
+with {
+    xc  = max(-3.0, min(3.0, x));
+    x2  = xc * xc;
+    num = xc * (1.0 + x2 / 15.0);
+    den = 1.0 + 0.4 * x2;
+};
+
+//---------------------------------- agc ---------------------------------------
+// Simple feed-forward AGC: normalize toward unit RMS with a one-pole envelope.
+// `tau` is the averaging time constant in seconds. Useful ahead of the RX
+// tonebank when input level is unknown (acoustic distance varies). Stateless
+// branches only; safe under Faust strict evaluation.
+agc(tau) = _ <: _, env : gainstage
+with {
+    a       = exp(-1.0 / (tau * float(ma.SR)));
+    env     = abs : (\(x, y).(a*y + (1.0 - a)*x)) ~ _ : max(ma.EPSILON);
+    gainstage(sig, e) = sig / e;
+};

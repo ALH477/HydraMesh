@@ -390,6 +390,25 @@
             meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 
+          # HydraModem — acoustic M-FSK modem for the 17-byte DCF frame (LGPL-3.0,
+          # relicensed from Apache-2.0 on integration). Plain Makefile, zero deps
+          # (portable reference DSP); `make check` runs the full suite.
+          hydramodem = pkgs.stdenv.mkDerivation {
+            pname = "hydramodem";
+            version = "1.0.0";
+            src = self;
+            buildPhase = ''
+              runHook preBuild
+              make -C hydramodem -j''${NIX_BUILD_CORES:-2}
+              runHook postBuild
+            '';
+            doCheck = true;
+            checkPhase = "make -C hydramodem check";
+            installPhase = "make -C hydramodem PREFIX=$out install";
+            meta.description = "HydraModem — acoustic M-FSK modem for the 17-byte HydraMesh/DCF frame";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
+          };
+
           # Docs
           dcf-docs = pkgs.stdenv.mkDerivation {
             pname = "dcf-docs";
