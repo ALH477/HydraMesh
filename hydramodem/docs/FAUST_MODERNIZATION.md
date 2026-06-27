@@ -45,6 +45,28 @@ C reference:
 - **Over the cable:** the Faust backend ran A→B on the two-interface rig at
   **200/200 frames, PER 0.00%** — identical to the reference run.
 
+## Prior art & honest novelty
+
+HydraModem is **not** the first Faust modem, and we don't claim it is. The Faust
+authors themselves (GRAME-CNCM / CCRMA — Michon, Orlarey, Letz, Fober) published a
+**Bell 202 audio-FSK modem with both modulator and demodulator written in Faust**,
+hardware-verified, carrying UART data frames: *"Comparison and Implementation of
+Data Transmission Techniques Through Analog Audio Signals in the Context of
+Augmented Mobile Instruments,"* SMC-19, Málaga, 2019
+(https://www.smc2019.uma.es/articles/S3/S3_01_SMC2019_paper.pdf). Faust SDR
+demodulators also predate us (e.g. dazdsp.org, since 2018). So "first Faust modem /
+PHY / demodulator" would be an overclaim.
+
+What is defensible (building on, not first): a **continuous-phase M-FSK** modem
+whose entire per-sample PHY in Faust is a **non-coherent quadrature
+integrate-and-dump tone-correlator demodulator bank** (plus CPFSK modulator),
+compiled via `faust -lang c -os`, paired with a C packet layer (CRC-16,
+convolutional FEC, interleaving, soft-decision Viterbi) and verified at 0% packet
+error over real audio hardware. The GRAME 2019 demod used zero-crossing /
+cross-correlation; we use a correlator-bank receiver and add an FEC-protected
+framing stack. Use "to our knowledge, the first openly documented Faust
+non-coherent quadrature correlator-bank M-FSK receiver" only with the hedge.
+
 ## What broke on Faust >= 2.83 (historical — now handled)
 
 Before the modernization below, Faust **>= 2.83** broke the backend in two
