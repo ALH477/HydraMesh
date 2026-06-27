@@ -1,0 +1,50 @@
+cff-version: 1.2.0
+message: "If you use HydraModem or the DCF / HydraMesh framework, please cite it."
+title: "HydraModem: a Faust-authored acoustic M-FSK physical layer for a certified mesh-protocol frame"
+abstract: >-
+  An acoustic physical layer that carries the 17-byte DeModFrame of the DCF / HydraMesh
+  protocol over sound. The per-sample DSP (a continuous-phase M-FSK modulator and a
+  non-coherent quadrature integrate-and-dump tone-correlator demodulator bank) is authored
+  in Faust and compiled to C; the packet layer (CRC-16, K=7 r=1/2 convolutional FEC with
+  soft-decision Viterbi, a block interleaver, acquisition, and symbol-timing recovery) is in
+  C. A transport beneath the DCF wire quantum, validated at 0% packet error over real audio
+  hardware.
+type: software
+version: "1.0.0"
+date-released: 2026-06-27
+license: LGPL-3.0-only
+repository-code: "https://github.com/ALH477/HydraMesh"
+# DOI is assigned by Zenodo on first archive; paste it back here as `doi:` and in `identifiers`.
+# doi: 10.5281/zenodo.XXXXXXX
+authors:
+  - given-names: Asher
+    family-names: LeRoy
+    affiliation: "DeMoD LLC"
+    email: demodllc@gmail.com
+    orcid: "https://orcid.org/0009-0006-5842-4975"
+  - name: "DeMoD LLC"
+keywords:
+  - Faust
+  - acoustic modem
+  - M-FSK
+  - software-defined radio
+  - data over sound
+  - mesh networking
+  - DCF
+  - HydraMesh
+references:
+  - type: conference-paper
+    title: "Comparison and Implementation of Data Transmission Techniques Through Analog Audio Signals in the Context of Augmented Mobile Instruments"
+    authors:
+      - given-names: Romain
+        family-names: Michon
+      - given-names: Yann
+        family-names: Orlarey
+      - given-names: "Stéphane"
+        family-names: Letz
+      - given-names: Dominique
+        family-names: Fober
+    year: 2019
+    conference:
+      name: "Sound and Music Computing Conference (SMC-19)"
+    url: "https://www.smc2019.uma.es/articles/S3/S3_01_SMC2019_paper.pdf"
