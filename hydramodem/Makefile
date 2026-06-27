@@ -32,7 +32,11 @@ INCLUDEDIR ?= $(PREFIX)/include
 PKGDIR     ?= $(LIBDIR)/pkgconfig
 
 FAUST      ?= faust
-FAUSTFLAGS ?= -lang c -os -double -ftz 2
+# NB: no `-ftz 2` — Faust >= 2.83 emits malformed C for the denormal-flush
+# bit-cast under `-os`; the reference DSP doesn't flush denormals (it's the
+# numeric reference), so dropping it keeps TX/RX byte-equivalent and lets the
+# adapters build across Faust 2.72..2.85. See docs/FAUST_MODERNIZATION.md.
+FAUSTFLAGS ?= -lang c -os -double
 FAUST_INC  ?= /usr/include          # location of faust/gui/CInterface.h
 
 # version is single-sourced from src/hydramodem.h (HYDRAMODEM_VERSION) so the

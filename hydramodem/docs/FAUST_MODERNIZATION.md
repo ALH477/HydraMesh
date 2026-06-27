@@ -11,13 +11,14 @@ are two backends behind `src/hydra_dsp.h`:
 - **`hydra_dsp_faust_{tx,rx}.c`** — thin adapters over `faust -lang c -os` output,
   the deployment path (`make faust`). Byte-identical to the reference in loopback.
 
-## Current state — pinned to Faust 2.72.14
+## Current state — version-tolerant (Faust 2.72 – 2.85)
 
 The Faust backend builds and passes `make faust-check` (clean loopback, full AWGN
-sweep, timing recovery) on **Faust 2.72.14**, pinned via the `nixpkgs-faust`
-input (nixos-24.05) in the repo `flake.nix`. This is the nearest binary-cached
-release to the **2.70.x** the adapters were written against (`BUILD.md` says
-"2.70.x or newer"); the 2.70–2.74 series share the same `-os` (one-sample) ABI.
+sweep, timing recovery) on **Faust 2.72.14, 2.83.1, and 2.85.5** from one source
+(see "Modernization → Faust 2.85 — DONE" below). The hermetic
+`nix build .#hydramodem-faust` uses a **pinned Faust 2.72.14** (via the
+`nixpkgs-faust` input, nixos-24.05) purely for a *reproducible, binary-cached*
+build — not because newer Faust is unsupported.
 
 Build it hermetically or interactively:
 
@@ -44,10 +45,10 @@ C reference:
 - **Over the cable:** the Faust backend ran A→B on the two-interface rig at
   **200/200 frames, PER 0.00%** — identical to the reference run.
 
-## Why not Faust 2.85 (the version on current dev machines)
+## What broke on Faust >= 2.83 (historical — now handled)
 
-Faust **>= 2.85** breaks the backend in two independent ways. Both were observed
-with Faust 2.85.5:
+Before the modernization below, Faust **>= 2.83** broke the backend in two
+independent ways (observed on 2.83.1 and 2.85.5):
 
 1. **`-ftz 2` codegen bug.** The denormal-flush idiom emits malformed C — the
    `int64_t` bit-cast of the sample is mis-parenthesized:
@@ -66,29 +67,40 @@ with Faust 2.85.5:
    (control folded in), so `hydra_dsp_faust_{tx,rx}.c`'s 5-arg calls no longer
    match.
 
-## Modernization plan → Faust 2.85
+## Modernization → Faust 2.85 — DONE
 
-Target: the Faust backend builds and stays byte-identical to the C reference on
-current Faust, without losing the 2.72 path until the new one is proven.
+The backend is now **version-tolerant across Faust 2.72 – 2.85** from a single
+source. Verified green (`make faust-check`, full clean/AWGN/clock-offset suite)
+on **2.72.14, 2.83.1, and 2.85.5**.
 
-1. **Adapt to the new `-os` ABI.** Update `hydra_dsp_faust_{tx,rx}.c` to the
-   2.85 `compute(dsp, count, inputs, outputs)` shape, folding the control-rate
-   precompute (formerly `control<class>()` + separate `iControl/fControl`) into
-   the new calling convention. Keep the TX warm-up that lets `si.smoo` /
-   `fi.dcblocker` settle before the preamble.
-2. **Resolve `-ftz`.** Check whether a 2.85 point release fixes the bitcast; if
-   not, drop `-ftz 2` (the reference DSP does not flush denormals and is the
-   numeric reference anyway) or substitute a supported denormal flag, and confirm
-   no audible/loopback difference.
-3. **Re-validate.** `make faust-check` green on 2.85, and a byte-diff of Faust vs
-   reference output over the loopback vectors. The C reference remains the
-   certified path; the Faust build must match it, not the other way around.
-4. **Make the adapter version-tolerant** (optional): detect the `-os` signature
-   at build time (a configure probe or a small `#if` on `FAUSTVERSION`) so one
-   adapter supports both the 2.70–2.74 and >=2.85 ABIs.
-5. **Bump the pin.** Once the adapter supports 2.85, move `nixpkgs-faust` to a
-   nixpkgs that ships it (or drop the pin and use the default `nixpkgs`), and
-   delete this interim note's "pinned to 2.72.14" framing.
+What changed:
 
-Until step 5 lands, the pin is the supported configuration and the C reference is
-the default everywhere else.
+1. **Version-tolerant adapters.** `hydra_dsp_faust_{tx,rx}.c` pick the call
+   convention at compile time off a macro the generated file emits only in the
+   old ABI:
+   ```c
+   #if defined(FAUST_REAL_CONTROLS)      /* <= 2.74 */
+       controlhydratx(dsp, ic, fc);  computehydratx(dsp, &in, &out, ic, fc);
+   #else                                 /* >= 2.83 */
+       framehydratx(dsp, &in, &out);     /* control folded in; no control fn */
+   #endif
+   ```
+   The control arrays and the `control*()` call exist only on the old path; the
+   TX warm-up (settling `si.smoo` / `fi.dcblocker`) is preserved on both.
+2. **Dropped `-ftz 2`.** The Makefile no longer passes it — it produced the
+   malformed bit-cast on >= 2.83, and the C reference doesn't flush denormals
+   (it is the numeric reference), so removing it keeps TX/RX byte-equivalent and
+   builds cleanly on every version. (No supported per-version denormal flag is
+   needed at 48 kHz voice-band.)
+3. **Re-validated.** Loopback green on all three Faust versions; the Faust TX is
+   tone-for-tone identical to the C reference and cross-decodes with it both ways
+   (see "Verified equivalence" above). The C reference remains the certified path.
+
+### Remaining (optional) follow-ups
+
+- **Bump / drop the pin.** `nixpkgs-faust` (2.72.14) is now kept only for a
+  *reproducible, binary-cached* hermetic build — no longer a necessity. It can be
+  bumped to a nixpkgs shipping a newer Faust, or dropped in favour of the default
+  `nixpkgs`, whenever a cached modern Faust is preferred.
+- If a future Faust changes the `-os` ABI again, extend the `#if` with the next
+  discriminator macro; the seam is already in place.

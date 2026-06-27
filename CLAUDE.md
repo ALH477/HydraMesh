@@ -365,10 +365,12 @@ cabled** link. Cross-compiles to RISC-V (StarFive JH7110); runs real-time on one
 
 The DSP is **authored in Faust** (`faust/*.dsp` + `demod_modem.lib` are normative);
 the default `make` ships the byte-identical C reference (`hydra_dsp_ref.c`). The
-**compiled-Faust** backend needs the 2.70.x-era `-os` ABI — pinned to **Faust
-2.72.14** via the `nixpkgs-faust` flake input (Faust ≥ 2.85 broke it). Build/verify
-the real Faust DSP with `nix build .#hydramodem-faust` or `nix develop
-.#hydramodem-faust && cd hydramodem && make faust-check`. Migration plan to 2.85:
+**compiled-Faust** backend's adapters are **version-tolerant across Faust 2.72–2.85**
+(`#if FAUST_REAL_CONTROLS` picks the old `control`+`compute` vs new `frame` `-os`
+ABI; the buggy `-ftz 2` flag is dropped) — verified green on 2.72.14 / 2.83.1 /
+2.85.5. Build/verify with `nix build .#hydramodem-faust` (hermetic, pinned Faust
+2.72.14 for a cached reproducible build) or `nix develop .#hydramodem-faust && cd
+hydramodem && make faust-check` (uses whatever Faust is on PATH). Details:
 `hydramodem/docs/FAUST_MODERNIZATION.md`.
 
 ```sh

@@ -7,10 +7,10 @@
     # Rust toolchain with the wasm32-unknown-unknown target (for the browser
     # WASM codec — plain nixpkgs rustc ships host std only). See the `.#wasm` shell.
     rust-overlay.url = "github:oxalica/rust-overlay";
-    # Pinned Faust for HydraModem's compiled-Faust DSP backend. nixos-24.05 ships
-    # Faust 2.72.14 — the nearest binary-cached release to the 2.70.x the adapters
-    # target, sharing the same `-os` (one-sample) ABI. Faust >= 2.85 changed that
-    # ABI and breaks the backend; see hydramodem/docs/FAUST_MODERNIZATION.md.
+    # Pinned Faust for a reproducible, binary-cached compiled-Faust build of
+    # HydraModem (nixos-24.05 ships Faust 2.72.14). The adapters are version-
+    # tolerant across Faust 2.72–2.85, so this pin is for determinism, not
+    # necessity; see hydramodem/docs/FAUST_MODERNIZATION.md.
     nixpkgs-faust.url = "github:NixOS/nixpkgs/nixos-24.05";
   };
 
@@ -18,8 +18,9 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; overlays = [ rust-overlay.overlays.default ]; };
-        # Faust 2.72.14 (nixos-24.05) — the 2.70.x-era `-os` ABI HydraModem's
-        # Faust DSP adapters were written against. See FAUST_MODERNIZATION.md.
+        # Faust 2.72.14 (nixos-24.05) — a cached, reproducible Faust for the
+        # compiled-Faust build. The adapters also build on 2.83/2.85 (the build
+        # is version-tolerant); this pin just fixes a known-good cached toolchain.
         faust270 = (import nixpkgs-faust { inherit system; }).faust;
         # Toolchain with the wasm target bundled in, for codec-wasm + the web build.
         rustWasm = pkgs.rust-bin.stable.latest.default.override {
