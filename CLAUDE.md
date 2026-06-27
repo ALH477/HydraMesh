@@ -363,9 +363,17 @@ cabled** link. Cross-compiles to RISC-V (StarFive JH7110); runs real-time on one
   `nix build .#hydramodem`; CI job
   `certify-hydramodem` in `wire-certify.yml`.
 
+The DSP is **authored in Faust** (`faust/*.dsp` + `demod_modem.lib` are normative);
+the default `make` ships the byte-identical C reference (`hydra_dsp_ref.c`). The
+**compiled-Faust** backend needs the 2.70.x-era `-os` ABI — pinned to **Faust
+2.72.14** via the `nixpkgs-faust` flake input (Faust ≥ 2.85 broke it). Build/verify
+the real Faust DSP with `nix build .#hydramodem-faust` or `nix develop
+.#hydramodem-faust && cd hydramodem && make faust-check`. Migration plan to 2.85:
+`hydramodem/docs/FAUST_MODERNIZATION.md`.
+
 ```sh
 cd hydramodem && make check && make asan          # full suite (CRC 0x29B1, FEC, timing, fuzz)
-make validate && make faust-check                 # Faust DSP == reference (needs faust)
+nix build .#hydramodem-faust                       # compiled Faust DSP == reference (pinned Faust 2.72.14)
 dcf-tools/build.sh && dcf-tools/build/dcf_loopback # DCF interop (byte-exact, wire CRC valid)
 # cabled hardware PER over two interfaces (run per direction):
 dcf-tools/field-test.sh --tx-dev plughw:3,0 --rx-dev plughw:4,0 -n 200 --keep OUT

@@ -1,6 +1,7 @@
 # build output
 /build/
 dcf-tools/build/
+dcf-tools/build-faust/
 *.o
 *.a
 *.so

@@ -7,12 +7,20 @@
     # Rust toolchain with the wasm32-unknown-unknown target (for the browser
     # WASM codec — plain nixpkgs rustc ships host std only). See the `.#wasm` shell.
     rust-overlay.url = "github:oxalica/rust-overlay";
+    # Pinned Faust for HydraModem's compiled-Faust DSP backend. nixos-24.05 ships
+    # Faust 2.72.14 — the nearest binary-cached release to the 2.70.x the adapters
+    # target, sharing the same `-os` (one-sample) ABI. Faust >= 2.85 changed that
+    # ABI and breaks the backend; see hydramodem/docs/FAUST_MODERNIZATION.md.
+    nixpkgs-faust.url = "github:NixOS/nixpkgs/nixos-24.05";
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay, nixpkgs-faust }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; overlays = [ rust-overlay.overlays.default ]; };
+        # Faust 2.72.14 (nixos-24.05) — the 2.70.x-era `-os` ABI HydraModem's
+        # Faust DSP adapters were written against. See FAUST_MODERNIZATION.md.
+        faust270 = (import nixpkgs-faust { inherit system; }).faust;
         # Toolchain with the wasm target bundled in, for codec-wasm + the web build.
         rustWasm = pkgs.rust-bin.stable.latest.default.override {
           targets = [ "wasm32-unknown-unknown" ];
@@ -409,6 +417,35 @@
             meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 
+          # HydraModem built on the COMPILED FAUST DSP backend (not the C
+          # reference). Uses pinned Faust 2.72.14 (2.70.x-era `-os` ABI). The
+          # build runs `make faust-check`, so success means the real Faust DSP
+          # passed the loopback. See hydramodem/docs/FAUST_MODERNIZATION.md.
+          hydramodem-faust = pkgs.stdenv.mkDerivation {
+            pname = "hydramodem-faust";
+            version = "1.0.0";
+            src = self;
+            nativeBuildInputs = [ faust270 ];
+            buildPhase = ''
+              runHook preBuild
+              make -C hydramodem faust \
+                FAUST=${faust270}/bin/faust FAUST_INC=${faust270}/include \
+                -j''${NIX_BUILD_CORES:-2}
+              runHook postBuild
+            '';
+            doCheck = true;
+            checkPhase = ''
+              make -C hydramodem faust-check \
+                FAUST=${faust270}/bin/faust FAUST_INC=${faust270}/include
+            '';
+            installPhase = ''
+              mkdir -p $out/lib
+              cp hydramodem/build/libhydramodem_faust.a $out/lib/
+            '';
+            meta.description = "HydraModem on the compiled Faust DSP backend (Faust 2.72.14)";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
+          };
+
           # Docs
           dcf-docs = pkgs.stdenv.mkDerivation {
             pname = "dcf-docs";
@@ -505,6 +542,20 @@
               echo "◈ DCF-SDR shell — dcf-sdr tx/rx; .cf32 <-> rtl_sdr / hackrf_transfer"
             '';
             meta.description = "DCF SDR/RF dev shell (FEC modem + SoapySDR)";
+          };
+
+          # HydraModem with the compiled-Faust DSP toolchain (pinned Faust
+          # 2.72.14). FAUST_INC is exported so `make faust` / `make faust-check`
+          # in hydramodem/ build the real Faust backend out of the box.
+          hydramodem-faust = pkgs.mkShell {
+            packages = [ faust270 pkgs.gcc pkgs.gnumake ];
+            shellHook = ''
+              export FAUST=${faust270}/bin/faust
+              export FAUST_INC=${faust270}/include
+              echo "◈ HydraModem Faust shell — $(${faust270}/bin/faust --version | head -1)"
+              echo "  cd hydramodem && make faust-check    # build+run the compiled Faust DSP"
+            '';
+            meta.description = "HydraModem compiled-Faust DSP shell (Faust 2.72.14)";
           };
 
           lisp = pkgs.mkShell {
