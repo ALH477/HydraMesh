@@ -18,6 +18,22 @@
         "type": "github"
       }
     },
+    "janus-c-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1708038105,
+        "narHash": "sha256-vFW8996z+FCCihlq/sieokqQXf6qaewL6rwhPQ89V68=",
+        "owner": "mission-systems-pty-ltd",
+        "repo": "janus-c",
+        "rev": "65f6c54065a9f6a359be99749e6a90631c3d7d9d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "mission-systems-pty-ltd",
+        "repo": "janus-c",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1767640445,
@@ -69,6 +85,7 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
+        "janus-c-src": "janus-c-src",
         "nixpkgs": "nixpkgs",
         "nixpkgs-faust": "nixpkgs-faust",
         "rust-overlay": "rust-overlay"

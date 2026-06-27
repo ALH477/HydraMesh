@@ -13,7 +13,10 @@ on overflow a drop policy sheds bulk while keeping priority (control/mesh) frame
 buffer is the heart of making heterogeneous shapes work.
 """
 import os
+import re
+import shutil
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -402,3 +405,109 @@ class SdrTransport(_DirMedium):
         sig = _iqmod.read_cf32(path)
         r = _iqmod.iq_to_frame(sig, mod=self._mod, sps=self._sps)
         return r[0] if r else None
+
+
+# ── JANUS (NATO STANAG 4748) acoustic transport ───────────────────────────────
+# The 17-byte DeModFrame rides as JANUS *cargo*, hex-encoded so arbitrary binary
+# survives a CLI argument. We shell out to the GPL-3.0 janus-c reference
+# (janus-tx/janus-rx) as a SEPARATE PROCESS — never linked — so this LGPL library
+# is unaffected (mere aggregation, like the existing pw-play/ffmpeg calls). The
+# reference encoder/decoder make the waveform STANAG-4748-compliant by
+# construction. See Documentation/DCF_JANUS_SPEC.md and LICENSING.md.
+
+# "Cargo (ASCII)" prints our hex string in quotes; "Payload" prints it bare.
+_JANUS_CARGO_RE = re.compile(r'Cargo \(ASCII\)\s*:\s*"([0-9a-fA-F]*)"')
+_JANUS_PAYLOAD_RE = re.compile(r'Payload\s*:\s*([0-9a-fA-F]+)')
+
+
+def janus_available():
+    """True iff the GPL janus-c binaries are reachable (PATH or $JANUS_TX/$JANUS_RX)."""
+    tx = os.environ.get("JANUS_TX") or shutil.which("janus-tx")
+    rx = os.environ.get("JANUS_RX") or shutil.which("janus-rx")
+    return bool(tx and rx)
+
+
+def _janus_share(tx_bin, *parts):
+    """A path under the reference's installed share dir (../share/janus/... from bin)."""
+    base = os.path.dirname(os.path.dirname(os.path.realpath(tx_bin)))
+    return os.path.join(base, "share", "janus", *parts)
+
+
+def _janus_default_pset(tx_bin):
+    """The reference installs parameter_sets.csv next to its bin (../share/janus/etc)."""
+    cand = _janus_share(tx_bin, "etc", "parameter_sets.csv")
+    return cand if os.path.isfile(cand) else None
+
+
+def _janus_env(tx_bin, plugins_dir=None):
+    """Cargo (the codec plugins) is loaded by janus-c via dlopen on a bare name, so the
+    plugins dir must be on LD_LIBRARY_PATH. Default to ../share/janus/plugins from the bin."""
+    pdir = plugins_dir or os.environ.get("JANUS_PLUGINS") or _janus_share(tx_bin, "plugins")
+    env = dict(os.environ)
+    if os.path.isdir(pdir):
+        env["LD_LIBRARY_PATH"] = pdir + os.pathsep + env.get("LD_LIBRARY_PATH", "")
+    return env
+
+
+def _janus_parse_cargo(stdout):
+    m = _JANUS_CARGO_RE.search(stdout) or _JANUS_PAYLOAD_RE.search(stdout)
+    if not m:
+        return None
+    h = m.group(1).strip()[: FRAME_LEN * 2]   # cargo is null-padded to a multiple of 8
+    try:
+        b = bytes.fromhex(h)
+    except ValueError:
+        return None
+    return b if len(b) == FRAME_LEN else None
+
+
+class JanusTransport(_DirMedium):
+    """Carry frames over a STANAG-4748 (JANUS) acoustic link via the GPL janus-c
+    reference. Default profile: parameter set 1 (Initial JANUS band, 11520 Hz
+    center / 4160 Hz BW) rendered at 48 kHz. Raises at construction if janus-c is
+    not installed (it is an optional GPL dependency — `nix build .#janus-c`)."""
+
+    EXT = ".wav"
+
+    def __init__(self, name="janus", pset_id=1, fs=48000, pset_file=None,
+                 tx_bin=None, rx_bin=None, class_id=None, app_type=None,
+                 rate_bps=80, **kw):
+        super().__init__(name, rate_bps=rate_bps, **kw)
+        self._tx = tx_bin or os.environ.get("JANUS_TX") or shutil.which("janus-tx")
+        self._rx = rx_bin or os.environ.get("JANUS_RX") or shutil.which("janus-rx")
+        if not self._tx or not self._rx:
+            raise RuntimeError(
+                "janus-c not found: need janus-tx/janus-rx on PATH or $JANUS_TX/$JANUS_RX. "
+                "Install the GPL-3.0 reference (e.g. `nix build .#janus-c` or "
+                "`nix develop .#janus`). See Documentation/DCF_JANUS_SPEC.md")
+        self._pset_id, self._fs = str(pset_id), str(fs)
+        self._pset = pset_file or os.environ.get("JANUS_PSET") or _janus_default_pset(self._tx)
+        self._class_id, self._app_type = class_id, app_type
+        self._env = _janus_env(self._tx)   # plugins dir on LD_LIBRARY_PATH (cargo codec)
+
+    def _common(self):
+        a = ["--pset-id", self._pset_id, "--stream-fs", self._fs,
+             "--stream-driver", "wav"]
+        if self._pset:
+            a += ["--pset-file", self._pset]
+        return a
+
+    def _encode_file(self, frame, path):
+        cmd = [self._tx, *self._common(), "--stream-driver-args", path,
+               "--packet-cargo", bytes(frame).hex()]
+        if self._class_id is not None:
+            cmd += ["--packet-class-id", str(self._class_id)]
+        if self._app_type is not None:
+            cmd += ["--packet-app-type", str(self._app_type)]
+        subprocess.run(cmd, check=True, env=self._env, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=60)
+
+    def _decode_file(self, path):
+        # --verbose makes janus-rx print the recovered cargo (on stderr).
+        cmd = [self._rx, *self._common(), "--stream-driver-args", path, "--verbose", "1"]
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True,
+                                 env=self._env, timeout=60)
+        except subprocess.TimeoutExpired:
+            return None
+        return _janus_parse_cargo(res.stdout + res.stderr)

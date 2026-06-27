@@ -112,7 +112,15 @@ class TestTransports(unittest.TestCase):
         finally:
             tx.stop(); rx.stop()
 
-    def _dir_roundtrip(self, cls, kw):
+    def test_janus_dir_roundtrip(self):
+        # STANAG-4748 via the GPL janus-c reference (optional dep). The 17-byte
+        # frame rides as JANUS cargo; subprocess encode+decode is slow, so allow
+        # a generous timeout.
+        if not T.janus_available():
+            self.skipTest("janus-c (janus-tx/janus-rx) not installed")
+        self._dir_roundtrip(T.JanusTransport, {}, timeout=40.0)
+
+    def _dir_roundtrip(self, cls, kw, timeout=3.0):
         d = tempfile.mkdtemp()
         link = os.path.join(d, "link")
         rx = cls("rx", in_dir=link, **kw)
@@ -122,7 +130,7 @@ class TestTransports(unittest.TestCase):
         tx.start(lambda f, m: None)
         try:
             tx.send(FRAME)
-            self._wait(lambda: got, 3.0)
+            self._wait(lambda: got, timeout)
             self.assertEqual(got[0], FRAME)
         finally:
             tx.stop(); rx.stop()

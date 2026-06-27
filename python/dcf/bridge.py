@@ -167,7 +167,8 @@ def _demo():
 
 # ── CLI: compose a node's shape from transports ───────────────────────────────
 def _make_transport(spec):
-    from .transport import UdpTransport, AudioTransport, SdrTransport, FileTransport
+    from .transport import (UdpTransport, AudioTransport, SdrTransport, FileTransport,
+                            JanusTransport)
     typ, _, rest = spec.partition(":")
     kw = dict(kv.split("=", 1) for kv in rest.split(",") if kv) if rest else {}
     name = kw.pop("name", typ)
@@ -182,9 +183,16 @@ def _make_transport(spec):
     if typ == "sdr":
         return SdrTransport(name, out_dir=kw.get("out"), in_dir=kw.get("in"),
                             mod=kw.get("mod", "gfsk"))
+    if typ == "janus":
+        # STANAG-4748 via the GPL janus-c reference (separate process). Carries the
+        # frame as JANUS cargo; see Documentation/DCF_JANUS_SPEC.md.
+        return JanusTransport(name, out_dir=kw.get("out"), in_dir=kw.get("in"),
+                              pset_id=int(kw.get("pset", "1")), fs=int(kw.get("fs", "48000")),
+                              pset_file=kw.get("pset_file"),
+                              tx_bin=kw.get("tx"), rx_bin=kw.get("rx"))
     if typ == "file":
         return FileTransport(name, out_path=kw.get("out"), in_path=kw.get("in"))
-    raise SystemExit(f"unknown transport type {typ!r} (udp|audio|sdr|file)")
+    raise SystemExit(f"unknown transport type {typ!r} (udp|audio|sdr|janus|file)")
 
 
 def main(argv=None):

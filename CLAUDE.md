@@ -381,6 +381,32 @@ dcf-tools/build.sh && dcf-tools/build/dcf_loopback # DCF interop (byte-exact, wi
 dcf-tools/field-test.sh --tx-dev plughw:3,0 --rx-dev plughw:4,0 -n 200 --keep OUT
 ```
 
+## DCF-JANUS (STANAG-4748 acoustic transport)
+
+A `janus:` **transport** (not a new wire format) that carries the 17-byte `DeModFrame` over a
+**JANUS (NATO STANAG 4748)** underwater-acoustic link — FH-BFSK + convolutional FEC + a
+variable-length cargo field. The frame rides as JANUS **cargo** (hex-encoded), so JANUS sits
+*beneath* the wire quantum like UDP/audio/SDR; the 246-vector certificate is untouched. The
+value is **interop with a ratified standard** (real JANUS gear), not a novel modem.
+
+- `JanusTransport` (`python/dcf/transport.py`) subclasses `_DirMedium` like `AudioTransport`;
+  its codec hooks **shell out to the GPL-3.0 janus-c reference** (`janus-tx`/`janus-rx`) as a
+  **separate process** — never linked — so the LGPL library is unaffected (mere aggregation,
+  like the `pw-play`/`ffmpeg` calls). The reference encoder/decoder make the waveform
+  STANAG-compliant by construction. Factory string: `janus:in=,out=,pset=1,fs=48000`.
+- janus-c loads its cargo plugins via `dlopen`, so the transport puts the plugins dir on
+  `LD_LIBRARY_PATH` automatically (`../share/janus/plugins`). Default profile = parameter set 1
+  (Initial JANUS band, 11520 Hz / 4160 Hz) at 48 kHz. Binaries via `$JANUS_TX`/`$JANUS_RX`/PATH.
+- janus-c is an **optional GPL dependency**: a standalone `nix build .#janus-c` (kept out of
+  every LGPL closure); the transport raises and the tests `skip` without it, so CI stays green.
+  Spec: `Documentation/DCF_JANUS_SPEC.md`; GPL boundary: `LICENSING.md`.
+
+```sh
+nix build .#janus-c        # GPL reference (janus-tx/janus-rx + parameter sets + plugins)
+JANUS_TX=$PWD/result/bin/janus-tx JANUS_RX=$PWD/result/bin/janus-rx \
+  python3 -m unittest python/tests/test_transport -k janus -v   # DCF frame -> JANUS cargo -> frame
+```
+
 ## DCF-WASM (browser comms client)
 
 The certified `codec/` compiled to `wasm32` (`codec-wasm/`, a wasm-bindgen

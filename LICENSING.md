@@ -28,6 +28,17 @@ DeMoD LLC on request. Dual-licensing is currently **scoped to Lua only**. DeMoD 
 copyright holder and may extend dual-licensing to other components in the future; until then,
 the rest of the tree is LGPL-3.0-only.
 
+## DCF-JANUS — GPL-3.0 boundary (subprocess only)
+
+The DCF `janus:` transport ([`python/dcf/transport.py`](python/dcf/transport.py),
+[`Documentation/DCF_JANUS_SPEC.md`](Documentation/DCF_JANUS_SPEC.md)) interoperates with the
+NATO STANAG-4748 standard by invoking the **GPL-3.0** janus-c reference (`janus-tx`/`janus-rx`)
+as a **separate subprocess** — mere aggregation, exactly like the existing `pw-play`/`ffmpeg`
+calls. janus-c is **never vendored or linked** into this `LGPL-3.0-only` tree; it is an
+**optional, user-installed GPL dependency** (built by a standalone Nix derivation,
+`nix build .#janus-c`, kept out of every LGPL package's closure). The transport raises (and
+its tests skip) when janus-c is absent, so the LGPL library never depends on GPL code.
+
 ## HydraModem — LGPL-3.0-only
 
 The [`hydramodem/`](hydramodem/) directory is a self-contained acoustic M-FSK modem that carries

@@ -12,9 +12,13 @@
     # tolerant across Faust 2.72–2.85, so this pin is for determinism, not
     # necessity; see hydramodem/docs/FAUST_MODERNIZATION.md.
     nixpkgs-faust.url = "github:NixOS/nixpkgs/nixos-24.05";
+    # GPL-3.0 JANUS (STANAG 4748) reference modem. Built as a SEPARATE package and
+    # used by the DCF `janus:` transport as a subprocess only — never linked into
+    # the LGPL library. See Documentation/DCF_JANUS_SPEC.md and LICENSING.md.
+    janus-c-src = { url = "github:mission-systems-pty-ltd/janus-c"; flake = false; };
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay, nixpkgs-faust }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay, nixpkgs-faust, janus-c-src }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; overlays = [ rust-overlay.overlays.default ]; };
@@ -447,6 +451,23 @@
             meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 
+          # JANUS (NATO STANAG 4748) reference modem — GPL-3.0, CMRE-derived.
+          # A STANDALONE package: the DCF `janus:` transport invokes janus-tx /
+          # janus-rx as a separate process (never linked), so this GPL build is
+          # NOT in any LGPL package's closure. Installs the binaries + the
+          # parameter-set CSV the transport auto-discovers.
+          janus-c = pkgs.stdenv.mkDerivation {
+            pname = "janus-c";
+            version = "unstable";
+            src = janus-c-src;
+            nativeBuildInputs = [ pkgs.cmake pkgs.pkg-config ];
+            buildInputs = [ pkgs.fftw pkgs.fftwFloat pkgs.alsa-lib ];
+            # The upstream CMakeLists predates CMake 4's minimum-policy removal.
+            cmakeFlags = [ "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" ];
+            meta.description = "JANUS (STANAG 4748) underwater acoustic modem reference (janus-tx/janus-rx)";
+            meta.license = pkgs.lib.licenses.gpl3Only;
+          };
+
           # Docs
           dcf-docs = pkgs.stdenv.mkDerivation {
             pname = "dcf-docs";
@@ -543,6 +564,21 @@
               echo "◈ DCF-SDR shell — dcf-sdr tx/rx; .cf32 <-> rtl_sdr / hackrf_transfer"
             '';
             meta.description = "DCF SDR/RF dev shell (FEC modem + SoapySDR)";
+          };
+
+          # DCF-JANUS: the GPL janus-c reference (janus-tx/janus-rx) on PATH for
+          # the `janus:` transport. GPL lives only in this shell/subprocess, never
+          # linked into the LGPL library.
+          janus = pkgs.mkShell {
+            packages = [
+              self.packages.${system}.janus-c
+              (pkgs.python3.withPackages (ps: with ps; [ numpy ]))
+            ];
+            shellHook = ''
+              echo "◈ DCF-JANUS shell — janus-tx/janus-rx (STANAG 4748, GPL-3.0) on PATH"
+              echo "  cd python && python3 -m unittest tests.test_transport -k janus -v"
+            '';
+            meta.description = "DCF-JANUS dev shell (GPL janus-c reference + python)";
           };
 
           # HydraModem with the compiled-Faust DSP toolchain (pinned Faust

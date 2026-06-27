@@ -130,6 +130,29 @@ class TestBridgeMultiHopMedia(unittest.TestCase):
         finally:
             A.stop(); B.stop(); C.stop()
 
+    def test_janus_then_sdr(self):
+        # A frame enters over a STANAG-4748 (JANUS) link and is relayed onto SDR,
+        # byte-exact. Requires the GPL janus-c reference (optional dep).
+        if not T.janus_available():
+            self.skipTest("janus-c (janus-tx/janus-rx) not installed")
+        d = tempfile.mkdtemp()
+        link1, link2 = os.path.join(d, "l1"), os.path.join(d, "l2")
+        arrived = []
+        A = Bridge([T.JanusTransport("A.janus", out_dir=link1)]).start()
+        B = Bridge([T.JanusTransport("B.janus", in_dir=link1),
+                    T.SdrTransport("B.sdr", out_dir=link2, mod="gfsk")]).start()
+        C = Bridge([T.SdrTransport("C.sdr", in_dir=link2, mod="gfsk")],
+                   on_frame=lambda f, m: arrived.append(f)).start()
+        try:
+            fr = _frame(seq=7)
+            A.inject(fr)
+            end = time.monotonic() + 45.0
+            while time.monotonic() < end and not arrived:
+                time.sleep(0.1)
+            self.assertTrue(arrived and arrived[0] == fr, "frame crossed janus->sdr")
+        finally:
+            A.stop(); B.stop(); C.stop()
+
 
 if __name__ == "__main__":
     unittest.main()
