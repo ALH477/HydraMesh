@@ -70,7 +70,9 @@ pcm = (np.clip(x, -1, 1) * 32767.0).astype("<i2")
 o = wave.open(dst, "wb"); o.setnchannels(1); o.setsampwidth(2); o.setframerate(fr)
 o.writeframes(pcm.tobytes()); o.close()
 pk = np.max(np.abs(x)) or 1e-9
-print(f"  extracted input{c+1}: peak {20*np.log10(pk):.1f} dBFS")
+clipped = int(np.sum(np.abs(x) >= 0.999))
+warn = f"  *** CLIPPING ({clipped} samples) -- lower input gain ***" if clipped > 50 else ""
+print(f"  extracted input{c+1}: peak {20*np.log10(pk):.1f} dBFS{warn}")
 PY
 
 echo "[3/3] decoding capture"

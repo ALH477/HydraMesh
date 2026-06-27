@@ -21,8 +21,11 @@
 typedef struct {
     int   *seen;
     long   max_id;
-    long   rx;          /* total CRC-valid frames decoded            */
-    int    sync_min;    /* worst sync score seen                     */
+    long   rx;          /* total CRC-valid frames matching our direction  */
+    long   foreign;     /* CRC-valid frames with another src (crosstalk)  */
+    int    have_src;    /* 1 if filtering by expected src                 */
+    uint16_t src;       /* expected direction tag                         */
+    int    sync_min;    /* worst sync score seen                          */
     double ppm_sum;
     double ppm_absmax;
 } acc_t;
@@ -34,6 +37,10 @@ static void on_frame(const uint8_t payload[DCF_FRAME_SIZE],
     dcf_frame_t f;
     if (!dcf_frame_decode(payload, &f)) return;   /* not a valid DCF frame */
 
+    if (acc->have_src && f.src_id != acc->src) {  /* leaked from the other cable */
+        acc->foreign++;
+        return;
+    }
     long id = ((long)f.payload[0] << 8) | f.payload[1];
     acc->rx++;
     if (id >= 0 && id <= acc->max_id && !acc->seen[id]) acc->seen[id] = 1;
@@ -46,7 +53,7 @@ static void on_frame(const uint8_t payload[DCF_FRAME_SIZE],
 int main(int argc, char **argv)
 {
     if (argc < 3) {
-        fprintf(stderr, "usage: %s in.wav N [--none|--rep3|--conv]\n", argv[0]);
+        fprintf(stderr, "usage: %s in.wav N [--none|--rep3|--conv] [--src 0xHHHH]\n", argv[0]);
         return 2;
     }
     const char *path = argv[1];
@@ -55,10 +62,14 @@ int main(int argc, char **argv)
 
     hydra_profile p;
     hydra_profile_default(&p);
-    if (argc >= 4) {
-        if      (!strcmp(argv[3], "--none")) p.fec_mode = HYDRA_FEC_NONE;
-        else if (!strcmp(argv[3], "--rep3")) p.fec_mode = HYDRA_FEC_REP3;
-        else if (!strcmp(argv[3], "--conv")) p.fec_mode = HYDRA_FEC_CONV;
+    int have_src = 0; uint16_t exp_src = 0;
+    for (int i = 3; i < argc; ++i) {
+        if      (!strcmp(argv[i], "--none")) p.fec_mode = HYDRA_FEC_NONE;
+        else if (!strcmp(argv[i], "--rep3")) p.fec_mode = HYDRA_FEC_REP3;
+        else if (!strcmp(argv[i], "--conv")) p.fec_mode = HYDRA_FEC_CONV;
+        else if (!strcmp(argv[i], "--src") && i + 1 < argc) {
+            exp_src = (uint16_t)strtol(argv[++i], NULL, 0); have_src = 1;
+        } else { fprintf(stderr, "bad arg: %s\n", argv[i]); return 2; }
     }
     if (hydra_profile_init(&p) != 0) { fprintf(stderr, "bad profile\n"); return 2; }
 
@@ -72,6 +83,8 @@ int main(int argc, char **argv)
     acc_t acc;
     memset(&acc, 0, sizeof acc);
     acc.max_id = N - 1;
+    acc.have_src = have_src;
+    acc.src = exp_src;
     acc.sync_min = (int)HYDRA_SYNC_BITS;
     acc.seen = calloc((size_t)N, sizeof(int));
     if (!acc.seen) { fprintf(stderr, "oom\n"); free(audio); return 1; }
@@ -98,6 +111,9 @@ int main(int argc, char **argv)
     printf("  PER=%.2f%%   sync_min=%d/%d   clock_ppm mean=%.0f absmax=%.0f\n",
            per, acc.sync_min, (int)HYDRA_SYNC_BITS,
            acc.rx ? acc.ppm_sum / (double)acc.rx : 0.0, acc.ppm_absmax);
+    if (acc.have_src)
+        printf("  expected src=0x%04X   foreign frames (crosstalk)=%ld\n",
+               acc.src, acc.foreign);
 
     if (lost > 0) {
         printf("  lost ids:");

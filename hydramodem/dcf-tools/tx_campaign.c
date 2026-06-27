@@ -21,7 +21,7 @@
 int main(int argc, char **argv)
 {
     if (argc < 3) {
-        fprintf(stderr, "usage: %s N out.wav [--none|--rep3|--conv]\n", argv[0]);
+        fprintf(stderr, "usage: %s N out.wav [--none|--rep3|--conv] [--src 0xHHHH]\n", argv[0]);
         return 2;
     }
     long N = strtol(argv[1], NULL, 10);
@@ -30,10 +30,14 @@ int main(int argc, char **argv)
 
     hydra_profile p;
     hydra_profile_default(&p);                 /* fec defaults to conv */
-    if (argc >= 4) {
-        if      (!strcmp(argv[3], "--none")) p.fec_mode = HYDRA_FEC_NONE;
-        else if (!strcmp(argv[3], "--rep3")) p.fec_mode = HYDRA_FEC_REP3;
-        else if (!strcmp(argv[3], "--conv")) p.fec_mode = HYDRA_FEC_CONV;
+    uint16_t src = 0x00A1;                     /* direction tag (src_id) */
+    for (int i = 3; i < argc; ++i) {
+        if      (!strcmp(argv[i], "--none")) p.fec_mode = HYDRA_FEC_NONE;
+        else if (!strcmp(argv[i], "--rep3")) p.fec_mode = HYDRA_FEC_REP3;
+        else if (!strcmp(argv[i], "--conv")) p.fec_mode = HYDRA_FEC_CONV;
+        else if (!strcmp(argv[i], "--src") && i + 1 < argc)
+            src = (uint16_t)strtol(argv[++i], NULL, 0);
+        else { fprintf(stderr, "bad arg: %s\n", argv[i]); return 2; }
     }
     if (hydra_profile_init(&p) != 0) { fprintf(stderr, "bad profile\n"); return 2; }
 
@@ -57,7 +61,7 @@ int main(int argc, char **argv)
 
     for (long i = 0; i < N; ++i) {
         dcf_frame_t f;
-        dcf_frame_init(&f, 1, DCF_TYPE_DATA, (uint16_t)i, 0x00A1, DCF_BROADCAST);
+        dcf_frame_init(&f, 1, DCF_TYPE_DATA, (uint16_t)i, src, DCF_BROADCAST);
         f.payload[0] = (uint8_t)(i >> 8);
         f.payload[1] = (uint8_t)i;
         uint8_t frame[DCF_FRAME_SIZE];
@@ -84,8 +88,8 @@ int main(int argc, char **argv)
     }
     const char *name = p.fec_mode == HYDRA_FEC_NONE ? "none"
                      : p.fec_mode == HYDRA_FEC_REP3 ? "rep3" : "conv";
-    printf("tx_campaign: %ld frames -> %s  (%.1f s, FEC=%s, %.0f baud %d-FSK, %d Hz)\n",
-           N, path, (double)len / p.sample_rate, name, p.baud, p.n_tones,
+    printf("tx_campaign: %ld frames src=0x%04X -> %s  (%.1f s, FEC=%s, %.0f baud %d-FSK, %d Hz)\n",
+           N, src, path, (double)len / p.sample_rate, name, p.baud, p.n_tones,
            (int)p.sample_rate);
     free(out);
     return 0;
