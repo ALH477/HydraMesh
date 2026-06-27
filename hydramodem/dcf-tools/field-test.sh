@@ -49,11 +49,29 @@ PY
 )
 
 echo "[2/3] capturing on $RXDEV ($((dur+1))s) while playing on $TXDEV"
-arecord -D "$RXDEV" -f S16_LE -r "$RATE" -c 1 -d "$((dur + 1))" "$rx" &
+raw="$work/rx_raw.wav"
+# Capture full-resolution S32 stereo; we extract the live channel below at full
+# scale (avoids the 6 dB loss + averaging of a mono -c 1 plug downmix).
+arecord -D "$RXDEV" -f S32_LE -r "$RATE" -c 2 --buffer-time=1000000 -d "$((dur + 1))" "$raw" &
 recpid=$!
 sleep 0.3
 aplay -D "$TXDEV" "$tx"
 wait "$recpid" || true
+
+# Extract the louder input channel -> 16-bit mono (what rx_campaign reads).
+python3 - "$raw" "$rx" <<'PY'
+import sys, wave, numpy as np
+src, dst = sys.argv[1], sys.argv[2]
+w = wave.open(src); n = w.getnframes(); ch = w.getnchannels(); fr = w.getframerate()
+a = np.frombuffer(w.readframes(n), dtype="<i4").reshape(-1, ch).astype(np.float64) / 2147483648.0
+c = int(np.argmax([np.sqrt(np.mean(a[:, k] ** 2)) for k in range(ch)]))  # live channel
+x = a[:, c]
+pcm = (np.clip(x, -1, 1) * 32767.0).astype("<i2")
+o = wave.open(dst, "wb"); o.setnchannels(1); o.setsampwidth(2); o.setframerate(fr)
+o.writeframes(pcm.tobytes()); o.close()
+pk = np.max(np.abs(x)) or 1e-9
+print(f"  extracted input{c+1}: peak {20*np.log10(pk):.1f} dBFS")
+PY
 
 echo "[3/3] decoding capture"
 "$here/build/rx_campaign" "$rx" "$N" "$FEC"

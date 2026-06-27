@@ -98,6 +98,15 @@ int main(int argc, char **argv)
     printf("  PER=%.2f%%   sync_min=%d/%d   clock_ppm mean=%.0f absmax=%.0f\n",
            per, acc.sync_min, (int)HYDRA_SYNC_BITS,
            acc.rx ? acc.ppm_sum / (double)acc.rx : 0.0, acc.ppm_absmax);
+
+    if (lost > 0) {
+        printf("  lost ids:");
+        long shown = 0;
+        for (long i = 0; i < N && shown < 40; ++i)
+            if (!acc.seen[i]) { printf(" %ld", i); ++shown; }
+        if (lost > shown) printf(" ...");
+        printf("\n");
+    }
     free(acc.seen);
 
     printf(per < 1.0 ? "  PASS (PER < 1%%)\n"

@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 int main(int argc, char **argv)
 {
@@ -38,6 +39,21 @@ int main(int argc, char **argv)
 
     size_t gap = (size_t)(0.05 * p.sample_rate);   /* 50 ms inter-frame silence */
     float *out = NULL; size_t cap = 0, len = 0;
+
+    /* Warm-up lead-in: ~1 s of steady tone + a gap before frame 0. Lets a real
+     * analog path (mixer/AGC/DC-block, USB stream start) settle so the first
+     * frames aren't lost to a startup transient. Ignored by the RX (no sync). */
+    {
+        size_t warm = (size_t)(1.0 * p.sample_rate);
+        cap = warm + gap;
+        out = realloc(out, cap * sizeof(float));
+        if (!out) { fprintf(stderr, "oom\n"); return 1; }
+        for (size_t i = 0; i < warm; ++i)
+            out[i] = (float)(p.tx_gain * sin(2.0 * 3.14159265358979323846
+                                             * p.base_freq * (double)i / p.sample_rate));
+        len = warm;
+        memset(out + len, 0, gap * sizeof(float)); len += gap;
+    }
 
     for (long i = 0; i < N; ++i) {
         dcf_frame_t f;
