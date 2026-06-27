@@ -357,8 +357,10 @@ cabled** link. Cross-compiles to RISC-V (StarFive JH7110); runs real-time on one
   `hydramodem/dcf-tools/`: `dcf_loopback.c` (interop — a real
   `DeModFrame` from `codec/demod_frame.h` survives TX→RX byte-exact, wire CRC valid, all FEC
   modes), `tx_campaign.c`/`rx_campaign.c` (streaming-RX PER harness keyed by a per-frame
-  counter), and `field-test.sh` (cabled-link PER over two ALSA devices — the `DCF_FIELD_USE.md`
-  **T2** tier, pass = PER < 1% with FEC). Nix: `nix build .#hydramodem`; CI job
+  counter), `field-test.sh` (cabled-link PER over two ALSA devices — the `DCF_FIELD_USE.md`
+  **T2** tier, pass = PER < 1% with FEC), and `link-meter.py` (live per-channel input-level
+  meter for tuning an analog path — mixer routing/gain/cabling — until signal arrives). Nix:
+  `nix build .#hydramodem`; CI job
   `certify-hydramodem` in `wire-certify.yml`.
 
 ```sh
