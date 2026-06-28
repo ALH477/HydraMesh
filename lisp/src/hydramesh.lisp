@@ -22,6 +22,10 @@
                  :log4cl :trivial-backtrace :flexi-streams :fiveam
                  :ieee-floats :cl-json))
 
+;; FiveAM does not push :fiveam onto *features*; do it ourselves so the
+;; #+fiveam-guarded test suite below is actually compiled and run-tests defined.
+(pushnew :fiveam *features*)
+
 (defpackage :d-lisp
 (:use :cl :cffi :uuid :usocket :bordeaux-threads :log4cl
          :trivial-backtrace :flexi-streams :fiveam :ieee-floats :cl-json)
@@ -400,6 +404,14 @@
 
 ;; --- Adapter tests (fiveam) --------------------------------------------------
 
+;; Define the suite up front so every test below (and the second block further
+;; down) registers into it. def-suite must precede the first test/in-suite.
+#+fiveam
+(fiveam:def-suite hydramesh-suite
+  :description "HydraMesh v2.2.0 Tests")
+#+fiveam
+(fiveam:in-suite hydramesh-suite)
+
 #+fiveam
 (fiveam:test dcf-frame-crc-test
   "CRC-CCITT computed by Lisp must match the Haskell implementation exactly.
@@ -413,14 +425,15 @@
                             #xDE #xAD #xBE #xEF #xAB #x12 #xCD))))
     (let ((crc (crc16-ccitt body 0 15)))
       ;; Body bytes match Haskell exampleFrame — CRC must equal Haskell output
-      (fiveam:is (= (ash crc -8) (aref body 0))  ; just checks it runs; value
-        "CRC computation did not complete")       ; pinned in the round-trip test
+      ;; (0xA963; same anchor as certify-wire-codec's example frame).
+      (fiveam:is (= crc #xA963)
+                 "CRC must match the Haskell exampleFrame value 0xA963")
       (fiveam:is (integerp crc) "CRC must be integer"))))
 
 #+fiveam
 (fiveam:test dcf-frame-roundtrip-test
   "encode-dcf-frame followed by decode-dcf-frame is identity."
-  (let* ((payload #(#xDE #xAD #xBE #xEF))
+  (let* ((payload (coerce #(#xDE #xAD #xBE #xEF) '(vector (unsigned-byte 8))))
          (msg   (make-proto-message :type +msg-type-game-event+
                                     :sequence 42
                                     :timestamp 0
@@ -440,7 +453,8 @@
 (fiveam:test dcf-frame-corruption-test
   "A single flipped bit in the frame body must cause decode-dcf-frame to return NIL."
   (let* ((msg   (make-proto-message :type +msg-type-position+
-                                    :sequence 1 :timestamp 0 :payload #(0 0 0 0)))
+                                    :sequence 1 :timestamp 0
+                                    :payload (coerce #(0 0 0 0) '(vector (unsigned-byte 8)))))
          (frame  (encode-dcf-frame msg 1 2))
          (bad    (copy-seq frame)))
     ;; Flip a bit in the payload area
@@ -452,16 +466,13 @@
 (fiveam:test dcf-frame-valid-predicate-test
   "valid-dcf-frame-p agrees with decode-dcf-frame."
   (let* ((msg   (make-proto-message :type +msg-type-ping+
-                                    :sequence 99 :timestamp 0 :payload #()))
+                                    :sequence 99 :timestamp 0
+                                    :payload (coerce #() '(vector (unsigned-byte 8)))))
          (frame (encode-dcf-frame msg 3 4))
          (bad   (copy-seq frame)))
     (setf (aref bad 8) (logxor (aref bad 8) #x01))
     (fiveam:is (valid-dcf-frame-p frame) "Good frame must be valid")
     (fiveam:is (not (valid-dcf-frame-p bad)) "Corrupt frame must be invalid")))
-
-;; Add adapter tests to the existing suite
-#+fiveam
-(fiveam:in-suite hydramesh-suite)
 
 ;; Configuration (updated for UDP/gaming)
 (defstruct dcf-config
@@ -1296,11 +1307,7 @@ Repo: https://github.com/ALH477/DeMoD-Communication-Framework"))
     (error (e)
       (format t "Error: ~A~%" e))))
 
-;; Tests
-#+fiveam
-(fiveam:def-suite hydramesh-suite
-  :description "HydraMesh v2.2.0 Tests")
-
+;; Tests (suite defined above near the adapter tests; just keep adding to it)
 #+fiveam
 (fiveam:in-suite hydramesh-suite)
 
@@ -1314,7 +1321,7 @@ Repo: https://github.com/ALH477/DeMoD-Communication-Framework"))
 
 #+fiveam
 (fiveam:test serialization-test
-  (let* ((payload #(1 2 3))
+  (let* ((payload (coerce #(1 2 3) '(vector (unsigned-byte 8))))
          (msg (make-proto-message :type 1 :sequence 42 :timestamp 123 :payload payload))
          (ser (serialize-proto-message msg))
          (des (deserialize-proto-message ser)))
