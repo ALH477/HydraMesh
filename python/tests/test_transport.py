@@ -118,6 +118,12 @@ class TestTransports(unittest.TestCase):
             self.skipTest("HydraModem frame_tx/frame_rx not built/on PATH")
         self._dir_roundtrip(T.HydraTransport, {}, timeout=20.0)
 
+    def test_hydra_cffi_dir_roundtrip(self):
+        # HydraModem PHY via the in-process ctypes binding (no subprocess).
+        if not T.hydramodem_cffi_available():
+            self.skipTest("libhydramodem (ctypes) not available")
+        self._dir_roundtrip(T.HydraCffiTransport, {}, timeout=10.0)
+
     def test_janus_dir_roundtrip(self):
         # STANAG-4748 via the GPL janus-c reference (optional dep). The 17-byte
         # frame rides as JANUS cargo; subprocess encode+decode is slow, so allow

@@ -6,6 +6,7 @@
  *   frame_tx <34-hex-char-frame> out.wav [--none|--rep3|--conv]   (default conv)
  */
 #include "../src/hydramodem.h"
+#include "frame_profile.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,11 +36,7 @@ int main(int argc, char **argv)
     }
     hydra_profile p;
     hydra_profile_default(&p);
-    for (int i = 3; i < argc; ++i) {
-        if      (!strcmp(argv[i], "--none")) p.fec_mode = HYDRA_FEC_NONE;
-        else if (!strcmp(argv[i], "--rep3")) p.fec_mode = HYDRA_FEC_REP3;
-        else if (!strcmp(argv[i], "--conv")) p.fec_mode = HYDRA_FEC_CONV;
-    }
+    if (frame_profile_args(&p, argc, argv, 3) != 0) return 2;
     if (hydra_profile_init(&p) != 0) { fprintf(stderr, "bad profile\n"); return 2; }
 
     float *audio = NULL; size_t n = 0;

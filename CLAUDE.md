@@ -419,12 +419,16 @@ MAC, node + gateway, loopback demo, tests.
   `[sensor_type u8 | value i16 scaled | flags u8]`; `physical = raw/SCALE[type]`. Efficient,
   no adapter overhead. (Bundling via DCF-Game `EVENT` / SuperPack = Phase-2 options.)
 - **MAC** (`mac.py`): HydraModem has no media access, so a shared line needs it — configurable
-  `tdma` (slot per `node_id % num_slots`, beacon-synced, guard times) / `dedicated`; `fdma`
-  (per-node tone profiles) + `csma` are Phase 2.
-- **node.py / gateway.py / config.py**: node reads→encodes→sends in its slot over any DCF
-  `Transport`; gateway RX→`decode_reading`→egress (CSV/callback). Runs over HydraModem once a
-  HydraModem transport binding lands (the Phase-2 step; reuses the `_DirMedium`/JanusTransport
-  pattern).
+  `tdma` (slot per node, guard times), `dedicated`, `csma` (backoff), and `fdma` (per-node tone
+  channels — `base_freq = base0 + k·spacing`, gateway runs one decoder/channel; capacity ×N).
+- **node.py / gateway.py / config.py / network.py**: node reads→encodes→sends over any DCF
+  `Transport`; gateway RX→`decode_reading`→egress; `build_network(SenseConfig, read, factory)`
+  is the config-driven entry point. Runs over real HydraModem via `HydraTransport` (subprocess
+  `frame_tx`/`frame_rx`) or in-process `HydraCffiTransport` (`dcf.hydramodem_cffi`, ctypes).
+  Mesh = relay readings through `dcf.bridge.Bridge`. Portable C node skeleton:
+  `hydramodem/dcf-tools/sense_node.c` (a C node's WAV decodes in the Python gateway).
+- **`model.py`**: measured energy/throughput (conv = 396 ms/reading → ~134 nodes/channel @ 60s,
+  ~28 mJ/reading) + vs LoRa/RS-485.
 
 ```sh
 python3 python/dcf/sense/demo.py --nodes 4 --mac tdma --cycles 3 --csv /tmp/sense.csv

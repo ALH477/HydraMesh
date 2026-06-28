@@ -6,10 +6,12 @@ moisture, CO₂, light/PAR, pH, EC, …) but medium- and platform-agnostic. It i
 media-access layer over the 17-byte `DeModFrame`**: it never changes the frame, so the
 246-vector wire certificate is untouched.
 
-Status: **Phase 1 done** (schema, TDMA/dedicated MAC, node + gateway, demo, tests) **+ Phase 2
-in progress**: the HydraModem transport (DCF-Sense over the real modem at PER 0%), the
-config-driven `build_network` builder, a CSMA MAC mode, and an energy/throughput model.
-Remaining: FDMA PHY plumbing (per-node tone profiles), mesh topology, MCU firmware, field test.
+Status: **Phases 1–2 done.** Schema, MAC (`tdma`/`dedicated`/`csma`/`fdma`), node + gateway,
+config-driven `build_network`, energy/throughput model, the HydraModem transport (subprocess
+`HydraTransport` + in-process ctypes `HydraCffiTransport`), FDMA per-node tone channels, mesh
+relay via `dcf.bridge.Bridge`, and a portable C MCU node skeleton — all tested (DCF-Sense over
+the real modem at PER 0%; a C node's reading decodes in the Python gateway). **Remaining: the
+physical cabled multi-node field run** (needs hardware — runbook below) and MCU firmware ports.
 
 ## Cost, energy & throughput (measured model)
 
@@ -57,14 +59,20 @@ a thin scheduler *above* the transport (`python/dcf/sense/mac.py`), selected by 
   its (guarded) slot, so a shared line never collides. `slot = node_id % num_slots`. The
   `epoch` (superframe t0) is learned from the gateway `BEACON` in deployment; HydraModem's
   ±3000 ppm timing recovery absorbs the in-slot clock skew. **Best for many battery nodes.**
-- **`fdma`** (Phase 2) — per-node HydraModem tone profile; nodes transmit concurrently, the
-  gateway runs one decoder per channel. **`csma`** (Phase 2) — listen-before-talk + backoff.
+- **`fdma`** — each node on a distinct HydraModem tone channel (`base_freq = base0 +
+  k·spacing`, integer-cycle so tones stay orthogonal); nodes transmit concurrently and the
+  gateway runs one decoder per channel. Verified: a ch-0 signal is *rejected* by a ch-1 decoder.
+  Capacity multiplies by the channel count (see the model). `Fdma.profile_of(channel)` feeds the
+  HydraModem transport's `base_freq/tone_spacing/baud/n_tones`.
+- **`csma`** — opportunistic + exponential backoff (real carrier-sense needs the live medium).
 
 ## Topology
 
 - **Star** (shared bus or dedicated lines) → nodes → one gateway.
-- **Mesh** (Phase 3) → the DCF self-healing mesh (AUTO/master, RTT routing, failover) relays
-  across a large/obstructed greenhouse — reuses `python/dcf/mesh_runtime.py`.
+- **Mesh** → a DCF-Sense reading is just a `DeModFrame`, so the existing **`dcf.bridge.Bridge`**
+  relays it multi-hop across media (flood/egress + dedup) — verified end-to-end (a reading
+  crosses a 2-hop relay and decodes at the far gateway). For self-healing roles/failover,
+  layer `python/dcf/mesh_runtime.py` underneath.
 
 All selected by one config (`python/dcf/sense/config.py`: `topology`, `mac`, per-node sensors
 + cadence, gateway egress).
@@ -120,6 +128,30 @@ needed for FDMA's concurrent decoders). Over the wire, reuse the HydraModem
   tests).
 - **Levels/clocks**: each interface has its own crystal; TDMA guard time + HydraModem timing
   recovery handle the skew.
+
+## Platform-agnostic node (C / MCU)
+
+`hydramodem/dcf-tools/sense_node.c` is a portable C reference node: read sensor → pack a
+DCF-Sense reading into a `DeModFrame` (the repo wire codec) → HydraModem TX → emit samples.
+An MCU port only implements three hooks — `sensor_read` (ADC/I2C), `sample_sink` (DAC/line-out),
+`node_sleep` (low-power) — everything else is portable. On the host it writes a WAV per reading;
+because it builds the frame with the same codec, **a C node's WAV decodes in the Python gateway**
+(verified). The C core targets MCUs (HydraModem cross-compiles to RISC-V); flashable firmware
+ports are the remaining hardware work.
+
+## Field runbook (cabled multi-node, needs hardware)
+
+1. Build: `hydramodem/dcf-tools/build.sh`; `export HYDRA_TX/HYDRA_RX` (or `HYDRAMODEM_LIB` for
+   the in-process codec).
+2. Wire each node's line-out (instrument conductor of the PoE+ combo cable) into the gateway
+   interface's line-in. **Shared bus:** passive summing network; keep the summed peak ≈ −6 dBFS.
+   **FDMA:** assign each node a channel (`Fdma.profile_of`), gateway runs N decoders.
+3. Pick the MAC in config: `tdma` (many nodes, one channel) or `fdma` (concurrent, N channels).
+4. Run the gateway over `HydraCffiTransport` (or `HydraTransport`) on the line-in device; run
+   nodes (SBC: `build_network` + a node loop; MCU: `sense_node` port) on their line-out devices.
+5. Measure **per-node PER and throughput** over ≥100 readings/node, reusing the HydraModem
+   `field-test.sh`/`duplex-test.sh` methodology (level → single-frame proof → campaign). Pass:
+   PER < 1% with conv FEC at nominal level.
 
 ## Honest framing
 DCF-Sense reuses standard ideas (TDMA/FDMA media access, scaled-integer telemetry). The

@@ -14,7 +14,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
 from dcf import transport as T          # noqa: E402
-from .mac import make_mac               # noqa: E402
+from .mac import make_mac, Fdma         # noqa: E402
 from .node import SensorNode            # noqa: E402
 from .gateway import Gateway            # noqa: E402
 
@@ -60,30 +60,55 @@ def hydra_factory(link_dir):
 
 
 # ── builder ───────────────────────────────────────────────────────────────────
-def build_network(cfg, read, transport_factory=None):
+def _node_read(read, sensors):
+    allow = set(sensors)
+    def f(nid):
+        return {k: v for k, v in read(nid).items() if not allow or k in allow}
+    return f
+
+
+def build_network(cfg, read, transport_factory=None, link_dir=None):
     """Build a Network from a SenseConfig.
 
       cfg               : SenseConfig (topology / mac / gw_channel / egress / nodes)
       read(node_id)     : -> {sensor_name|id: value} for that node
       transport_factory : (role, name) -> Transport;  defaults to loopback
+      link_dir          : shared dir for the FDMA path (HydraModem channels)
     """
-    if transport_factory is None:
-        transport_factory = loopback_factory()
     if cfg.topology not in ("star",):
         raise ValueError(f"topology {cfg.topology!r} not supported yet (star; mesh = Phase 3)")
-
     mac = make_mac(cfg.mac)
+    if isinstance(mac, Fdma):
+        return _build_fdma(cfg, read, mac, link_dir)
+
+    if transport_factory is None:
+        transport_factory = loopback_factory()
     gateway = Gateway(transport_factory("gateway", "gw"),
                       csv_path=(cfg.egress or {}).get("csv")).start()
-
     nodes = []
     for nc in cfg.nodes:
         nt = transport_factory("node", f"node-{nc.node_id:#06x}")
         nt.start(lambda f, m: None)                       # nodes only transmit
-        allow = set(nc.sensors)                            # per-node sensor filter
-        def node_read(nid, _read=read, _allow=allow):
-            r = _read(nid)
-            return {k: v for k, v in r.items() if not _allow or k in _allow}
-        nodes.append(SensorNode(nc.node_id, nt, mac, node_read,
+        nodes.append(SensorNode(nc.node_id, nt, mac, _node_read(read, nc.sensors),
+                                gw_channel=cfg.gw_channel, cadence=nc.cadence))
+    return Network(gateway, nodes)
+
+
+def _build_fdma(cfg, read, mac, link_dir):
+    """FDMA over HydraModem: each node on its own tone channel (concurrent), the gateway
+    runs one HydraModem decoder per channel over the shared dir/line."""
+    if link_dir is None:
+        raise ValueError("FDMA needs link_dir (the shared HydraModem line/dir)")
+    # gateway: one decoder per channel
+    gw_ts = [T.HydraTransport(f"gw-ch{ch}", in_dir=link_dir, **mac.profile_of(ch))
+             for ch in range(mac.num_channels)]
+    gateway = Gateway(gw_ts, csv_path=(cfg.egress or {}).get("csv")).start()
+    nodes = []
+    for nc in cfg.nodes:
+        ch = mac.channel_of(nc.node_id)
+        nt = T.HydraTransport(f"node-{nc.node_id:#06x}", out_dir=link_dir,
+                              **mac.profile_of(ch))
+        nt.start(lambda f, m: None)
+        nodes.append(SensorNode(nc.node_id, nt, mac, _node_read(read, nc.sensors),
                                 gw_channel=cfg.gw_channel, cadence=nc.cadence))
     return Network(gateway, nodes)

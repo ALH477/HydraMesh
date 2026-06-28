@@ -100,9 +100,37 @@ class Csma(Mac):
         return self._rng.randint(0, max(0, window - 1)) * self.slot_dur
 
 
+class Fdma(Mac):
+    """Frequency-division: each node sits on a distinct HydraModem tone channel, so nodes
+    transmit concurrently and the gateway runs one decoder per channel. Channel k uses
+    base_freq = base0 + k*spacing; freqs stay integer multiples of baud (orthogonal).
+    No time gating (concurrent) — the channel separation prevents collisions."""
+    mode = "fdma"
+
+    def __init__(self, num_channels, base0=2000, spacing=2000, tone_spacing=1000,
+                 baud=1000, n_tones=2, sample_rate=48000):
+        if num_channels < 1:
+            raise ValueError("num_channels must be >= 1")
+        top = base0 + (num_channels - 1) * spacing + tone_spacing * (n_tones - 1)
+        if top >= sample_rate / 2:
+            raise ValueError(f"top tone {top} Hz exceeds Nyquist {sample_rate/2:.0f} Hz "
+                             "(reduce num_channels/spacing)")
+        self.num_channels = int(num_channels)
+        self.base0, self.spacing = base0, spacing
+        self.tone_spacing, self.baud, self.n_tones = tone_spacing, baud, n_tones
+
+    def channel_of(self, node_id):
+        return node_id % self.num_channels
+
+    def profile_of(self, channel):
+        """HydraModem profile kwargs for a channel (-> HydraTransport / frame_tx args)."""
+        return {"base_freq": self.base0 + channel * self.spacing,
+                "tone_spacing": self.tone_spacing, "baud": self.baud,
+                "n_tones": self.n_tones}
+
+
 def make_mac(cfg):
-    """Build a Mac from {mode, num_slots, slot_dur, guard}. Unknown modes raise.
-    `fdma` (per-node tone profiles) needs PHY plumbing and lands as a Phase-2 follow-up."""
+    """Build a Mac from a config dict. Unknown modes raise."""
     cfg = cfg or {}
     mode = cfg.get("mode", "tdma")
     if mode == "dedicated":
@@ -114,4 +142,9 @@ def make_mac(cfg):
     if mode == "csma":
         return Csma(slot_dur=cfg.get("slot_dur", 0.5),
                     max_backoff_slots=cfg.get("max_backoff_slots", 8))
-    raise ValueError(f"unknown mac mode {mode!r} (tdma|dedicated|csma; fdma in Phase 2)")
+    if mode == "fdma":
+        return Fdma(num_channels=cfg.get("num_channels", 1),
+                    base0=cfg.get("base0", 2000), spacing=cfg.get("spacing", 2000),
+                    tone_spacing=cfg.get("tone_spacing", 1000),
+                    baud=cfg.get("baud", 1000), n_tones=cfg.get("n_tones", 2))
+    raise ValueError(f"unknown mac mode {mode!r} (tdma|dedicated|csma|fdma)")

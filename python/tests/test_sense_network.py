@@ -3,6 +3,7 @@
 flow end-to-end over the loopback medium, honouring per-node sensor filters and MAC mode."""
 import os
 import sys
+import tempfile
 import time
 import unittest
 
@@ -56,6 +57,29 @@ class TestNetwork(unittest.TestCase):
         }, cycles=1)
         self.assertTrue(all(r["sensor"] == "co2" for r in got))
         self.assertEqual(len(got), 1)
+
+    def test_fdma_over_hydramodem(self):
+        # Two nodes on two distinct tone channels, decoded concurrently by the gateway's
+        # per-channel HydraModem decoders. Requires the built frame_tx/frame_rx tools.
+        from dcf import transport as T
+        if not T.hydramodem_available():
+            self.skipTest("HydraModem frame_tx/frame_rx not built/on PATH")
+        cfg = SenseConfig.from_dict({
+            "topology": "star",
+            "mac": {"mode": "fdma", "num_channels": 2, "base0": 2000, "spacing": 2000},
+            "nodes": [{"node_id": 0x3001, "sensors": ["temp"]},     # channel 1
+                      {"node_id": 0x3002, "sensors": ["co2"]}],     # channel 0
+        })
+        link = tempfile.mkdtemp(prefix="sense-fdma-")
+        net = network.build_network(cfg, _read, link_dir=link)
+        sent = net.run_cycles(1)
+        t0 = time.monotonic()
+        while net.gateway.decoded < sent and time.monotonic() - t0 < 20.0:
+            time.sleep(0.05)
+        net.stop()
+        self.assertEqual(net.gateway.decoded, sent)         # both channels recovered
+        nodes_seen = {r["node_id"] for r in net.gateway.readings}
+        self.assertEqual(nodes_seen, {0x3001, 0x3002})
 
     def test_csma_mode_builds_and_runs(self):
         sent, got = self._run({

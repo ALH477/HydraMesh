@@ -55,5 +55,26 @@ class TestTdma(unittest.TestCase):
             macmod.Tdma(num_slots=2, slot_dur=1.0, guard=0.6)
 
 
+@unittest.skipUnless(HAVE, "dcf.sense.mac required")
+class TestFdma(unittest.TestCase):
+    def test_channel_assignment_wraps(self):
+        m = macmod.Fdma(num_channels=3)
+        self.assertEqual([m.channel_of(i) for i in range(5)], [0, 1, 2, 0, 1])
+
+    def test_profiles_are_distinct_bands(self):
+        m = macmod.Fdma(num_channels=4, base0=2000, spacing=2000)
+        bases = [m.profile_of(c)["base_freq"] for c in range(4)]
+        self.assertEqual(bases, [2000, 4000, 6000, 8000])
+        self.assertEqual(len(set(bases)), 4)
+
+    def test_nyquist_guard(self):
+        with self.assertRaises(ValueError):
+            macmod.Fdma(num_channels=20, base0=2000, spacing=2000)   # tops out > 24 kHz
+
+    def test_make_mac_fdma(self):
+        m = macmod.make_mac({"mode": "fdma", "num_channels": 2})
+        self.assertEqual(m.mode, "fdma")
+
+
 if __name__ == "__main__":
     unittest.main()

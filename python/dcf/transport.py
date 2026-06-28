@@ -534,6 +534,7 @@ class HydraTransport(_DirMedium):
     EXT = ".wav"
 
     def __init__(self, name="hydra", fec="conv", tx_bin=None, rx_bin=None,
+                 base_freq=None, tone_spacing=None, baud=None, n_tones=None,
                  rate_bps=8000, **kw):
         super().__init__(name, rate_bps=rate_bps, **kw)
         self._tx = tx_bin or os.environ.get("HYDRA_TX") or shutil.which("frame_tx")
@@ -544,16 +545,22 @@ class HydraTransport(_DirMedium):
                 "frame_tx/frame_rx on PATH or in $HYDRA_TX/$HYDRA_RX. See "
                 "Documentation/DCF_SENSE_SPEC.md")
         self._fec = "--" + fec if fec in ("none", "rep3", "conv") else "--conv"
+        # optional FDMA tone-channel profile (per-node distinct frequency band)
+        self._prof = []
+        for flag, val in (("--base-freq", base_freq), ("--tone-spacing", tone_spacing),
+                          ("--baud", baud), ("--n-tones", n_tones)):
+            if val is not None:
+                self._prof += [flag, str(val)]
 
     def _encode_file(self, frame, path):
-        subprocess.run([self._tx, bytes(frame).hex(), path, self._fec],
+        subprocess.run([self._tx, bytes(frame).hex(), path, self._fec, *self._prof],
                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                        timeout=60)
 
     def _decode_file(self, path):
         try:
-            res = subprocess.run([self._rx, path, self._fec], capture_output=True,
-                                 text=True, timeout=60)
+            res = subprocess.run([self._rx, path, self._fec, *self._prof],
+                                 capture_output=True, text=True, timeout=60)
         except subprocess.TimeoutExpired:
             return None
         if res.returncode != 0:
@@ -564,3 +571,33 @@ class HydraTransport(_DirMedium):
         except ValueError:
             return None
         return b if len(b) == FRAME_LEN else None
+
+
+def hydramodem_cffi_available():
+    """True iff the in-process ctypes HydraModem binding can load libhydramodem."""
+    try:
+        from .hydramodem_cffi import available
+        return available()
+    except Exception:
+        return False
+
+
+class HydraCffiTransport(_DirMedium):
+    """HydraModem via the in-process ctypes binding (no subprocess) — faster than
+    HydraTransport, same WAV-file medium. Accepts the same FDMA profile kwargs. See
+    dcf.hydramodem_cffi (needs libhydramodem.so; $HYDRAMODEM_LIB or hydramodem/build)."""
+
+    EXT = ".wav"
+
+    def __init__(self, name="hydra", fec="conv", base_freq=None, tone_spacing=None,
+                 baud=None, n_tones=None, rate_bps=8000, **kw):
+        super().__init__(name, rate_bps=rate_bps, **kw)
+        from .hydramodem_cffi import HydraModem
+        self._codec = HydraModem(fec=fec, base_freq=base_freq, tone_spacing=tone_spacing,
+                                 baud=baud, n_tones=n_tones)
+
+    def _encode_file(self, frame, path):
+        self._codec.encode_wav(frame, path)
+
+    def _decode_file(self, path):
+        return self._codec.decode_wav(path)

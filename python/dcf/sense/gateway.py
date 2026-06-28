@@ -7,12 +7,16 @@ from . import schema
 
 
 class Gateway:
+    """Receives over one or more transports (FDMA uses one decoder per tone channel)."""
+
     def __init__(self, transport, on_reading=None, csv_path=None):
-        self.transport = transport
+        self.transports = list(transport) if isinstance(transport, (list, tuple)) \
+            else [transport]
+        self.transport = self.transports[0]
         self.on_reading = on_reading
         self.csv_path = csv_path
         self.readings = []          # in-memory log of decoded readings
-        self.frames = 0             # frames delivered by the transport
+        self.frames = 0             # frames delivered by the transport(s)
         self.decoded = 0            # frames that decoded as DCF-Sense readings
         self._csv = None
 
@@ -34,11 +38,13 @@ class Gateway:
         if self.csv_path:
             self._csv = open(self.csv_path, "w")
             self._csv.write("ts_us,node_id,sensor,value,unit,flags\n")
-        self.transport.start(self._on_frame)
+        for t in self.transports:
+            t.start(self._on_frame)
         return self
 
     def stop(self):
-        self.transport.stop()
+        for t in self.transports:
+            t.stop()
         if self._csv:
             self._csv.close()
             self._csv = None
