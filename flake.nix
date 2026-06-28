@@ -133,16 +133,72 @@
             meta.mainProgram = "dcfnode";
           };
 
-          # Lisp SDK (dev shell oriented, as it's interpreted)
-          # For package, perhaps build StreamDB and provide loader
-          streamdb = pkgs.rustPlatform.buildRustPackage {
+          # StreamDB — the small C embedded DB the Lisp SDK dlopens at startup
+          # (cffi:use-foreign-library libstreamdb). lisp/streamdb is plain C (.c/.h),
+          # not Rust, so this is an stdenv build producing the shared object on the
+          # loader path + headers. Mirrors lisp/Dockerfile's gcc recipe.
+          streamdb = pkgs.stdenv.mkDerivation {
             pname = "streamdb";
-            version = "0.3.0";
+            version = "2.2.0";
             src = self + "/lisp/streamdb";
-            cargoHash = pkgs.lib.fakeHash; # TODO: real hash via `nix build` (needs a nix environment)
-            buildType = "release";
-            meta.description = "StreamDB for DCF Lisp SDK";
+            buildInputs = [ pkgs.util-linux.dev pkgs.util-linux.lib ]; # libuuid
+            buildPhase = ''
+              runHook preBuild
+              $CC -shared -fPIC -O2 streamdb.c libstreamdb_wrapper.c \
+                -o libstreamdb.so -luuid
+              runHook postBuild
+            '';
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out/lib $out/include
+              cp libstreamdb.so $out/lib/
+              cp streamdb.h libstreamdb_wrapper.h $out/include/
+              runHook postInstall
+            '';
+            meta.description = "StreamDB embedded DB for the DCF Lisp SDK";
             meta.license = pkgs.lib.licenses.lgpl3Only;
+          };
+
+          # SBCL with the SDK's Quicklisp systems pre-loaded via nixpkgs lispPackages
+          # (exposed through ASDF; src/hydramesh.lisp loads them portably).
+          hydramesh-sbcl = pkgs.sbcl.withPackages (ps: with ps; [
+            cffi uuid usocket bordeaux-threads
+            log4cl trivial-backtrace flexi-streams fiveam
+            ieee-floats cl-json
+          ]);
+
+          # Hermetic Lisp SDK executable (the `hydramesh` CLI). Builds the saved
+          # SBCL core via dcf-deploy, with libstreamdb.so on the loader path so the
+          # foreign library resolves both at build and at runtime.
+          hydramesh-lisp = pkgs.stdenv.mkDerivation {
+            pname = "hydramesh-lisp";
+            version = "2.2.0";
+            src = self + "/lisp";
+            nativeBuildInputs = [ hydramesh-sbcl pkgs.makeWrapper ];
+            dontStrip = true; # stripping breaks SBCL executables
+            buildPhase = ''
+              runHook preBuild
+              export LD_LIBRARY_PATH=${streamdb}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+              ${hydramesh-sbcl}/bin/sbcl --no-userinit --non-interactive \
+                --load src/hydramesh.lisp \
+                --eval '(in-package :d-lisp)' \
+                --eval '(dcf-deploy "hydramesh")' \
+                --quit
+              runHook postBuild
+            '';
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out/bin $out/libexec
+              cp hydramesh $out/libexec/hydramesh
+              # Wrap so the saved core can dlopen libstreamdb.so at runtime; without
+              # it the SDK still runs (DB disabled), but this enables the DB.
+              makeWrapper $out/libexec/hydramesh $out/bin/hydramesh \
+                --prefix LD_LIBRARY_PATH : ${streamdb}/lib
+              runHook postInstall
+            '';
+            meta.description = "HydraMesh (D-LISP) SDK executable";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
+            meta.mainProgram = "hydramesh";
           };
 
           # Python SDK
@@ -386,6 +442,22 @@
             config = {
               Env = [ "PATH=${hydramodem-tools}/bin:${pkgs.coreutils}/bin:${pkgs.bashInteractive}/bin" ];
               Cmd = [ "dcf_loopback" ];
+              Labels = { "org.opencontainers.image.source" = "https://github.com/ALH477/HydraMesh"; };
+            };
+          };
+
+          # Hermetic Lisp SDK node image — the Nix replacement for the traditional
+          # lisp/Dockerfile. The wrapped `hydramesh` binary already carries
+          # libstreamdb.so on LD_LIBRARY_PATH (via makeWrapper), so the saved core
+          # resolves the DB foreign library at startup.
+          docker-hydramesh = pkgs.dockerTools.buildLayeredImage {
+            name = "alh477/hydramesh";
+            tag = "latest";
+            contents = [ hydramesh-lisp pkgs.bashInteractive pkgs.coreutils ];
+            config = {
+              Entrypoint = [ "${hydramesh-lisp}/bin/hydramesh" ];
+              Cmd = [ "help" ];
+              ExposedPorts = { "7777/udp" = {}; "50051/tcp" = {}; };
               Labels = { "org.opencontainers.image.source" = "https://github.com/ALH477/HydraMesh"; };
             };
           };
@@ -638,8 +710,10 @@
             packages = [ pkgs.sbcl pkgs.quicklisp ];
             inputsFrom = [ self.packages.${system}.streamdb ];
             shellHook = ''
-              export LD_LIBRARY_PATH=${self.packages.${system}.streamdb}/lib
-              sbcl --load ${self}/lisp/src/d-lisp.lisp
+              export LD_LIBRARY_PATH=${self.packages.${system}.streamdb}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+              echo "Lisp SDK dev shell. libstreamdb.so on LD_LIBRARY_PATH."
+              echo "  Load the SDK:  sbcl --load ${self}/lisp/src/hydramesh.lisp"
+              echo "  Run tests:     sbcl --load ${self}/lisp/src/hydramesh.lisp --eval '(d-lisp::run-tests)'"
             '';
             meta.description = "Lisp SDK dev shell";
           };

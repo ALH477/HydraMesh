@@ -474,7 +474,8 @@ byte-identical to the 246-vector wire certificate + adapter vectors.
 Lisp: `hydramesh.lisp` self-certifies the wire codec on load — all fixes F1–F9 are
 folded into source (`hydramesh-hotfix.lisp` is now a thin shim), and `:cl-json-schema`
 (not in Quicklisp) is already gone. `lisp/src/wire.lisp` is the dependency-free codec
-the `certify-lisp` CI loads. StreamDB (`lisp/streamdb/`, Rust via CFFI) is Lisp-SDK-only.
+the `certify-lisp` CI loads. StreamDB (`lisp/streamdb/`, a small C lib via CFFI, built by
+the `streamdb` Nix package → `libstreamdb.so`) is Lisp-SDK-only.
 
 ## Nix / Docker
 
@@ -488,7 +489,11 @@ Node Docker images are hermetic Nix `dockerTools` builds (`nix build .#docker-<n
 or `docker/build-and-push.sh`): `docker-dcf-{go,rust,c,cpp,python,nodejs,gns}` (UDP/
 gRPC/GNS nodes) and **`docker-hydramodem`** — the acoustic-modem toolbox
 (`frame_tx`/`frame_rx`/`tx_campaign`/`rx_campaign`/`dcf_loopback`/`sense_node` on PATH;
-a WAV/file PHY, default cmd = the interop self-test). **`docker/docker-compose.yml`**
+a WAV/file PHY, default cmd = the interop self-test) and **`docker-hydramesh`** — the
+Common Lisp SDK CLI node (`hydramesh` + StreamDB; versioned `2.2.0`, default cmd = its
+FiveAM self-test). The hermetic `docker-hydramesh` is now canonical for the
+`alh477/hydramesh` image; the traditional `lisp/Dockerfile` remains as a fallback.
+**`docker/docker-compose.yml`**
 brings the backends up together (`docker compose -f docker/docker-compose.yml up`);
 `--profile demo` adds a hydramodem acoustic file-link demo (one container modulates a
 frame onto a shared volume, another demodulates it). Interop matrix:

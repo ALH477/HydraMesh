@@ -471,3 +471,20 @@ jobs:
 
       - name: Certify the Lisp DeModFrame wire codec (dependency-free, no Quicklisp)
         run: sbcl --non-interactive --load lisp/src/wire.lisp --load lisp/src/fec.lisp
+
+      # Build the StreamDB foreign library and run the full HydraMesh SDK FiveAM
+      # suite. Separate from the dependency-free codec cert above so that fast gate
+      # still runs even if the Quicklisp bootstrap (which needs network) is flaky.
+      - name: Build libstreamdb + run the HydraMesh FiveAM suite
+        run: |
+          sudo apt-get install -y uuid-dev curl
+          gcc -shared -fPIC -O2 \
+            lisp/streamdb/streamdb.c lisp/streamdb/libstreamdb_wrapper.c \
+            -o /usr/local/lib/libstreamdb.so -luuid
+          sudo ldconfig
+          curl -sLO https://beta.quicklisp.org/quicklisp.lisp
+          sbcl --non-interactive \
+            --load quicklisp.lisp \
+            --eval '(quicklisp-quickstart:install :path "quicklisp/")' \
+            --load lisp/src/hydramesh.lisp \
+            --eval '(sb-ext:exit :code (if (d-lisp::run-tests) 0 1))'

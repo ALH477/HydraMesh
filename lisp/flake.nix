@@ -15,18 +15,21 @@
           overlays = [ emacs-overlay.overlays.default ];
         };
 
-        # List of required Quicklisp systems from the original code
+        # Required Quicklisp systems — kept in sync with the actual
+        # (ql:quickload ...) / defpackage list in src/hydramesh.lisp. cl-protobufs
+        # and jsonschema were dropped from the source (and jsonschema is not in
+        # nixpkgs lispPackages), so they are not listed here.
         qlSystems = [
-          "cffi" "uuid" "cl-protobufs" "usocket" "bordeaux-threads"
+          "cffi" "uuid" "usocket" "bordeaux-threads"
           "log4cl" "trivial-backtrace" "flexi-streams" "fiveam"
-          "ieee-floats" "cl-json" "jsonschema"
+          "ieee-floats" "cl-json"
         ];
 
         # SBCL with all required dependencies pre-loaded via Nixpkgs lispPackages
         sbclWithDeps = pkgs.sbcl.withPackages (ps: with ps; [
-          cffi uuid cl-protobufs usocket bordeauxThreads
-          log4cl trivial-backtrace flexiStreams fiveam
-          ieee-floats cl-json jsonschema
+          cffi uuid usocket bordeaux-threads
+          log4cl trivial-backtrace flexi-streams fiveam
+          ieee-floats cl-json
         ]);
 
         # Emacs with native compilation and SLY
@@ -48,7 +51,8 @@
 
           buildPhase = ''
             ${sbclWithDeps}/bin/sbcl --no-userinit --non-interactive \
-              --load hydramesh.lisp \
+              --load src/hydramesh.lisp \
+              --eval '(in-package :d-lisp)' \
               --eval '(dcf-deploy "hydramesh")' \
               --quit
           '';

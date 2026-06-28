@@ -17,10 +17,21 @@
 ;; - Audio-optimized with priority queuing
 ;; - Backward compatible with TCP/gRPC for reliable operations
 
-;; Dependencies: Install via Quicklisp
-(ql:quickload '(:cffi :uuid :usocket :bordeaux-threads
+;; Dependencies. Load portably so the same source works under both a Quicklisp
+;; environment (Roswell / the traditional Docker build) and a Nix
+;; sbcl.withPackages build, where the systems are exposed through ASDF and there
+;; is no :quicklisp package. uiop:symbol-call avoids a literal ql: symbol (which
+;; would fail to *read* when the QL package is absent). A bare sbcl.withPackages
+;; image does not pre-load ASDF/UIOP, so require it first (no-op under Quicklisp);
+;; --load processes the file form-by-form, so the packages exist before the next
+;; form (which references uiop:/asdf:) is read.
+(require "asdf")
+(let ((systems '(:cffi :uuid :usocket :bordeaux-threads
                  :log4cl :trivial-backtrace :flexi-streams :fiveam
-                 :ieee-floats :cl-json))
+                 :ieee-floats :cl-json)))
+  (if (find-package :quicklisp)
+      (uiop:symbol-call :ql :quickload systems :silent t)
+      (mapc #'asdf:load-system systems)))
 
 ;; FiveAM does not push :fiveam onto *features*; do it ourselves so the
 ;; #+fiveam-guarded test suite below is actually compiled and run-tests defined.
@@ -46,7 +57,15 @@
   (:wasm "libstreamdb.wasm")
   (t (:default "libstreamdb")))
 
-(cffi:use-foreign-library libstreamdb)
+;; Degrade gracefully if the shared object is missing: without this guard a
+;; missing libstreamdb.so aborts loading the whole file, so `main` (and the rest
+;; of the SDK) never gets defined. DB call sites are already null-guarded
+;; (dcf-init / dcf-db-* check (dcf-node-streamdb node)), so the node still runs
+;; with the database disabled. (format to *error-output* — the logger isn't
+;; configured yet at this point in the file.)
+(handler-case (cffi:use-foreign-library libstreamdb)
+  (error (e)
+    (format *error-output* "~&WARN: libstreamdb unavailable; DB disabled: ~A~%" e)))
 
 ;; StreamDB CFFI Bindings (updated for v2.2.0). Explicit underscore Lisp names so
 ;; they match the callers (cffi's default would hyphenate, leaving them undefined).
@@ -1302,7 +1321,7 @@ Repo: https://github.com/ALH477/DeMoD-Communication-Framework"))
              ((string= command "rollback-tx") (print (dcf-rollback-transaction (first cmd-args))))
              ((string= command "db-insert") (print (apply #'dcf-db-insert *node* cmd-args)))
              ((string= command "db-query") (print (apply #'dcf-db-query *node* cmd-args)))
-             ((string= command "test") (run-tests))
+             ((string= command "test") (sb-ext:exit :code (if (run-tests) 0 1)))
              (t (format t "Unknown: ~A. Try 'help'.~%" command)))))
     (error (e)
       (format t "Error: ~A~%" e))))
@@ -1337,11 +1356,19 @@ Repo: https://github.com/ALH477/DeMoD-Communication-Framework"))
 
 #+fiveam
 (defun run-tests ()
-  (fiveam:run! 'hydramesh-suite))
+  "Run the FiveAM suite, print the report, and return T iff every check passed.
+   Callers (e.g. the `test` subcommand / CI) turn the boolean into an exit code."
+  (let ((results (fiveam:run 'hydramesh-suite)))
+    (fiveam:explain! results)
+    (fiveam:results-status results)))
 
-;; Deployment
+;; Deployment. Forward the command-line arguments to MAIN: SBCL calls a :toplevel
+;; thunk with no arguments, so a bare #'main would always take the no-args (help)
+;; branch. This matches the Dockerfile's save-lisp-and-die invocation.
 (defun dcf-deploy (&optional output-file)
-  (sb-ext:save-lisp-and-die (or output-file "hydramesh") :executable t :toplevel #'main))
+  (sb-ext:save-lisp-and-die (or output-file "hydramesh")
+                            :executable t
+                            :toplevel (lambda () (apply #'main (rest sb-ext:*posix-argv*)))))
 
 ;; C7 regression guard: self-certify the wire codec against the cross-language
 ;; anchors when this file loads. A broken crc16-ccitt now fails the load loudly

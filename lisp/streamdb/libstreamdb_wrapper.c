@@ -1,5 +1,6 @@
 /* libstreamdb_wrapper.c */
 #include "streamdb.h"
+#include <stdlib.h>     // malloc/free — implicit decl is an error under gcc 14+
 #include <string.h>
 #include <uuid/uuid.h>  // For GUID generation
 

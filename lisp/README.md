@@ -1,6 +1,6 @@
 # HydraMesh (formerly DeMoD-LISP / D-LISP) SDK for DeMoD Communication Framework (DCF)
 
-**Version 2.1.0** | **Updated: October 26, 2025**  
+**Version 2.2.0** | **Updated: June 28, 2026**  
 **Developed by DeMoD LLC**
 **License**: GNU Lesser General Public License v3.0 (LGPL-3.0)  
 **Repository**: [https://github.com/ALH477/DeMoD-Communication-Framework](https://github.com/ALH477/DeMoD-Communication-Framework)  
