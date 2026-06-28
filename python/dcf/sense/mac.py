@@ -76,13 +76,42 @@ class Tdma(Mac):
         return self.window(node_slot, cycle + 1, epoch)[0]
 
 
+class Csma(Mac):
+    """Carrier-sense multiple access with exponential backoff, for low-traffic / ad-hoc
+    nodes that don't want assigned slots. A node transmits opportunistically; on a
+    detected collision the caller calls `backoff(attempt)` and retries after the
+    returned delay. NB: real carrier-sense needs the live medium (the gateway/PHY must
+    report channel-busy); on the loopback/file medium there are no true collisions, so
+    this behaves as send-on-ready. `rng` is injectable for deterministic tests."""
+    mode = "csma"
+
+    def __init__(self, slot_dur=0.5, max_backoff_slots=8, rng=None):
+        import random
+        self.slot_dur = float(slot_dur)
+        self.max_backoff_slots = int(max_backoff_slots)
+        self._rng = rng or random.Random()
+
+    def next_tx(self, node_slot, now, epoch=0.0):
+        return now                                  # send as soon as there's data
+
+    def backoff(self, attempt):
+        """Randomized exponential backoff delay (seconds) for retry `attempt` (0-based)."""
+        window = min(2 ** attempt, self.max_backoff_slots)
+        return self._rng.randint(0, max(0, window - 1)) * self.slot_dur
+
+
 def make_mac(cfg):
-    """Build a Mac from {mode, num_slots, slot_dur, guard}. Unknown modes raise."""
-    mode = (cfg or {}).get("mode", "tdma")
+    """Build a Mac from {mode, num_slots, slot_dur, guard}. Unknown modes raise.
+    `fdma` (per-node tone profiles) needs PHY plumbing and lands as a Phase-2 follow-up."""
+    cfg = cfg or {}
+    mode = cfg.get("mode", "tdma")
     if mode == "dedicated":
         return Dedicated()
     if mode == "tdma":
         return Tdma(num_slots=cfg.get("num_slots", 1),
                     slot_dur=cfg.get("slot_dur", 1.0),
                     guard=cfg.get("guard", 0.05))
-    raise ValueError(f"unknown mac mode {mode!r} (tdma|dedicated; fdma/csma in Phase 2)")
+    if mode == "csma":
+        return Csma(slot_dur=cfg.get("slot_dur", 0.5),
+                    max_backoff_slots=cfg.get("max_backoff_slots", 8))
+    raise ValueError(f"unknown mac mode {mode!r} (tdma|dedicated|csma; fdma in Phase 2)")
