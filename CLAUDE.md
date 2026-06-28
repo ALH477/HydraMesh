@@ -407,6 +407,30 @@ JANUS_TX=$PWD/result/bin/janus-tx JANUS_RX=$PWD/result/bin/janus-rx \
   python3 -m unittest python/tests/test_transport -k janus -v   # DCF frame -> JANUS cargo -> frame
 ```
 
+## DCF-Sense (configurable sensor telemetry)
+
+A telemetry layer for many sensor nodes → one gateway over a wired audio-band link
+(HydraModem) — built for greenhouses, medium/platform-agnostic. An **adapter + media-access
+layer over the 17-byte frame** (certificate untouched). Python: `python/dcf/sense/`. Spec:
+`Documentation/DCF_SENSE_SPEC.md`. **Phase 1 (MVP) shipped:** reading schema, TDMA/dedicated
+MAC, node + gateway, loopback demo, tests.
+
+- **Schema** (`schema.py`): one reading = one bare `DeModFrame` — `src_id`=node, payload
+  `[sensor_type u8 | value i16 scaled | flags u8]`; `physical = raw/SCALE[type]`. Efficient,
+  no adapter overhead. (Bundling via DCF-Game `EVENT` / SuperPack = Phase-2 options.)
+- **MAC** (`mac.py`): HydraModem has no media access, so a shared line needs it — configurable
+  `tdma` (slot per `node_id % num_slots`, beacon-synced, guard times) / `dedicated`; `fdma`
+  (per-node tone profiles) + `csma` are Phase 2.
+- **node.py / gateway.py / config.py**: node reads→encodes→sends in its slot over any DCF
+  `Transport`; gateway RX→`decode_reading`→egress (CSV/callback). Runs over HydraModem once a
+  HydraModem transport binding lands (the Phase-2 step; reuses the `_DirMedium`/JanusTransport
+  pattern).
+
+```sh
+python3 python/dcf/sense/demo.py --nodes 4 --mac tdma --cycles 3 --csv /tmp/sense.csv
+cd python && python3 -m unittest tests.test_sense_schema tests.test_sense_mac -v
+```
+
 ## DCF-WASM (browser comms client)
 
 The certified `codec/` compiled to `wasm32` (`codec-wasm/`, a wasm-bindgen
