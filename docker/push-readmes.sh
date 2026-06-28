@@ -11,7 +11,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ORG="${ORG:-alh477}"
-IMAGES=(dcf-go dcf-rs dcf-c dcf-cpp dcf-python dcf-nodejs)
+IMAGES=(dcf-go dcf-rs dcf-c dcf-cpp dcf-python dcf-nodejs hydramodem)
 
 short() { case "$1" in
   dcf-go)     echo "DCF mesh node (Go) — certified DeModFrame over ProtoMessage/UDP" ;;
@@ -20,6 +20,7 @@ short() { case "$1" in
   dcf-cpp)    echo "DCF gRPC node (C++) — DeModFrame/SuperPack over a bidirectional MeshStream" ;;
   dcf-python) echo "DCF mesh node (Python) — DeModFrame + SuperPack text endpoint" ;;
   dcf-nodejs) echo "DCF mesh node (Node.js) — DeModFrame + SuperPack over UDP (dgram)" ;;
+  hydramodem) echo "HydraModem acoustic modem toolbox — DeModFrame over sound (M-FSK + FEC)" ;;
 esac; }
 
 method="${1:-api}"
