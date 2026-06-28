@@ -511,3 +511,56 @@ class JanusTransport(_DirMedium):
         except subprocess.TimeoutExpired:
             return None
         return _janus_parse_cargo(res.stdout + res.stderr)
+
+
+# ── HydraModem acoustic/line transport ────────────────────────────────────────
+# Carries the 17-byte frame over HydraModem (continuous-phase M-FSK + soft-Viterbi
+# FEC), the modem we hardware-verified at 0% PER over a guitar cable. The transport
+# shells out to the single-frame `frame_tx`/`frame_rx` tools
+# (hydramodem/dcf-tools/build.sh) — a subprocess PHY, like the audio/janus transports.
+
+def hydramodem_available():
+    """True iff the HydraModem frame tools are reachable (PATH or $HYDRA_TX/$HYDRA_RX)."""
+    tx = os.environ.get("HYDRA_TX") or shutil.which("frame_tx")
+    rx = os.environ.get("HYDRA_RX") or shutil.which("frame_rx")
+    return bool(tx and rx)
+
+
+class HydraTransport(_DirMedium):
+    """Carry frames over HydraModem via the `frame_tx`/`frame_rx` tools. Raises at
+    construction if they aren't built/on PATH (run hydramodem/dcf-tools/build.sh, then
+    set $HYDRA_TX/$HYDRA_RX or put build/ on PATH)."""
+
+    EXT = ".wav"
+
+    def __init__(self, name="hydra", fec="conv", tx_bin=None, rx_bin=None,
+                 rate_bps=8000, **kw):
+        super().__init__(name, rate_bps=rate_bps, **kw)
+        self._tx = tx_bin or os.environ.get("HYDRA_TX") or shutil.which("frame_tx")
+        self._rx = rx_bin or os.environ.get("HYDRA_RX") or shutil.which("frame_rx")
+        if not self._tx or not self._rx:
+            raise RuntimeError(
+                "HydraModem tools not found: build hydramodem/dcf-tools (build.sh) and put "
+                "frame_tx/frame_rx on PATH or in $HYDRA_TX/$HYDRA_RX. See "
+                "Documentation/DCF_SENSE_SPEC.md")
+        self._fec = "--" + fec if fec in ("none", "rep3", "conv") else "--conv"
+
+    def _encode_file(self, frame, path):
+        subprocess.run([self._tx, bytes(frame).hex(), path, self._fec],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                       timeout=60)
+
+    def _decode_file(self, path):
+        try:
+            res = subprocess.run([self._rx, path, self._fec], capture_output=True,
+                                 text=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            return None
+        if res.returncode != 0:
+            return None
+        h = res.stdout.strip()
+        try:
+            b = bytes.fromhex(h)
+        except ValueError:
+            return None
+        return b if len(b) == FRAME_LEN else None

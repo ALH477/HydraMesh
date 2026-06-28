@@ -168,7 +168,7 @@ def _demo():
 # ── CLI: compose a node's shape from transports ───────────────────────────────
 def _make_transport(spec):
     from .transport import (UdpTransport, AudioTransport, SdrTransport, FileTransport,
-                            JanusTransport)
+                            JanusTransport, HydraTransport)
     typ, _, rest = spec.partition(":")
     kw = dict(kv.split("=", 1) for kv in rest.split(",") if kv) if rest else {}
     name = kw.pop("name", typ)
@@ -190,9 +190,14 @@ def _make_transport(spec):
                               pset_id=int(kw.get("pset", "1")), fs=int(kw.get("fs", "48000")),
                               pset_file=kw.get("pset_file"),
                               tx_bin=kw.get("tx"), rx_bin=kw.get("rx"))
+    if typ == "hydra":
+        # HydraModem (M-FSK + soft-Viterbi FEC) via the frame_tx/frame_rx subprocess PHY.
+        return HydraTransport(name, out_dir=kw.get("out"), in_dir=kw.get("in"),
+                              fec=kw.get("fec", "conv"),
+                              tx_bin=kw.get("tx"), rx_bin=kw.get("rx"))
     if typ == "file":
         return FileTransport(name, out_path=kw.get("out"), in_path=kw.get("in"))
-    raise SystemExit(f"unknown transport type {typ!r} (udp|audio|sdr|janus|file)")
+    raise SystemExit(f"unknown transport type {typ!r} (udp|audio|sdr|janus|hydra|file)")
 
 
 def main(argv=None):

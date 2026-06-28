@@ -6,9 +6,10 @@ moisture, CO₂, light/PAR, pH, EC, …) but medium- and platform-agnostic. It i
 media-access layer over the 17-byte `DeModFrame`**: it never changes the frame, so the
 246-vector wire certificate is untouched.
 
-Status: **Phase 1 (MVP)** — the reading schema, the TDMA/dedicated MAC, the node + gateway,
-and an end-to-end loopback demo are implemented and tested in Python (`python/dcf/sense/`).
-Phases 2–3 (FDMA/CSMA, mesh, MCU firmware, field test) are planned.
+Status: **Phase 1 done** (reading schema, TDMA/dedicated MAC, node + gateway, loopback demo,
+tests) **+ the HydraModem transport** (Phase 2 start): DCF-Sense runs end-to-end over the real
+modem at PER 0%. Remaining Phase 2–3 (FDMA/CSMA, mesh topology, MCU firmware, field test) are
+planned.
 
 ## Reading schema (the efficient default)
 
@@ -62,16 +63,23 @@ All selected by one config (`python/dcf/sense/config.py`: `topology`, `mac`, per
 ## Run it
 
 ```sh
-# End-to-end demo: N nodes -> gateway over the in-process loopback medium (deterministic).
+# End-to-end demo over the in-process loopback medium (deterministic):
 python3 python/dcf/sense/demo.py --nodes 4 --mac tdma --cycles 3 --csv /tmp/sense.csv
+
+# End-to-end over REAL HydraModem (each reading -> M-FSK audio -> decoded back), via a
+# shared dir = shared bus. Build the modem tools first:
+hydramodem/dcf-tools/build.sh
+python3 python/dcf/sense/demo.py --nodes 3 --mac tdma --cycles 2 --transport hydra
 
 # Unit tests
 cd python && python3 -m unittest tests.test_sense_schema tests.test_sense_mac -v
 ```
 
-The node/gateway take a `Transport`, so the same code runs over HydraModem once a HydraModem
-transport binding lands (the immediate Phase-2 step — subprocess to `hydramodem/dcf-tools`
-first, then a CFFI binding for FDMA's concurrent decoders). Over the wire, reuse the HydraModem
+**HydraModem transport (Phase 2, shipped):** `HydraTransport` (`python/dcf/transport.py`,
+factory `hydra:in=,out=,fec=`) drives HydraModem as a subprocess PHY via the single-frame
+`frame_tx`/`frame_rx` tools (`hydramodem/dcf-tools/`). DCF-Sense over it is verified end-to-end
+at PER 0% (file medium). A CFFI binding to `libhydramodem` is the next step (lower latency, and
+needed for FDMA's concurrent decoders). Over the wire, reuse the HydraModem
 `field-test.sh`/`duplex-test.sh` methodology to measure per-node PER and throughput.
 
 ## Wired-medium notes
