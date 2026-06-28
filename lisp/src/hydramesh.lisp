@@ -22,33 +22,6 @@
                  :log4cl :trivial-backtrace :flexi-streams :fiveam
                  :ieee-floats :cl-json))
 
-(cffi:define-foreign-library libstreamdb
-  (:unix "libstreamdb.so")
-  (:darwin "libstreamdb.dylib")
-  (:wasm "libstreamdb.wasm")
-  (t (:default "libstreamdb")))
-
-(cffi:use-foreign-library libstreamdb)
-
-;; StreamDB CFFI Bindings (updated for v2.2.0)
-(cffi:defcfun "streamdb_init" :pointer (file-path :string) (flush-interval-ms :int))
-(cffi:defcfun "streamdb_insert" :int (db :pointer) (key :pointer) (key-len :size) (value :pointer) (value-size :size))
-(cffi:defcfun "streamdb_get" :pointer (db :pointer) (key :pointer) (key-len :size) (size-ptr :pointer))
-(cffi:defcfun "streamdb_delete" :int (db :pointer) (key :pointer) (key-len :size))
-(cffi:defcfun "streamdb_prefix_search" :pointer (db :pointer) (prefix :pointer) (prefix-len :size))
-(cffi:defcfun "streamdb_free_results" :void (results :pointer))
-(cffi:defcfun "streamdb_flush" :int (db :pointer))
-(cffi:defcfun "streamdb_free" :void (db :pointer))
-(cffi:defcfun "streamdb_set_quick_mode" :void (db :pointer) (quick :boolean))
-
-;; Error Codes from StreamDB FFI
-(defconstant +success+ 0)
-(defconstant +err-io+ -1)
-(defconstant +err-not-found+ -2)
-(defconstant +err-invalid-input+ -3)
-(defconstant +err-panic+ -4)
-(defconstant +err-transaction+ -5)
-
 (defpackage :d-lisp
 (:use :cl :cffi :uuid :usocket :bordeaux-threads :log4cl
          :trivial-backtrace :flexi-streams :fiveam :ieee-floats :cl-json)
@@ -61,9 +34,42 @@
 
 (in-package :d-lisp)
 
+;; StreamDB foreign library + FFI bindings. Interned in :d-lisp (where they are
+;; used); the #.+success+ readers below need the constants bound at read time.
+(cffi:define-foreign-library libstreamdb
+  (:unix "libstreamdb.so")
+  (:darwin "libstreamdb.dylib")
+  (:wasm "libstreamdb.wasm")
+  (t (:default "libstreamdb")))
+
+(cffi:use-foreign-library libstreamdb)
+
+;; StreamDB CFFI Bindings (updated for v2.2.0). Explicit underscore Lisp names so
+;; they match the callers (cffi's default would hyphenate, leaving them undefined).
+(cffi:defcfun ("streamdb_init" streamdb_init) :pointer (file-path :string) (flush-interval-ms :int))
+(cffi:defcfun ("streamdb_insert" streamdb_insert) :int (db :pointer) (key :pointer) (key-len :size) (value :pointer) (value-size :size))
+(cffi:defcfun ("streamdb_get" streamdb_get) :pointer (db :pointer) (key :pointer) (key-len :size) (size-ptr :pointer))
+(cffi:defcfun ("streamdb_delete" streamdb_delete) :int (db :pointer) (key :pointer) (key-len :size))
+(cffi:defcfun ("streamdb_prefix_search" streamdb_prefix_search) :pointer (db :pointer) (prefix :pointer) (prefix-len :size))
+(cffi:defcfun ("streamdb_free_results" streamdb_free_results) :void (results :pointer))
+(cffi:defcfun ("streamdb_flush" streamdb_flush) :int (db :pointer))
+(cffi:defcfun ("streamdb_free" streamdb_free) :void (db :pointer))
+(cffi:defcfun ("streamdb_set_quick_mode" streamdb_set_quick_mode) :void (db :pointer) (quick :boolean))
+
+;; Error Codes from StreamDB FFI
+(defconstant +success+ 0)
+(defconstant +err-io+ -1)
+(defconstant +err-not-found+ -2)
+(defconstant +err-invalid-input+ -3)
+(defconstant +err-panic+ -4)
+(defconstant +err-transaction+ -5)
+
 ;; Logging Setup
 (defvar *dcf-logger* (log:category "dcf-lisp") "Logger for D-LISP.")
-(log:config *dcf-logger* :info) ; Default to info for gaming perf
+;; Default to info for gaming perf. Guarded: log4cl's config DSL varies across
+;; versions and rejects a logger instance in some, which must not abort loading.
+(handler-case (log:config *dcf-logger* :info)
+  (error () (ignore-errors (setf (log4cl:logger-log-level *dcf-logger*) :info))))
 
 ;; Global state
 (defvar *node* nil "Global DCF node instance")
@@ -712,7 +718,7 @@
                                        (remhash seq
                                                 (udp-endpoint-reliable-packets endpoint))
                                        (incf (network-stats-packets-lost
-                                              (udp-endpoint-stats endpoint)))))))))))
+                                              (udp-endpoint-stats endpoint))))))))))
                        (udp-endpoint-reliable-packets endpoint))))))
        :name "udp-reliable"))))
 (defun stop-udp-endpoint (endpoint)
@@ -1057,7 +1063,7 @@ matching is case- and punctuation-insensitive (immune to cl-json key mangling)."
         (unless init-ok
           (when (and (dcf-node-streamdb node)
                      (not (cffi:null-pointer-p (dcf-node-streamdb node))))
-            (streamdb_free (dcf-node-streamdb node)))))))
+            (streamdb_free (dcf-node-streamdb node))))))))
 ;; F6: peers are persisted as the JSON object {"peers":[...]} and restored
 ;; symmetrically; first boot (no key yet) is not an error.
 (defun restore-state (node)

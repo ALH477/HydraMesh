@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     libffi-dev \
     zlib1g-dev \
+    uuid-dev \
     git \
     curl \
     ca-certificates \
@@ -25,7 +26,15 @@ WORKDIR /build
 # Copy source files
 COPY src/ /build/src/
 COPY hydramesh.asd /build/
-COPY config/ /build/config/
+COPY streamdb/ /build/streamdb/
+
+# Build the StreamDB foreign library that hydramesh.lisp loads at startup
+# (cffi:use-foreign-library libstreamdb). Compiled from source so it is portable
+# into the runtime image; installed on the default loader path.
+RUN gcc -shared -fPIC -O2 \
+      /build/streamdb/streamdb.c /build/streamdb/libstreamdb_wrapper.c \
+      -o /usr/local/lib/libstreamdb.so -luuid \
+    && ldconfig
 
 # The fukamachi/sbcl image uses Roswell - Quicklisp is already available via ros
 # Install dependencies using ros/quicklisp
@@ -48,6 +57,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
     libffi8 \
     zlib1g \
+    libuuid1 \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /usr/share/man /tmp/* /var/tmp/* \
     && chmod 700 /root \
@@ -65,8 +75,12 @@ RUN mkdir -p /etc/hydramesh /var/lib/hydramesh /var/log/hydramesh && \
 # Copy executable from builder
 COPY --from=builder --chown=hydramesh:hydramesh /build/hydramesh /usr/local/bin/hydramesh
 
-# Copy config
-COPY --chown=hydramesh:hydramesh config/ /etc/hydramesh/
+# Copy the StreamDB foreign library (re-dlopen'd by the saved core on startup)
+COPY --from=builder /usr/local/lib/libstreamdb.so /usr/local/lib/
+RUN ldconfig
+
+# Copy config schema (the runtime config.json is created by `hydramesh init` or mounted)
+COPY --chown=hydramesh:hydramesh config.schema.json /etc/hydramesh/
 
 # Set secure permissions
 RUN chmod 755 /usr/local/bin/hydramesh && \
@@ -105,6 +119,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
     libffi8 \
     zlib1g \
+    libuuid1 \
     rlwrap \
     && rm -rf /var/lib/apt/lists/*
 
@@ -115,12 +130,16 @@ RUN groupadd -g 10001 hydramesh && \
 # Copy source
 COPY --chown=hydramesh:hydramesh src/ /home/hydramesh/src/
 
+# StreamDB foreign library for the REPL (loaded by hydramesh.lisp on load)
+COPY --from=builder /usr/local/lib/libstreamdb.so /usr/local/lib/
+RUN ldconfig
+
 # Create directories
 RUN mkdir -p /etc/hydramesh /var/lib/hydramesh /var/log/hydramesh && \
     chown -R hydramesh:hydramesh /var/lib/hydramesh /var/log/hydramesh /home/hydramesh
 
-# Copy config
-COPY --chown=hydramesh:hydramesh config/ /etc/hydramesh/
+# Copy config schema (runtime config.json is created via init or mounted)
+COPY --chown=hydramesh:hydramesh config.schema.json /etc/hydramesh/
 
 # Pre-install dependencies as root (Roswell cache is system-wide)
 RUN ros -e '(ql:quickload (quote (:cffi :uuid :usocket :bordeaux-threads :log4cl :trivial-backtrace :flexi-streams :fiveam :ieee-floats :cl-json)) :silent t)' -e '(quit)'
