@@ -1,0 +1,91 @@
+# DCF / HydraMesh — bring the node backends up together.
+# SPDX-License-Identifier: LGPL-3.0-only
+#
+#   docker compose -f docker/docker-compose.yml up            # the meshing nodes + hydramodem self-test
+#   docker compose -f docker/docker-compose.yml --profile demo up   # + a hydramodem acoustic file-link demo
+#
+# Images are built hermetically with Nix and published to Docker Hub (alh477/*) by
+# docker/build-and-push.sh. To use locally-built images instead, run
+# `./docker/build-and-push.sh PUSH=0` (or `nix build .#docker-<name> && docker load < result`).
+#
+# Backends and how they interoperate (see docker/mesh-interop-test.sh):
+#   ProtoMessage/UDP        : dcf-go, dcf-rs, dcf-c          (mesh with each other)
+#   bare frame+SuperPack/UDP: dcf-python, dcf-nodejs         (mesh with each other)
+#   gRPC bidi MeshStream    : dcf-cpp
+#   Steam/GNS hub           : dcf-gns
+#   acoustic WAV/file PHY   : hydramodem  (frame_tx/frame_rx/sense_node — not a UDP node)
+name: dcf
+
+networks:
+  dcf: {}
+
+volumes:
+  modem: {}        # a shared "wire" (the acoustic file medium) between hydramodem containers
+
+services:
+  # ── ProtoMessage/UDP mesh ───────────────────────────────────────────────────
+  dcf-go:
+    image: alh477/dcf-go:latest
+    command: ["start", "--bind", "0.0.0.0:7777"]
+    networks: [dcf]
+    ports: ["7777:7777/udp"]
+    restart: unless-stopped
+
+  dcf-rs:
+    image: alh477/dcf-rs:latest
+    command: ["start"]                       # ProtoMessage hub on :7777
+    networks: [dcf]
+    restart: unless-stopped
+
+  # ── bare frame + SuperPack/UDP ──────────────────────────────────────────────
+  dcf-python:
+    image: alh477/dcf-python:latest
+    command: ["recv", "--follow", "--channel", "duet", "--port", "7801"]
+    networks: [dcf]
+    restart: unless-stopped
+
+  dcf-nodejs:
+    image: alh477/dcf-nodejs:latest
+    command: ["recv", "--follow", "--channel", "duet", "--port", "7801"]
+    networks: [dcf]
+    restart: unless-stopped
+
+  # ── gRPC node ───────────────────────────────────────────────────────────────
+  dcf-cpp:
+    image: alh477/dcf-cpp:latest
+    command: ["serve", "--port", "50051", "--node-id", "cpp-hub"]
+    networks: [dcf]
+    ports: ["50051:50051"]
+    restart: unless-stopped
+
+  # ── Steam-compatible dedicated server (GameNetworkingSockets) ───────────────
+  dcf-gns:
+    image: alh477/dcf-gns:latest
+    command: ["serve-gns", "--port", "27015"]
+    networks: [dcf]
+    ports: ["27015:27015/udp"]
+    restart: unless-stopped
+
+  # ── HydraModem acoustic PHY ─────────────────────────────────────────────────
+  # A WAV/file modem, not a network daemon. On `up` it runs the DCF interop
+  # self-test (a real DeModFrame through TX->RX, byte-exact) and exits.
+  hydramodem:
+    image: alh477/hydramodem:latest
+    command: ["dcf_loopback"]
+    restart: "no"
+
+  # Acoustic file-link demo (`--profile demo`): one container modulates a frame onto
+  # the shared `modem` volume; the other demodulates it — the modem as a wire between
+  # containers, mirroring the dcf-c Faust-modem file-medium interop.
+  hydramodem-tx:
+    image: alh477/hydramodem:latest
+    profiles: [demo]
+    volumes: ["modem:/m"]
+    command: ["bash", "-c",
+              "frame_tx d310000100a1ffffdeadbeef0a1b2c6242 /m/frame.wav --conv && echo 'tx: wrote /m/frame.wav'"]
+  hydramodem-rx:
+    image: alh477/hydramodem:latest
+    profiles: [demo]
+    volumes: ["modem:/m"]
+    depends_on: [hydramodem-tx]
+    command: ["bash", "-c", "for i in $$(seq 1 50); do [ -f /m/frame.wav ] && break; sleep 0.2; done; echo 'rx: decoded' $$(frame_rx /m/frame.wav --conv)"]

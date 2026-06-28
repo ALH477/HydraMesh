@@ -374,6 +374,22 @@
             };
           };
 
+          # HydraModem toolbox image: the acoustic-modem CLI tools on PATH (a WAV/file
+          # PHY, not a network daemon). Default cmd runs the DCF interop self-test;
+          # override with any tool, e.g.
+          #   docker run --rm -v "$PWD:/m" alh477/hydramodem frame_tx <34-hex> /m/out.wav
+          #   docker run --rm -v "$PWD:/m" alh477/hydramodem frame_rx /m/out.wav
+          docker-hydramodem = pkgs.dockerTools.buildLayeredImage {
+            name = "alh477/hydramodem";
+            tag = "latest";
+            contents = [ hydramodem-tools pkgs.bashInteractive pkgs.coreutils ];
+            config = {
+              Env = [ "PATH=${hydramodem-tools}/bin:${pkgs.coreutils}/bin:${pkgs.bashInteractive}/bin" ];
+              Cmd = [ "dcf_loopback" ];
+              Labels = { "org.opencontainers.image.source" = "https://github.com/ALH477/HydraMesh"; };
+            };
+          };
+
           # Node.js SDK
           dcf-nodejs = pkgs.nodePackages.buildNpmPackage {
             pname = "dcf-nodejs";
@@ -448,6 +464,29 @@
               cp hydramodem/build/libhydramodem_faust.a $out/lib/
             '';
             meta.description = "HydraModem on the compiled Faust DSP backend (Faust 2.72.14)";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
+          };
+
+          # HydraModem CLI tools (the dcf-tools toolbox: frame_tx/frame_rx, tx/rx
+          # campaigns, dcf_loopback interop, sense_node) — static-linked to
+          # libhydramodem via dcf-tools/build.sh. This is what the container ships.
+          hydramodem-tools = pkgs.stdenv.mkDerivation {
+            pname = "hydramodem-tools";
+            version = "1.0.0";
+            src = self;
+            nativeBuildInputs = [ pkgs.gcc pkgs.gnumake pkgs.bash ];
+            buildPhase = ''
+              runHook preBuild
+              bash hydramodem/dcf-tools/build.sh
+              runHook postBuild
+            '';
+            installPhase = ''
+              mkdir -p $out/bin
+              for t in dcf_loopback tx_campaign rx_campaign frame_tx frame_rx sense_node; do
+                install -m755 hydramodem/dcf-tools/build/$t $out/bin/
+              done
+            '';
+            meta.description = "HydraModem CLI tools (frame_tx/frame_rx, campaigns, sense_node)";
             meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 

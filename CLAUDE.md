@@ -479,9 +479,20 @@ the `certify-lisp` CI loads. StreamDB (`lisp/streamdb/`, Rust via CFFI) is Lisp-
 ## Nix / Docker
 
 `flake.nix` exposes per-language packages (`dcf-c`, `dcf-cpp`, `dcf-go`,
-`streamdb`, `dcf-python`, `dcf-rust`, `dcf-nodejs`, `dcf-perl`, `dcf-docs`) and a
-default devShell (`nix develop`) with all toolchains. Top-level `Dockerfile`,
-`install_deps.sh`, and `*-edit-gen.sh` bootstrap environments.
+`streamdb`, `dcf-python`, `dcf-rust`, `dcf-nodejs`, `dcf-perl`, `dcf-docs`,
+`hydramodem`, `janus-c`) and a default devShell (`nix develop`) with all
+toolchains. Top-level `Dockerfile`, `install_deps.sh`, and `*-edit-gen.sh`
+bootstrap environments.
+
+Node Docker images are hermetic Nix `dockerTools` builds (`nix build .#docker-<name>`,
+or `docker/build-and-push.sh`): `docker-dcf-{go,rust,c,cpp,python,nodejs,gns}` (UDP/
+gRPC/GNS nodes) and **`docker-hydramodem`** — the acoustic-modem toolbox
+(`frame_tx`/`frame_rx`/`tx_campaign`/`rx_campaign`/`dcf_loopback`/`sense_node` on PATH;
+a WAV/file PHY, default cmd = the interop self-test). **`docker/docker-compose.yml`**
+brings the backends up together (`docker compose -f docker/docker-compose.yml up`);
+`--profile demo` adds a hydramodem acoustic file-link demo (one container modulates a
+frame onto a shared volume, another demodulates it). Interop matrix:
+`docker/mesh-interop-test.sh`.
 
 ## Conventions when changing the wire/audio path
 

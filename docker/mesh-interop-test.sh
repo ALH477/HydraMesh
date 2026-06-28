@@ -18,7 +18,7 @@ set -uo pipefail
 ORG="${ORG:-alh477}"; TAG="${TAG:-latest}"
 NET="dcf-interop-$$"; MODEM_VOL="dcf-modem-$$"
 GO="$ORG/dcf-go:$TAG"; RS="$ORG/dcf-rs:$TAG"; PY="$ORG/dcf-python:$TAG"
-JS="$ORG/dcf-nodejs:$TAG"; C="$ORG/dcf-c:$TAG"; CPP="$ORG/dcf-cpp:$TAG"
+JS="$ORG/dcf-nodejs:$TAG"; C="$ORG/dcf-c:$TAG"; CPP="$ORG/dcf-cpp:$TAG"; HM="$ORG/hydramodem:$TAG"
 fails=0
 pass() { echo "  PASS  $*"; }
 fail() { echo "  FAIL  $*"; fails=$((fails + 1)); }
@@ -74,10 +74,17 @@ echo "$out" | grep -q "frame (valid)"           && pass "C++ MeshStream frame ec
 echo "$out" | grep -q "superpack (2 frames"     && pass "C++ MeshStream SuperPack echo"     || fail "C++ superpack"
 docker rm -f cpp-hub >/dev/null 2>&1
 
+echo "== 6. HydraModem acoustic PHY (WAV/file medium): self-test + frame round-trip =="
+docker run --rm "$HM" 2>&1 | grep -q "INTEROP PASSED" && pass "hydramodem interop self-test" || fail "hydramodem self-test"
+docker run --rm -v "$MODEM_VOL:/m" "$HM" frame_tx d310000100a1ffffdeadbeef0a1b2c6242 /m/hm.wav --conv >/dev/null 2>&1
+docker run --rm -v "$MODEM_VOL:/m" "$HM" frame_rx /m/hm.wav --conv 2>&1 | grep -q "d310000100a1ffffdeadbeef0a1b2c6242" \
+  && pass "hydramodem frame_tx -> frame_rx byte-exact over a volume" || fail "hydramodem round-trip"
+
 echo
 if [ "$fails" -eq 0 ]; then
   echo "ALL INTEROP CHECKS PASSED — 6 DCF node images mesh across ProtoMessage/UDP (go/rust/c),"
-  echo "bare-frame+SuperPack (python/nodejs), the Faust modem (c), and gRPC (cpp)."
+  echo "bare-frame+SuperPack (python/nodejs), the Faust modem (c), and gRPC (cpp); plus the"
+  echo "hydramodem acoustic toolbox (frame round-trip over a shared volume)."
 else
   echo "$fails INTEROP CHECK(S) FAILED"; exit 1
 fi
