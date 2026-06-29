@@ -1,0 +1,44 @@
+# Cross-language Docker mesh interop — heavyweight, so NOT on every push.
+# Builds every node image hermetically with Nix (no registry push) and runs the
+# full interop matrix (docker/mesh-interop-test.sh), which exits non-zero on any
+# failure. Triggered manually or nightly.
+name: interop
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 7 * * *'   # 07:00 UTC nightly
+
+concurrency:
+  group: interop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mesh-interop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Nix build + many container images need disk; reclaim the space the
+      # runner pre-populates with unused language SDKs.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          docker image prune -af || true
+          df -h /
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      # Build + `docker load` all node images locally (PUSH=0 → no registry write).
+      # Low priority disabled (NICE=0) so CI isn't artificially throttled.
+      - name: Build node images (Nix, no push)
+        run: PUSH=0 NICE=0 ./docker/build-and-push.sh
+
+      # The script runs the identity/cross-cert matrix + live ProtoMessage/UDP,
+      # bare-frame+SuperPack, Faust modem, gRPC, hydramodem, and hydramesh checks,
+      # and `exit 1`s on the first failure.
+      - name: Run mesh interop matrix
+        run: ./docker/mesh-interop-test.sh
