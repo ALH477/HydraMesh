@@ -20,13 +20,15 @@
   "files": [
     "src/frame.js",
     "src/superpack.js",
-    "src/fec.js"
+    "src/fec.js",
+    "src/text.js"
   ],
   "scripts": {
-    "certify": "node test/certify.js && node test/certify_superpack.js && node test/certify_fec.js",
+    "certify": "node test/certify.js && node test/certify_superpack.js && node test/certify_fec.js && node test/certify_text.js",
     "certify:superpack": "node test/certify_superpack.js",
     "certify:fec": "node test/certify_fec.js",
-    "test": "node test/certify.js && node test/certify_superpack.js && node test/certify_fec.js"
+    "certify:text": "node test/certify_text.js",
+    "test": "node test/certify.js && node test/certify_superpack.js && node test/certify_fec.js && node test/certify_text.js"
   },
   "repository": {
     "type": "git",

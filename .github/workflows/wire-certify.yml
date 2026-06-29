@@ -411,6 +411,9 @@ jobs:
       - name: Certify the Node.js FEC adapter
         run: node JS/nodejs/test/certify_fec.js
 
+      - name: Certify the Node.js DCF-Text adapter
+        run: node JS/nodejs/test/certify_text.js
+
   certify-perl:
     runs-on: ubuntu-latest
     steps:
