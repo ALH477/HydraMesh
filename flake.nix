@@ -462,17 +462,25 @@
             };
           };
 
-          # Node.js SDK
-          dcf-nodejs = pkgs.nodePackages.buildNpmPackage {
+          # Node.js SDK — the published package is the dependency-free wire codec
+          # (frame/superpack/fec/text, pure Node stdlib; package.json has no deps).
+          # So this is a plain install, not buildNpmPackage: there is no lockfile
+          # and no npmDepsHash to pin, which is what made the old derivation
+          # unbuildable (fakeHash). Certification runs in the certify-node CI job
+          # (it needs Documentation/*_vectors.json, which live outside this src).
+          # The UDP node entrypoint is the separate `dcf-nodejs-node` wrapper.
+          dcf-nodejs = pkgs.stdenv.mkDerivation {
             pname = "dcf-nodejs";
             version = "0.3.0";
             src = self + "/JS/nodejs";
-            npmDepsHash = pkgs.lib.fakeHash; # TODO: real hash via `nix build` (needs a nix environment)
-            nativeBuildInputs = [ protobuf pkgs.grpc-tools.grpc_tools_node_protoc_ts ];
-            preBuild = ''
-              protoc -I${self} --js_out=import_style=commonjs,binary:src --grpc_out=grpc_js:src --plugin=protoc-gen-grpc=${pkgs.grpc-tools}/bin/grpc_node_plugin ${self}/messages.proto ${self}/services.proto
+            dontBuild = true;
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out/lib/dcf-wire
+              cp -r src package.json $out/lib/dcf-wire/
+              runHook postInstall
             '';
-            meta.description = "Node.js SDK for DCF";
+            meta.description = "Node.js DCF wire codec (certified, dependency-free)";
             meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 

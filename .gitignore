@@ -40,6 +40,10 @@ perl/MYMETA.*
 Documentation/_build/
 Documentation/_include/
 
+# Nix build artifacts
+result
+result-*
+
 # editor / OS
 .vscode/
 .idea/
