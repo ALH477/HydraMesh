@@ -492,21 +492,31 @@ DCFPooledConn* dcf_connpool_acquire(DCFConnPool* pool, const char* peer_id,
         /* Create new connection if under limit */
         if (pool->total_connections < pool->config.max_connections &&
             (peer->idle_count + peer->active_count) < pool->config.max_per_peer) {
-            
+
+            /* Reserve the slot under the lock BEFORE releasing it to call the
+             * factory (H2). Otherwise two acquirers can both pass this cap check,
+             * both unlock, both create, and overshoot max_connections. Roll the
+             * reservation back if the factory fails or the peer disappears. */
+            pool->total_connections++;
+            peer->active_count++;
+            pool->active_connections++;
+
             dcf_rwlock_unlock(&pool->peers_lock);
-            
+
             conn = create_connection(pool, peer_id);
-            
+
             dcf_rwlock_wrlock(&pool->peers_lock);
             peer = find_peer(pool, peer_id);
-            
-            if (conn && peer) {
-                pool->total_connections++;
-                peer->active_count++;
-                pool->active_connections++;
-            } else if (conn) {
-                destroy_connection(pool, conn);
-                conn = NULL;
+
+            if (!conn || !peer) {
+                /* undo the reservation; peer->active_count only if peer survives */
+                pool->total_connections--;
+                pool->active_connections--;
+                if (peer) peer->active_count--;
+                if (conn) {
+                    destroy_connection(pool, conn);
+                    conn = NULL;
+                }
             }
             break;
         }

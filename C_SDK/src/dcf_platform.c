@@ -277,8 +277,32 @@ int dcf_rwlock_unlock(dcf_rwlock_t* lock) {
     return pthread_rwlock_unlock(lock);
 }
 
+/* The condition variable and dcf_cond_timedwait's deadline MUST use the same
+ * clock: pthread_cond_timedwait interprets the absolute deadline against the
+ * clock the cond was initialised with. Previously the cond defaulted to
+ * CLOCK_REALTIME while the deadline was computed from CLOCK_MONOTONIC, so the
+ * (small, ~uptime) monotonic timestamp was read as a (huge, ~epoch) realtime
+ * deadline — already in the past — making every timed wait return ETIMEDOUT
+ * immediately (a busy-spin). Apple lacks pthread_condattr_setclock, so there we
+ * fall back to CLOCK_REALTIME on both sides. */
+#if defined(__APPLE__)
+#define DCF_COND_CLOCK CLOCK_REALTIME
+#else
+#define DCF_COND_CLOCK CLOCK_MONOTONIC
+#endif
+
 int dcf_cond_init(dcf_cond_t* cond) {
+#if defined(__APPLE__)
     return pthread_cond_init(cond, NULL);
+#else
+    pthread_condattr_t attr;
+    int rc = pthread_condattr_init(&attr);
+    if (rc != 0) return rc;
+    pthread_condattr_setclock(&attr, DCF_COND_CLOCK);
+    rc = pthread_cond_init(cond, &attr);
+    pthread_condattr_destroy(&attr);
+    return rc;
+#endif
 }
 
 int dcf_cond_destroy(dcf_cond_t* cond) {
@@ -291,7 +315,7 @@ int dcf_cond_wait(dcf_cond_t* cond, dcf_mutex_t* mutex) {
 
 int dcf_cond_timedwait(dcf_cond_t* cond, dcf_mutex_t* mutex, uint64_t timeout_ms) {
     struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
+    clock_gettime(DCF_COND_CLOCK, &ts);
     ts.tv_sec += timeout_ms / 1000;
     ts.tv_nsec += (timeout_ms % 1000) * 1000000;
     if (ts.tv_nsec >= 1000000000) {
