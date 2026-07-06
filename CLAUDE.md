@@ -19,6 +19,8 @@ Read these first — they are normative:
   over it (same fragmentation scheme as audio, on `DATA` frames).
 - `Documentation/DCF_TEXT_SPEC.md` — chat / agent-to-agent UTF-8 text as an adapter
   over it (also on `DATA` frames, but a 10-bit fragment index).
+- `Documentation/DCF_SSTV_SPEC.md` — slow-scan television (still images) as an adapter
+  over it (also on `DATA` frames, but an 11-bit fragment index), carried over HydraModem.
 - `Documentation/DCF_MESH_SPEC.md` — self-healing redundancy (peer-health FSM,
   REPORT/ROLE control, election + failover) as a `MsgMesh` control adapter.
 - `Documentation/DCF_SECURITY_EXPOSURE.md` — the plaintext wire's exposure and the
@@ -152,6 +154,40 @@ python3 python/MCP/gen_text_vectors.py /tmp/tv.json           # regen + verify l
 cd codec && cargo test --test certify_text                    # Rust
 gcc -std=c11 -I codec C_SDK/tests/test_text_certify.c -lm -o /tmp/tc && /tmp/tc  # C
 cd go && go test ./text/                                       # Go
+```
+
+## DCF-SSTV (slow-scan television / still images over the wire)
+
+A fourth adapter over `DeModFrame`, structurally like DCF-Text but tuned for the
+*largest* messages: one still image (opaque bytes) is serialised into `1 + ceil(len/4)`
+ordinary `DATA` (type 0) frames. The L2 framing is **content-agnostic and byte-certified
+across C/Rust/Python/Go/Node**; a `format_id` (JPEG/PNG/raw hint) lives in the descriptor,
+so adding image formats never changes the vectors. It is the digital, DCF-native
+reimagining of ham SSTV — a picture trickling across the narrow **HydraModem** acoustic
+link (~8–12 app-bytes/s), rendered top-down as fragments arrive.
+
+- `seq = image_id[15:11] | frag_idx[10:0]`; `frag_idx 0` = `[len_hi, len_lo, format_id, flags]`
+  (big-endian length); payload ≤ **8188 B/image** (2047 frags), `image_id` 0..31. Descriptor
+  `flags` (opaque to L2): bit0 MORE, bit1 KEYFRAME, bit2 RELIABLE. Text/game/sstv all ride
+  `DATA(0)` with **different** seq splits (text 6:10, game 11:5, sstv 5:11) and are separated
+  by deployment (one reassembler per `dst`) — never multiplex them on one `dst`.
+- L2 references: `codec/demod_sstv.h` (C), `codec/src/sstv.rs` (Rust),
+  `python/MCP/sstvlab_core.py` (Python, canonical), `go/sstv/sstv.go` (Go),
+  `JS/nodejs/src/sstv.js` (Node). Spec: `Documentation/DCF_SSTV_SPEC.md`.
+- Vectors: `Documentation/sstv_vectors.json` (+ identical `python/MCP/` copy) and
+  `codec/sstv_vectors.gen.h` (dependency-free C test).
+- HydraModem carriage: `hydramodem/dcf-tools/{sstv_send,sstv_recv}.c` (image ⇄ M-FSK WAV,
+  byte-exact) and the in-process demo `python/dcf/sstv_demo.py` (progressive scan render
+  over `LoopbackTransport`/`HydraTransport`). Images > 8188 B chain across `image_id`s (MORE).
+
+```sh
+python3 python/MCP/gen_sstv_vectors.py /tmp/sstv.json           # regen + verify laws
+cd codec && cargo test --test certify_sstv                      # Rust
+gcc -std=c11 -I codec C_SDK/tests/test_sstv_certify.c -lm -o /tmp/sc && /tmp/sc  # C
+cd go && go test ./sstv/                                         # Go
+node JS/nodejs/test/certify_sstv.js                             # Node
+cd hydramodem && dcf-tools/build.sh && \
+  dcf-tools/build/sstv_send img.jpg out.wav --conv && dcf-tools/build/sstv_recv out.wav got.jpg  # acoustic
 ```
 
 ## DCF SuperPack (the paired-frame container)

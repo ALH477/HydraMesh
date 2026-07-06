@@ -9,5 +9,6 @@ pub mod fec;
 pub mod game;
 pub mod mesh;
 pub mod modulation;
+pub mod sstv;
 pub mod superpack;
 pub mod text;

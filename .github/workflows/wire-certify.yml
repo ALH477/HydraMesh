@@ -296,6 +296,38 @@ jobs:
         working-directory: codec
         run: cargo test --test certify_text
 
+  certify-sstv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Regenerate SSTV vectors and diff against committed
+        run: |
+          python3 python/MCP/sstvlab_core.py
+          python3 python/MCP/gen_sstv_vectors.py /tmp/sstv_vectors.json
+          diff /tmp/sstv_vectors.json    Documentation/sstv_vectors.json
+          diff /tmp/sstv_vectors.json    python/MCP/sstv_vectors.json
+          diff /tmp/sstv_vectors.gen.h   codec/sstv_vectors.gen.h
+          echo "sstv vectors: committed == regenerated"
+
+      - name: Build and run C SSTV certification (L2-only)
+        run: |
+          gcc -std=c11 -Wall -Wextra -I codec \
+            -o /tmp/test_sstv_certify C_SDK/tests/test_sstv_certify.c -lm
+          /tmp/test_sstv_certify
+
+      - name: Run Rust SSTV certification
+        working-directory: codec
+        run: cargo test --test certify_sstv
+
   certify-lua:
     runs-on: ubuntu-latest
     steps:
@@ -413,6 +445,9 @@ jobs:
 
       - name: Certify the Node.js DCF-Text adapter
         run: node JS/nodejs/test/certify_text.js
+
+      - name: Certify the Node.js DCF-SSTV adapter
+        run: node JS/nodejs/test/certify_sstv.js
 
   certify-perl:
     runs-on: ubuntu-latest

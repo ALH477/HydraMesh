@@ -13,8 +13,8 @@ CC=${CC:-cc}
 CFLAGS=${CFLAGS:--std=gnu11 -O2 -Wall -Wextra}
 out="$here/build"
 mkdir -p "$out"
-for t in dcf_loopback tx_campaign rx_campaign frame_tx frame_rx sense_node; do
+for t in dcf_loopback tx_campaign rx_campaign frame_tx frame_rx sense_node sstv_send sstv_recv; do
     # shellcheck disable=SC2086
     $CC $CFLAGS "$here/$t.c" "$root/build/libhydramodem.a" -lm -o "$out/$t"
 done
-echo "built: $out/{dcf_loopback,tx_campaign,rx_campaign,frame_tx,frame_rx,sense_node}"
+echo "built: $out/{dcf_loopback,tx_campaign,rx_campaign,frame_tx,frame_rx,sense_node,sstv_send,sstv_recv}"
