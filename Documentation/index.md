@@ -49,6 +49,12 @@ Collaborative real-time audio as a certified adapter over the quantum.
 A certified low-latency multiplayer adapter over the same wire.
 ```
 
+```{grid-item-card} 🎚 DCF-Snake
+:link: DCF_SNAKE_SPEC
+:link-type: doc
+A synchronized studio audio snake over cat5e — quanta record + PCM cue planes to a mixer.
+```
+
 ```{grid-item-card} 📦 SuperPack
 :link: SUPERPACK_SPEC
 :link-type: doc
@@ -79,6 +85,7 @@ WIRE_QUANTUM_SPEC
 wire_quanta_category
 DCF_AUDIO_SPEC
 DCF_GAME_SPEC
+DCF_SNAKE_SPEC
 SUPERPACK_SPEC
 DCF_FIELD_USE
 ```
