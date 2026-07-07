@@ -21,6 +21,9 @@ Read these first — they are normative:
   over it (also on `DATA` frames, but a 10-bit fragment index).
 - `Documentation/DCF_SSTV_SPEC.md` — slow-scan television (still images) as an adapter
   over it (also on `DATA` frames, but an 11-bit fragment index), carried over HydraModem.
+- `Documentation/DCF_SNAKE_SPEC.md` — a synchronized studio audio snake over cat5e: a star
+  of nodes → one "mixer" hub, with a quanta-coded **record plane** (`CTRL` 5:11) and a
+  bidirectional low-latency PCM **cue plane** (`CTRL` 9:7), locked to a `BEACON` media clock.
 - `Documentation/DCF_MESH_SPEC.md` — self-healing redundancy (peer-health FSM,
   REPORT/ROLE control, election + failover) as a `MsgMesh` control adapter.
 - `Documentation/DCF_SECURITY_EXPOSURE.md` — the plaintext wire's exposure and the
@@ -188,6 +191,47 @@ cd go && go test ./sstv/                                         # Go
 node JS/nodejs/test/certify_sstv.js                             # Node
 cd hydramodem && dcf-tools/build.sh && \
   dcf-tools/build/sstv_send img.jpg out.wav --conv && dcf-tools/build/sstv_recv out.wav got.jpg  # acoustic
+```
+
+## DCF-Snake (synchronized studio audio snake over cat5e)
+
+A **two-plane** software audio snake: a *star* of source ("spoke") nodes streaming to one
+central **"mixer"** hub over dedicated **cat5e**, for studio use, with **two wires per node**.
+Both planes are adapters over `DeModFrame` (the 246-vector certificate is untouched), share one
+**BEACON(2) grandmaster media clock** from the mixer, and ride a **raw-L2-Ethernet transport**
+(a custom EtherType per plane, SuperPack-batched, no IP/UDP). Spec: `Documentation/DCF_SNAKE_SPEC.md`.
+
+- **Record plane (DCF-Snake):** compressed, sample-accurate multitrack *capture* carrying the
+  DeMoD **quanta** codec (QSS streaming; `/home/asher/Documents/DeMoD/quanta`). One QSS commit-hop
+  packet → one message on `CTRL(3)` frames, `seq = stream_id[15:11] | frag_idx[10:0]` (5:11, ≤8188
+  B/message); descriptor `[len_hi, len_lo, mode_id, flags]` (`mode_id` = live/near/relaxed hint).
+  quanta's ≥64 ms encode floor is unfit for live tracking but ideal for recording. The mixer is
+  the live analog of `client/src-tauri/src/recorder.rs`.
+- **Cue plane (DCF-Cue):** a *bidirectional* low-latency uncompressed-PCM monitor loop on the
+  second wire — sources send ~1 ms PCM blocks up, the mixer sums a per-node cue mix and returns
+  each performer their feed (~4–6 ms RT). `CTRL(3)`, `seq = block_seq[15:7] | frag_idx[6:0]` (9:7,
+  ≤508 B/block); descriptor `[block_samples, format, channels, flags]` (length self-describing).
+- **Clock = hybrid:** the mixer is grandmaster (16-byte `[gm_sample_count u64 | nominal_rate_mHz
+  u32 | tx_seq u16 | epoch u16]` in `BEACON(2)` frames, same 5:11 fragmenter); spokes run a PI
+  servo, the mixer runs per-source ASRC fallback. `unwrap_pid` is ported verbatim + certified from
+  `sync.rs`. **Byte-certified:** both L2 framings, the clock payload, `unwrap_pid`. **NOT
+  certified** (float DSP, like Opus/PM): quanta QSS audio, the mixer ASRC/PLC/cue-mix.
+- **quanta = shell out** to `quanta-stream` / `quanta-stream-decode` subprocesses (like
+  `JanusTransport`→janus-c), `$QUANTA_STREAM`/`$QUANTA_STREAM_DECODE`; kept out of the LGPL closure
+  (GPL-3.0-only OR DeMoD-Commercial), a standalone `nix build .#quanta`.
+- **References:** `codec/demod_snake.h` / `demod_monitor.h` (C), `codec/src/{snake,monitor}.rs`
+  (Rust), `python/MCP/{snakelab_core,monitorlab_core}.py` (Python). Nodes:
+  `hydramodem/dcf-tools/snake_{source,mixer}.c` (+ `snake_l2.c` raw-L2 transport). Vectors:
+  `Documentation/{snake,monitor}_vectors.json` (+ `python/MCP/` copies) and
+  `codec/{snake,monitor}_vectors.gen.h`. The wire is plaintext — deploy behind WireGuard
+  (`Documentation/DCF_SECURITY_EXPOSURE.md`).
+
+```sh
+python3 python/MCP/gen_snake_vectors.py   /tmp/sv.json                            # record: regen + verify laws
+python3 python/MCP/gen_monitor_vectors.py /tmp/mv.json                            # cue: regen + verify laws
+cd codec && cargo test --test certify_snake --test certify_monitor               # Rust
+gcc -std=c11 -I codec C_SDK/tests/test_snake_certify.c   -lm -o /tmp/sc && /tmp/sc  # C (record)
+gcc -std=c11 -I codec C_SDK/tests/test_monitor_certify.c -lm -o /tmp/mc && /tmp/mc  # C (cue)
 ```
 
 ## DCF SuperPack (the paired-frame container)

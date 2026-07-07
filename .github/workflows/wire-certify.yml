@@ -328,6 +328,85 @@ jobs:
         working-directory: codec
         run: cargo test --test certify_sstv
 
+  certify-snake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Self-test the DCF-Snake (record) and DCF-Cue (cue) L2 references
+        run: |
+          python3 python/MCP/snakelab_core.py
+          python3 python/MCP/monitorlab_core.py
+
+      - name: Regenerate Snake vectors (record plane + BEACON clock + unwrap_pid) and diff
+        run: |
+          python3 python/MCP/gen_snake_vectors.py /tmp/snake_vectors.json
+          diff /tmp/snake_vectors.json    Documentation/snake_vectors.json
+          diff /tmp/snake_vectors.json    python/MCP/snake_vectors.json
+          diff /tmp/snake_vectors.gen.h   codec/snake_vectors.gen.h
+          echo "snake vectors: committed == regenerated"
+
+      - name: Regenerate Cue vectors (cue plane PCM) and diff
+        run: |
+          python3 python/MCP/gen_monitor_vectors.py /tmp/monitor_vectors.json
+          diff /tmp/monitor_vectors.json   Documentation/monitor_vectors.json
+          diff /tmp/monitor_vectors.json   python/MCP/monitor_vectors.json
+          diff /tmp/monitor_vectors.gen.h  codec/monitor_vectors.gen.h
+          echo "cue vectors: committed == regenerated"
+
+      - name: Build and run C Snake + Cue certification (L2-only)
+        run: |
+          gcc -std=c11 -Wall -Wextra -I codec \
+            -o /tmp/test_snake_certify C_SDK/tests/test_snake_certify.c -lm
+          /tmp/test_snake_certify
+          gcc -std=c11 -Wall -Wextra -I codec \
+            -o /tmp/test_monitor_certify C_SDK/tests/test_monitor_certify.c -lm
+          /tmp/test_monitor_certify
+
+      - name: Build and run C raw-L2 SuperPack batching (+ compile the AF_PACKET socket impl)
+        run: |
+          gcc -std=c11 -Wall -Wextra -I codec \
+            -o /tmp/test_snake_l2 C_SDK/tests/test_snake_l2.c -lm
+          /tmp/test_snake_l2
+          gcc -std=c11 -Wall -Wextra -I codec -c hydramodem/dcf-tools/snake_l2.c -o /tmp/snake_l2.o
+
+      - name: Run the Python raw-L2 transport tests (privilege-free batch double)
+        run: python3 -m unittest python/tests/test_snake_l2.py -v
+
+      - name: Run the quanta ⇄ DCF-Snake bridge tests (QSS splitter; no quanta binary needed)
+        run: python3 -m unittest python/tests/test_quanta_bridge.py -v
+
+      - name: Build and run the mixer/spoke DSP unit tests (servo/jitter/ASRC/PLC/cue-mix)
+        run: |
+          gcc -std=c11 -Wall -Wextra -I codec \
+            -o /tmp/test_snake_dsp C_SDK/tests/test_snake_dsp.c -lm
+          /tmp/test_snake_dsp
+
+      - name: Build the DCF-Snake nodes + run the end-to-end in-process integration demo
+        run: |
+          cd hydramodem/dcf-tools
+          cc -std=gnu11 -O2 -Wall -Wextra -I../../codec snake_loopback.c -lm -o /tmp/snake_loopback
+          /tmp/snake_loopback
+          cc -std=gnu11 -O2 -Wall -Wextra -I../../codec snake_source.c snake_l2.c -lm -o /tmp/snake_source
+          cc -std=gnu11 -O2 -Wall -Wextra -I../../codec snake_mixer.c  snake_l2.c -lm -o /tmp/snake_mixer
+          head -c 200000 /dev/urandom > /tmp/pcm.f32
+          /tmp/snake_source --selftest --no-quanta --block 1024 --in /tmp/pcm.f32
+          /tmp/snake_mixer  --selftest --no-quanta --out /tmp/rec.f32
+
+      - name: Run Rust Snake + Cue certification
+        working-directory: codec
+        run: |
+          cargo test --test certify_snake
+          cargo test --test certify_monitor
+
   certify-lua:
     runs-on: ubuntu-latest
     steps:

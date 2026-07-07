@@ -18,3 +18,14 @@ for t in dcf_loopback tx_campaign rx_campaign frame_tx frame_rx sense_node sstv_
     $CC $CFLAGS "$here/$t.c" "$root/build/libhydramodem.a" -lm -o "$out/$t"
 done
 echo "built: $out/{dcf_loopback,tx_campaign,rx_campaign,frame_tx,frame_rx,sense_node,sstv_send,sstv_recv}"
+
+# DCF-Snake nodes (cat5e audio snake): the record/cue planes ride the certified codec + the
+# raw-L2 SuperPack transport (snake_l2.c), independent of the hydramodem acoustic lib. The
+# in-process integration demo (snake_loopback) needs no socket. See DCF_SNAKE_SPEC.md.
+# shellcheck disable=SC2086
+$CC $CFLAGS "$here/snake_loopback.c" -lm -o "$out/snake_loopback"
+for t in snake_source snake_mixer; do
+    # shellcheck disable=SC2086
+    $CC $CFLAGS "$here/$t.c" "$here/snake_l2.c" -lm -o "$out/$t"
+done
+echo "built: $out/{snake_loopback,snake_source,snake_mixer}"

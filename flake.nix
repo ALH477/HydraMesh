@@ -16,9 +16,15 @@
     # used by the DCF `janus:` transport as a subprocess only — never linked into
     # the LGPL library. See Documentation/DCF_JANUS_SPEC.md and LICENSING.md.
     janus-c-src = { url = "github:mission-systems-pty-ltd/janus-c"; flake = false; };
+    # GPL-3.0-only (OR DeMoD Commercial) quanta codec. Built as a SEPARATE package and
+    # used by the DCF-Snake record plane via the quanta-stream / quanta-stream-decode
+    # subprocesses only — never linked into the LGPL library (mere aggregation, like
+    # janus-c). quanta lives in the `quanta/` subdir of the DeMoD monorepo. See
+    # Documentation/DCF_SNAKE_SPEC.md and LICENSING.md.
+    demod-quanta-src = { url = "github:ALH477/DeMoD"; flake = false; };
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay, nixpkgs-faust, janus-c-src }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay, nixpkgs-faust, janus-c-src, demod-quanta-src }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; overlays = [ rust-overlay.overlays.default ]; };
@@ -584,6 +590,31 @@
             # The upstream CMakeLists predates CMake 4's minimum-policy removal.
             cmakeFlags = [ "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" ];
             meta.description = "JANUS (STANAG 4748) underwater acoustic modem reference (janus-tx/janus-rx)";
+            meta.license = pkgs.lib.licenses.gpl3Only;
+          };
+
+          # DeMoD quanta codec (Gabor-atom matching pursuit + QSS streaming) — GPL-3.0-only
+          # OR DeMoD Commercial. A STANDALONE package: the DCF-Snake record plane invokes
+          # quanta-stream / quanta-stream-decode as separate processes (never linked), so
+          # this GPL build is NOT in any LGPL package's closure. Only libm; builds with the
+          # quanta Makefile's own determinism CFLAGS. See Documentation/DCF_SNAKE_SPEC.md.
+          quanta = pkgs.stdenv.mkDerivation {
+            pname = "quanta";
+            version = "unstable";
+            src = "${demod-quanta-src}/quanta";
+            buildPhase = ''
+              runHook preBuild
+              mkdir -p bin
+              make bin/quanta-stream bin/quanta-stream-decode
+              runHook postBuild
+            '';
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out/bin
+              cp bin/quanta-stream bin/quanta-stream-decode $out/bin/
+              runHook postInstall
+            '';
+            meta.description = "DeMoD quanta codec streaming encoder/decoder (quanta-stream/quanta-stream-decode)";
             meta.license = pkgs.lib.licenses.gpl3Only;
           };
 
