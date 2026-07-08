@@ -12,14 +12,22 @@
  * frames arrive on a raw-L2 socket when --iface is given, else --selftest drives the RX pipeline
  * in-process so the node builds and self-tests without CAP_NET_RAW or quanta.
  *
- * Usage: snake_mixer [--iface IF] [--channel NAME] [--out FILE] [--nodes N] [--no-quanta]
+ * Shared memory mode (--shm): writes each source's decoded audio to a per-source ring buffer
+ * (/demod-snake-src-{N}) that demod-rt can read. This is the hub integration path for the x86
+ * recording node.
+ *
+ * Usage: snake_mixer [--iface IF] [--channel NAME] [--out FILE] [--nodes N] [--shm] [--no-quanta]
  *                    [--selftest]
  */
 #include "../../codec/demod_snake.h"
 #include "snake_l2.h"
 #include "snake_node.h"
 #include "snake_dsp.h"
+#include "snake_ipc.h"
 #include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/mman.h>
 
 #ifndef SNAKE_MIX_MAX_SRC
 #define SNAKE_MIX_MAX_SRC 8u
@@ -35,9 +43,64 @@ typedef struct {
     snake_jb_t    jb;
     snake_asrc_t  asrc;
     snake_plc_t   plc;
+    /* Shared memory ring for hub integration */
+    int           shm_fd;
+    size_t        shm_size;
+    SnakeSpsc    *shm_ring;
 } mix_src_t;
 
 static mix_src_t g_src[SNAKE_MIX_MAX_SRC];
+static int g_shm_enabled = 0;
+
+/* Create shared memory ring for a source (hub mode) */
+static int create_source_ring(mix_src_t *s, uint16_t src_id) {
+    if (!g_shm_enabled) return 0;
+    
+    char shm_name[64];
+    snprintf(shm_name, sizeof(shm_name), SNAKE_IPC_SRC_SHM_PREFIX "%u", src_id);
+    
+    size_t size = snake_spsc_alloc_size(SNAKE_IPC_RING_CAP);
+    int fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666);
+    if (fd < 0) {
+        fprintf(stderr, "snake-mixer: shm_open(%s) failed: %s\n", shm_name, strerror(errno));
+        return -1;
+    }
+    
+    if (ftruncate(fd, size) < 0) {
+        fprintf(stderr, "snake-mixer: ftruncate failed: %s\n", strerror(errno));
+        close(fd);
+        shm_unlink(shm_name);
+        return -1;
+    }
+    
+    void *ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (ptr == MAP_FAILED) {
+        fprintf(stderr, "snake-mixer: mmap failed: %s\n", strerror(errno));
+        close(fd);
+        shm_unlink(shm_name);
+        return -1;
+    }
+    
+    s->shm_fd = fd;
+    s->shm_size = size;
+    s->shm_ring = snake_spsc_init(ptr, SNAKE_IPC_RING_CAP);
+    
+    fprintf(stderr, "snake-mixer: created source ring %s (src_id=%u)\n", shm_name, src_id);
+    return 0;
+}
+
+/* Close shared memory ring for a source */
+static void close_source_ring(mix_src_t *s) {
+    if (s->shm_ring) {
+        munmap(s->shm_ring, s->shm_size);
+        close(s->shm_fd);
+        char shm_name[64];
+        snprintf(shm_name, sizeof(shm_name), SNAKE_IPC_SRC_SHM_PREFIX "%u", s->src_id);
+        shm_unlink(shm_name);
+        s->shm_ring = NULL;
+        s->shm_fd = -1;
+    }
+}
 
 static mix_src_t *src_for(uint16_t id) {
     mix_src_t *free_slot = NULL;
@@ -49,10 +112,18 @@ static mix_src_t *src_for(uint16_t id) {
     memset(free_slot, 0, sizeof *free_slot);
     free_slot->in_use = true;
     free_slot->src_id = id;
+    free_slot->shm_fd = -1;
+    free_slot->shm_ring = NULL;
     dcf_snake_reasm_init(&free_slot->reasm, DCF_TYPE_CTRL);
     snake_jb_init(&free_slot->jb, SNAKE_MIX_BLK, 2);
     snake_asrc_init(&free_slot->asrc, 1.0);          /* refined per-source via clock skew */
     snake_plc_init(&free_slot->plc, SNAKE_MIX_BLK, 0.5f);
+    
+    /* Create shared memory ring if enabled */
+    if (create_source_ring(free_slot, id) < 0) {
+        fprintf(stderr, "snake-mixer: warning: failed to create shm ring for src %u\n", id);
+    }
+    
     return free_slot;
 }
 
@@ -74,7 +145,8 @@ static void on_message(mix_src_t *s, const dcf_snake_msg_t *msg, int no_quanta) 
     snake_jb_push(&s->jb, s->hop++, pcm, SNAKE_MIX_BLK);
 }
 
-/* Drain each source's jitter buffer by one block, drift-correct, and sum into the record bus. */
+/* Drain each source's jitter buffer by one block, drift-correct, and sum into the record bus.
+ * If shared memory is enabled, also write each source's decoded audio to its ring buffer. */
 static size_t mix_tick(float *bus, size_t cap) {
     memset(bus, 0, cap * sizeof(float));
     float blk[SNAKE_MIX_BLK], res[SNAKE_MIX_BLK * 2];
@@ -86,6 +158,12 @@ static size_t mix_tick(float *bus, size_t cap) {
         if (st == SNAKE_JB_UNDERRUN) continue;
         if (st == SNAKE_JB_GAP) snake_plc_conceal(&s->plc, blk);
         else                    snake_plc_good(&s->plc, blk, SNAKE_MIX_BLK);
+        
+        /* Write decoded audio to shared memory ring if enabled */
+        if (s->shm_ring) {
+            snake_spsc_push(s->shm_ring, blk, SNAKE_MIX_BLK);
+        }
+        
         size_t m = snake_asrc_process(&s->asrc, blk, SNAKE_MIX_BLK, res, SNAKE_MIX_BLK * 2);
         if (m > cap) m = cap;
         for (size_t j = 0; j < m; j++) bus[j] += res[j];
@@ -115,6 +193,7 @@ int main(int argc, char **argv) {
         if      (!strcmp(argv[i], "--iface")   && i + 1 < argc) iface   = argv[++i];
         else if (!strcmp(argv[i], "--channel") && i + 1 < argc) channel = argv[++i];
         else if (!strcmp(argv[i], "--out")     && i + 1 < argc) outfile = argv[++i];
+        else if (!strcmp(argv[i], "--shm"))                      g_shm_enabled = 1;
         else if (!strcmp(argv[i], "--no-quanta")) no_quanta = 1;
         else if (!strcmp(argv[i], "--selftest"))  selftest = 1;
     }
@@ -199,6 +278,14 @@ int main(int argc, char **argv) {
         if (m) { ticks++; gm += m; if (sink) fwrite(bus, sizeof(float), m, sink); }
         broadcast_beacon(&sock, dry, gm, ++bseq);
     }
+    
+    /* Cleanup shared memory rings */
+    for (size_t i = 0; i < SNAKE_MIX_MAX_SRC; i++) {
+        if (g_src[i].in_use) {
+            close_source_ring(&g_src[i]);
+        }
+    }
+    
     if (sink) fclose(sink);
     if (sock.fd >= 0) dcf_snake_l2_close(&sock);
     fprintf(stderr, "snake-mixer: %lu messages, %lu mixed ticks (dst 0x%04X)\n", msgs, ticks, dst);
