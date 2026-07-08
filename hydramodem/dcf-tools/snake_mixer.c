@@ -47,6 +47,10 @@ typedef struct {
     int           shm_fd;
     size_t        shm_size;
     SnakeSpsc    *shm_ring;
+    /* Cue ring: demod-rt writes, snake_mixer reads, sends back to spoke */
+    int           cue_fd;
+    size_t        cue_size;
+    SnakeSpsc    *cue_ring;
 } mix_src_t;
 
 static mix_src_t g_src[SNAKE_MIX_MAX_SRC];
@@ -102,6 +106,44 @@ static void close_source_ring(mix_src_t *s) {
     }
 }
 
+/* Open cue ring for a source (created by demod-rt, read by snake_mixer) */
+static int open_cue_ring(mix_src_t *s, uint16_t src_id) {
+    if (!g_shm_enabled) return 0;
+    
+    char shm_name[64];
+    snprintf(shm_name, sizeof(shm_name), SNAKE_IPC_CUE_SHM_PREFIX "%u", src_id);
+    
+    size_t size = snake_spsc_alloc_size(SNAKE_IPC_RING_CAP);
+    int fd = shm_open(shm_name, O_RDWR, 0666);
+    if (fd < 0) {
+        /* Cue ring is optional — demod-rt may not be running */
+        return 0;
+    }
+    
+    void *ptr = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
+    if (ptr == MAP_FAILED) {
+        close(fd);
+        return 0;
+    }
+    
+    s->cue_fd = fd;
+    s->cue_size = size;
+    s->cue_ring = (SnakeSpsc *)ptr;
+    
+    fprintf(stderr, "snake-mixer: opened cue ring %s (src_id=%u)\n", shm_name, src_id);
+    return 1;
+}
+
+/* Close cue ring for a source */
+static void close_cue_ring(mix_src_t *s) {
+    if (s->cue_ring) {
+        munmap(s->cue_ring, s->cue_size);
+        close(s->cue_fd);
+        s->cue_ring = NULL;
+        s->cue_fd = -1;
+    }
+}
+
 static mix_src_t *src_for(uint16_t id) {
     mix_src_t *free_slot = NULL;
     for (size_t i = 0; i < SNAKE_MIX_MAX_SRC; i++) {
@@ -114,6 +156,8 @@ static mix_src_t *src_for(uint16_t id) {
     free_slot->src_id = id;
     free_slot->shm_fd = -1;
     free_slot->shm_ring = NULL;
+    free_slot->cue_fd = -1;
+    free_slot->cue_ring = NULL;
     dcf_snake_reasm_init(&free_slot->reasm, DCF_TYPE_CTRL);
     snake_jb_init(&free_slot->jb, SNAKE_MIX_BLK, 2);
     snake_asrc_init(&free_slot->asrc, 1.0);          /* refined per-source via clock skew */
@@ -122,6 +166,11 @@ static mix_src_t *src_for(uint16_t id) {
     /* Create shared memory ring if enabled */
     if (create_source_ring(free_slot, id) < 0) {
         fprintf(stderr, "snake-mixer: warning: failed to create shm ring for src %u\n", id);
+    }
+    
+    /* Open cue ring if enabled (non-fatal if demod-rt isn't running yet) */
+    if (open_cue_ring(free_slot, id) < 0) {
+        fprintf(stderr, "snake-mixer: warning: failed to open cue ring for src %u\n", id);
     }
     
     return free_slot;
@@ -259,6 +308,7 @@ int main(int argc, char **argv) {
     /* live loop: recv → unbatch → per-src reassemble → decode → jitter; periodically mix + beacon */
     uint8_t eth[SNAKE_MIX_BLK * 8];
     uint64_t gm = 0; uint16_t bseq = 0;
+    uint64_t cue_ticks = 0;
     while (!dry) {
         long n = dcf_snake_l2_recv(&sock, eth, sizeof eth);
         if (n < 0) break;
@@ -276,6 +326,32 @@ int main(int argc, char **argv) {
         }
         size_t m = mix_tick(bus, SNAKE_MIX_BLK * 2);
         if (m) { ticks++; gm += m; if (sink) fwrite(bus, sizeof(float), m, sink); }
+        
+        /* Cue path: read from cue rings, send raw PCM back to spokes on cue plane */
+        for (size_t i = 0; i < SNAKE_MIX_MAX_SRC; i++) {
+            mix_src_t *s = &g_src[i];
+            if (!s->in_use || !s->cue_ring) continue;
+            float cue_pcm[SNAKE_MIX_BLK];
+            uint64_t got = snake_spsc_pop(s->cue_ring, cue_pcm, SNAKE_MIX_BLK);
+            if (got > 0) {
+                /* Send cue audio back to this spoke via raw-L2 cue plane */
+                uint8_t cue_frames[DCF_SNAKE_MAX_FRAMES][DCF_FRAME_SIZE];
+                uint8_t cue_eth[9000];
+                size_t cnf = 0, celen = 0;
+                dcf_snake_packetize((uint8_t *)cue_pcm, got * sizeof(float),
+                                    (uint16_t)(gm & 0xFFFF), 0, s->src_id, dst,
+                                    DCF_SNAKE_MODE_LIVE, 0,
+                                    cue_frames, DCF_SNAKE_MAX_FRAMES, &cnf);
+                size_t cc = dcf_snake_l2_capacity(9000);
+                for (size_t base = 0; base < cnf; base += cc) {
+                    size_t chunk = (cnf - base < cc) ? (cnf - base) : cc;
+                    dcf_snake_l2_batch(&cue_frames[base], chunk, cue_eth, sizeof cue_eth, &celen);
+                    dcf_snake_l2_send(&sock, NULL, cue_eth, celen);
+                }
+                cue_ticks++;
+            }
+        }
+        
         broadcast_beacon(&sock, dry, gm, ++bseq);
     }
     
@@ -283,11 +359,13 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < SNAKE_MIX_MAX_SRC; i++) {
         if (g_src[i].in_use) {
             close_source_ring(&g_src[i]);
+            close_cue_ring(&g_src[i]);
         }
     }
     
     if (sink) fclose(sink);
     if (sock.fd >= 0) dcf_snake_l2_close(&sock);
-    fprintf(stderr, "snake-mixer: %lu messages, %lu mixed ticks (dst 0x%04X)\n", msgs, ticks, dst);
+    fprintf(stderr, "snake-mixer: %lu messages, %lu mixed ticks, %lu cue ticks (dst 0x%04X)\n", 
+            msgs, ticks, cue_ticks, dst);
     return 0;
 }
