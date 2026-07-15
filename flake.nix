@@ -678,6 +678,7 @@
             # self-resolve langgraph_agents via sys.path manipulation).
             agentPython = pkgs.python3.withPackages (ps: with ps; [
               langgraph langchain-core httpx pydantic rich textual pytest
+              fastapi uvicorn mcp
             ]);
             agentCLI = pkgs.writeShellApplication {
               name = "dcf-agent";
@@ -695,6 +696,22 @@
                 exec ${agentPython}/bin/python -m langgraph_agents.tui "$@"
               '';
             };
+            agentServe = pkgs.writeShellApplication {
+              name = "dcf-agent-serve";
+              runtimeInputs = [ agentPython ];
+              text = ''
+                export PYTHONPATH="${self}/langgraph_agents''${PYTHONPATH:+:$PYTHONPATH}"
+                exec ${agentPython}/bin/python -m langgraph_agents.cli serve "$@"
+              '';
+            };
+            agentMCP = pkgs.writeShellApplication {
+              name = "dcf-agent-mcp";
+              runtimeInputs = [ agentPython ];
+              text = ''
+                export PYTHONPATH="${self}/langgraph_agents''${PYTHONPATH:+:$PYTHONPATH}"
+                exec ${agentPython}/bin/python -m langgraph_agents.cli mcp "$@"
+              '';
+            };
           in {
             a2a = mkApp interactive "dcf-a2a";
             a2a-demo = mkApp demo "dcf-a2a-demo";
@@ -706,6 +723,8 @@
             mesh-viz = mkApp viz "dcf-mesh-viz";
             agent = mkApp agentCLI "dcf-agent";
             agent-tui = mkApp agentTUI "dcf-agent-tui";
+            agent-serve = mkApp agentServe "dcf-agent-serve";
+            agent-mcp = mkApp agentMCP "dcf-agent-mcp";
             default = mkApp interactive "dcf-a2a";
           };
 
@@ -835,6 +854,7 @@
             packages = [
               (pkgs.python3.withPackages (ps: with ps; [
                 langgraph langchain-core httpx pydantic rich textual
+                fastapi uvicorn mcp
                 pytest pytest-asyncio
               ]))
             ];
@@ -844,10 +864,12 @@
               echo "  dcf-agent backends                     # list LLM backends"
               echo "  dcf-agent chat --backend echo 'hi'     # one-shot chat"
               echo "  dcf-agent agents --config langgraph_agents/agents.jsonc"
-              echo "  dcf-agent-tui                           # interactive TUI"
+              echo "  dcf-agent tui                           # interactive TUI"
+              echo "  dcf-agent serve --port 8000             # HTTP API server"
+              echo "  dcf-agent mcp                            # MCP server (stdio)"
               echo "  cd langgraph_agents && pytest -v        # run tests"
             '';
-            meta.description = "HydraMesh LangGraph agent CLI/TUI dev shell";
+            meta.description = "HydraMesh LangGraph agent CLI/TUI/API/MCP dev shell";
           };
         };
       }

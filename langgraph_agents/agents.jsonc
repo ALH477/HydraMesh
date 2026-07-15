@@ -27,10 +27,30 @@
       "poll_interval": 1.0
     }
   ],
+  // Universal provider configs — register any OpenAI-compatible API.
+  // "provider" selects a preset (fireworks, openai, grok, ollama, etc.),
+  // or omit it and use base_url + api_key + model directly.
+  "providers": [
+    {
+      "name": "fireworks-glm5p2",
+      "provider": "fireworks",
+      "model": "accounts/fireworks/models/glm-5p2"
+    },
+    {
+      "name": "ollama-local",
+      "provider": "ollama",
+      "model": "llama3"
+    }
+  ],
   "mesh_server": {
     "command": "python3",
     "args": ["matrix-bridge/mesh_mcp.py", "http"],
     "port": 8765,
-    "host": "127.0.0.1"
+    "host": "127.0.0.1",
+    "url": "http://127.0.0.1:8765"
+  },
+  "api_server": {
+    "host": "0.0.0.0",
+    "port": 8000
   }
 }

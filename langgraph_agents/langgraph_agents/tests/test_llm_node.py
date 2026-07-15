@@ -1,76 +1,86 @@
 # Copyright (C) 2026 DeMoD LLC
 # SPDX-License-Identifier: LGPL-3.0-only
-"""Tests for LLM backend registration and wiring."""
-from langgraph_agents.llm_node import BACKENDS, get_backend
+"""Tests for the universal LLM backend system."""
+from langgraph_agents.llm_node import (
+    BACKENDS, UniversalBackend, PROVIDER_PRESETS,
+    make_provider_backend, register_provider, register_from_config,
+    list_backends, list_providers,
+)
 
 
-def test_echo_backend_registered():
-    assert "echo" in BACKENDS
+def test_universal_backend_is_callable():
+    """UniversalBackend should be callable like other backends."""
+    b = UniversalBackend(base_url="http://example.com/v1", api_key="k", model="m")
+    assert callable(b)
 
 
-def test_grok_backend_registered():
-    assert "grok" in BACKENDS
+def test_universal_backend_strips_trailing_slash():
+    b = UniversalBackend(base_url="http://example.com/v1/", api_key="k", model="m")
+    assert b.base_url == "http://example.com/v1"
 
 
-def test_glm5p2_backend_registered():
-    """glm5p2 should be a registered backend name."""
-    assert "glm5p2" in BACKENDS, f"glm5p2 not in BACKENDS: {list(BACKENDS)}"
+def test_provider_presets_contain_known_providers():
+    for name in ("fireworks", "openai", "grok", "ollama", "deepseek", "openrouter"):
+        assert name in PROVIDER_PRESETS, f"missing preset: {name}"
 
 
-def test_glm5p2_backend_callable():
-    """The glm5p2 backend should be callable with a messages list."""
-    backend = get_backend("glm5p2")
-    assert callable(backend)
+def test_make_provider_backend_fireworks():
+    """make_provider_backend with fireworks preset should create UniversalBackend."""
+    import os
+    os.environ["FIREWORKS_API_KEY"] = "fw_test"
+    b = make_provider_backend("fireworks")
+    assert isinstance(b, UniversalBackend)
+    assert b.base_url == "https://api.fireworks.ai/inference/v1"
+    assert b.api_key == "fw_test"
+    assert b.model == "accounts/fireworks/models/glm-5p2"
 
 
-def test_get_backend_unknown_raises():
-    """Unknown backend name should raise ValueError."""
+def test_make_provider_backend_unknown_raises():
     try:
-        get_backend("nonexistent")
-        assert False, "should have raised"
+        make_provider_backend("nonexistent")
+        assert False
     except ValueError:
         pass
 
 
-def test_glm5p2_backend_makes_correct_api_call(monkeypatch):
-    """Verify glm5p2 backend calls Fireworks with correct model and headers."""
-    from unittest.mock import MagicMock
-    from langgraph_agents.llm_node import fireworks_backend
-
-    monkeypatch.setenv("FIREWORKS_API_KEY", "fw_test123")
-
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {
-        "choices": [{"message": {"content": "GLM response here"}}]
-    }
-    mock_resp.raise_for_status = MagicMock()
-
-    import httpx
-    calls = []
-
-    def mock_post(url, **kwargs):
-        calls.append({"url": url, "kwargs": kwargs})
-        return mock_resp
-
-    monkeypatch.setattr(httpx, "post", mock_post)
-
-    messages = [{"role": "user", "content": "test prompt"}]
-    result = fireworks_backend(messages)
-
-    assert result == "GLM response here"
-    assert len(calls) == 1
-    assert calls[0]["url"] == "https://api.fireworks.ai/inference/v1/chat/completions"
-    assert calls[0]["kwargs"]["json"]["model"] == "accounts/fireworks/models/glm-5p2"
-    assert calls[0]["kwargs"]["headers"]["Authorization"] == "Bearer fw_test123"
+def test_register_provider_adds_to_backends():
+    """register_provider should add a callable to BACKENDS."""
+    def custom_backend(msgs):
+        return "custom"
+    register_provider("test-custom", custom_backend)
+    assert "test-custom" in BACKENDS
+    assert BACKENDS["test-custom"]([{"role": "user", "content": "hi"}]) == "custom"
+    # cleanup
+    del BACKENDS["test-custom"]
 
 
-def test_glm5p2_backend_no_api_key_raises(monkeypatch):
-    """Should raise ValueError when FIREWORKS_API_KEY is not set."""
-    from langgraph_agents.llm_node import fireworks_backend
+def test_register_from_config():
+    """register_from_config should register providers from config list."""
+    register_from_config([
+        {"name": "cfg-fireworks", "provider": "fireworks", "model": "test-model"},
+        {"name": "cfg-direct", "base_url": "http://custom.api/v1", "api_key": "k", "model": "m"},
+    ])
+    assert "cfg-fireworks" in BACKENDS
+    assert "cfg-direct" in BACKENDS
+    assert isinstance(BACKENDS["cfg-fireworks"], UniversalBackend)
+    assert isinstance(BACKENDS["cfg-direct"], UniversalBackend)
+    # cleanup
+    del BACKENDS["cfg-fireworks"]
+    del BACKENDS["cfg-direct"]
 
-    monkeypatch.delenv("FIREWORKS_API_KEY", raising=False)
-    try:
-        fireworks_backend([{"role": "user", "content": "hi"}])
-        assert False, "should have raised"
-    except ValueError as e:
-        assert "FIREWORKS_API_KEY" in str(e)
+
+def test_list_backends_returns_sorted():
+    backends = list_backends()
+    assert backends == sorted(backends)
+    assert "echo" in backends
+
+
+def test_list_providers_returns_sorted():
+    providers = list_providers()
+    assert providers == sorted(providers)
+    assert "fireworks" in providers
+
+
+def test_ollama_preset_has_no_env():
+    """Ollama runs locally, so no API key env should be required."""
+    assert PROVIDER_PRESETS["ollama"]["api_key_env"] == ""

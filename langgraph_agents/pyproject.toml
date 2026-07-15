@@ -20,6 +20,8 @@ dependencies = [
 dev = ["pytest", "pytest-asyncio"]
 cli = ["rich>=13.0"]
 tui = ["rich>=13.0", "textual>=0.50"]
+api = ["fastapi>=0.100", "uvicorn>=0.20"]
+mcp-server = ["mcp>=1.0"]
 
 [project.scripts]
 dcf-agent = "langgraph_agents.cli:main"

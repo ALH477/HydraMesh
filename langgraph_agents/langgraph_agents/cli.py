@@ -215,6 +215,21 @@ def cmd_tui(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    """Start the HTTP API server."""
+    from langgraph_agents.api_server import run_server
+    run_server(host=args.host, port=args.port, config_path=args.config)
+    return 0
+
+
+def cmd_mcp(args: argparse.Namespace) -> int:
+    """Start the MCP server (stdio transport)."""
+    import asyncio
+    from langgraph_agents.mcp_server import run_stdio
+    asyncio.run(run_stdio(config_path=args.config))
+    return 0
+
+
 # ── entry point ──────────────────────────────────────────────────────────────
 
 def build_parser() -> argparse.ArgumentParser:
@@ -260,6 +275,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--mesh-url", default="http://127.0.0.1:8765",
                     help="Mesh MCP server URL")
     p.set_defaults(func=cmd_tui)
+
+    # serve (HTTP API server)
+    p = sub.add_parser("serve", help="Start the HTTP API server")
+    p.add_argument("--host", default="0.0.0.0", help="Bind address")
+    p.add_argument("--port", type=int, default=8000, help="Port")
+    p.add_argument("--config", default="agents.jsonc", help="Path to agents.jsonc")
+    p.set_defaults(func=cmd_serve)
+
+    # mcp (MCP server over stdio)
+    p = sub.add_parser("mcp", help="Start the MCP server (stdio transport)")
+    p.add_argument("--config", default="agents.jsonc", help="Path to agents.jsonc")
+    p.set_defaults(func=cmd_mcp)
 
     return parser
 
