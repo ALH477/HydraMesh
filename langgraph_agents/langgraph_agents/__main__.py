@@ -23,8 +23,12 @@ logger = logging.getLogger("langgraph-agents")
 
 
 def strip_jsonc(text: str) -> str:
-    """Strip // and /* */ comments, allow trailing commas."""
-    text = re.sub(r'//.*$', '', text, flags=re.MULTILINE)
+    """Strip // and /* */ comments, allow trailing commas.
+
+    Only strips // comments that start a line (after optional whitespace)
+    to avoid eating // inside string values like URLs.
+    """
+    text = re.sub(r'(?m)^\s*//.*$', '', text)
     text = re.sub(r'/\*.*?\*/', '', text, flags=re.DOTALL)
     text = re.sub(r',\s*([}\]])', r'\1', text)
     return text

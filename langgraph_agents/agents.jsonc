@@ -17,6 +17,14 @@
       "channel": "agent",
       "mesh_url": "http://127.0.0.1:8765",
       "poll_interval": 0.5
+    },
+    {
+      "name": "glm5p2-agent",
+      "graph": "coordinator",
+      "llm_backend": "glm5p2",
+      "channel": "glm",
+      "mesh_url": "http://127.0.0.1:8765",
+      "poll_interval": 1.0
     }
   ],
   "mesh_server": {

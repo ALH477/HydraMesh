@@ -40,9 +40,33 @@ def grok_backend(messages: list[dict]) -> str:
     return resp.json()["choices"][0]["message"]["content"]
 
 
+def fireworks_backend(messages: list[dict]) -> str:
+    """GLM-5p2 via Fireworks AI (OpenAI-compatible API). Requires FIREWORKS_API_KEY env."""
+    import httpx
+    api_key = os.environ.get("FIREWORKS_API_KEY", "")
+    if not api_key:
+        raise ValueError("FIREWORKS_API_KEY not set")
+    resp = httpx.post(
+        "https://api.fireworks.ai/inference/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": "accounts/fireworks/models/glm-5p2",
+            "messages": messages,
+            "stream": False,
+        },
+        timeout=60.0,
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
+
+
 BACKENDS: dict[str, Callable[[list[dict]], str]] = {
     "echo": echo_backend,
     "grok": grok_backend,
+    "glm5p2": fireworks_backend,
 }
 
 
