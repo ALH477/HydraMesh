@@ -1,0 +1,28 @@
+{
+  // Agent configuration for the LangGraph MCP realtime system.
+  // Each agent binds a graph type to a DCF channel and LLM backend.
+  "agents": [
+    {
+      "name": "echo-agent",
+      "graph": "base",
+      "llm_backend": "echo",
+      "channel": "echo",
+      "mesh_url": "http://127.0.0.1:8765",
+      "poll_interval": 1.0
+    },
+    {
+      "name": "coordinator-agent",
+      "graph": "coordinator",
+      "llm_backend": "grok",
+      "channel": "agent",
+      "mesh_url": "http://127.0.0.1:8765",
+      "poll_interval": 0.5
+    }
+  ],
+  "mesh_server": {
+    "command": "python3",
+    "args": ["matrix-bridge/mesh_mcp.py", "http"],
+    "port": 8765,
+    "host": "127.0.0.1"
+  }
+}
