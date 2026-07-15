@@ -215,17 +215,6 @@ def cmd_tui(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_sierpinski(args: argparse.Namespace) -> int:
-    """Print a Sierpinski triangle."""
-    tri = _sierpinski(depth=args.depth, char=args.char)
-    console, _, Panel, _ = _try_rich_print()
-    if console and Panel:
-        console.print(Panel(tri, title=f"Sierpinski (depth={args.depth})", border_style="cyan"))
-    else:
-        print(tri)
-    return 0
-
-
 # ── entry point ──────────────────────────────────────────────────────────────
 
 def build_parser() -> argparse.ArgumentParser:
@@ -272,19 +261,30 @@ def build_parser() -> argparse.ArgumentParser:
                     help="Mesh MCP server URL")
     p.set_defaults(func=cmd_tui)
 
-    # sierpinski
-    p = sub.add_parser("sierpinski", help="Print a Sierpinski triangle")
-    p.add_argument("--depth", type=int, default=4, help="Recursion depth (1-7)")
-    p.add_argument("--char", default="▲", help="Character to use")
-    p.set_defaults(func=cmd_sierpinski)
-
     return parser
+
+
+def _print_banner() -> None:
+    """Print the Sierpinski greeting banner."""
+    tri = _sierpinski(depth=3, char="▲")
+    console, _, Panel, _ = _try_rich_print()
+    if console and Panel:
+        console.print(Panel(
+            f"[cyan]{tri}[/cyan]\n[dim]HydraMesh LangGraph Agent System v0.1.0[/dim]",
+            border_style="cyan",
+            padding=(0, 2),
+        ))
+    else:
+        print(tri)
+        print("HydraMesh LangGraph Agent System v0.1.0")
+    print()
 
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
     parser = build_parser()
     args = parser.parse_args(argv)
+    _print_banner()
     return args.func(args)
 
 

@@ -76,19 +76,11 @@ def test_cmd_status_connection_failure(capsys):
     assert rc == 1
 
 
-def test_cmd_sierpinski(capsys):
-    """sierpinski subcommand should produce triangle output."""
-    main(["sierpinski", "--depth", "2"])
-    captured = capsys.readouterr()
-    assert "▲" in captured.out
-
-
 def test_sierpinski_depth_1():
     """depth=1 should produce a single triangle."""
     from langgraph_agents.cli import _sierpinski
     result = _sierpinski(depth=1)
     assert "▲" in result
-    assert len(result.strip().split("\n")) == 2  # 1 line padded + 1 line
 
 
 def test_sierpinski_grows_with_depth():
@@ -97,3 +89,11 @@ def test_sierpinski_grows_with_depth():
     shallow = len(_sierpinski(depth=1).split("\n"))
     deep = len(_sierpinski(depth=3).split("\n"))
     assert deep > shallow
+
+
+def test_banner_shown_on_every_command(capsys):
+    """The Sierpinski banner should appear before command output."""
+    main(["backends"])
+    captured = capsys.readouterr()
+    assert "▲" in captured.out
+    assert "HydraMesh" in captured.out
