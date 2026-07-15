@@ -468,6 +468,26 @@
             };
           };
 
+          # LangGraph agent system image: the HTTP API server + CLI + MCP server.
+          # Entrypoint is `dcf-agent serve` (HTTP API on :8000). Override cmd for
+          # other modes:
+          #   docker run alh477/dcf-agent mcp               # MCP server (stdio)
+          #   docker run alh477/dcf-agent backends          # list LLM backends
+          #   docker run alh477/dcf-agent chat "hi"         # one-shot chat
+          # Encryption-free for export control purposes.
+          docker-dcf-agent = pkgs.dockerTools.buildLayeredImage {
+            name = "alh477/dcf-agent";
+            tag = "latest";
+            contents = [ agentCLI agentTUI agentServe agentMCP agentPython pkgs.cacert ];
+            config = {
+              Entrypoint = [ "${agentCLI}/bin/dcf-agent" ];
+              Cmd = [ "serve" "--host" "0.0.0.0" "--port" "8000" ];
+              Env = [ "PYTHONPATH=${self}/langgraph_agents" ];
+              ExposedPorts = { "8000/tcp" = {}; };
+              Labels = { "org.opencontainers.image.source" = "https://github.com/ALH477/HydraMesh"; };
+            };
+          };
+
           # Node.js SDK — the published package is the dependency-free wire codec
           # (frame/superpack/fec/text, pure Node stdlib; package.json has no deps).
           # So this is a plain install, not buildNpmPackage: there is no lockfile
