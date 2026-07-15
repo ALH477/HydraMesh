@@ -689,163 +689,21 @@ DeMoD LLC developed the only complete GPLv3 version of StreamDB from Iain Ballar
 
 ## LangGraph Multi-Agent System (`langgraph_agents/`)
 
-The `langgraph_agents/` package adds LLM-powered agents that communicate over
-the DCF mesh in realtime using the Model Context Protocol (MCP). Agents are
-built as LangGraph state graphs (receive → route → process → respond) with
-pluggable LLM backends and MCP tool wrappers for `mesh_send`, `mesh_recv`,
-and `mesh_status`.
+LLM-powered agents that communicate over the DCF mesh in realtime using MCP.
+Pluggable LLM backends (echo, Grok, GLM-5p2 via Fireworks, or any
+OpenAI-compatible API), coordinator-based routing, HTTP API server, MCP
+server, Rich CLI + Textual TUI with Sierpinski greeting banner, and native
+Lisp DSL integration. Encryption-free for export control purposes.
 
-### Export control
-
-The agent system is **encryption-free** for export control purposes. Agents
-communicate over the same plaintext DCF transport — there is no separate
-encrypted channel. This keeps the system within EAR/ITAR export compliance
-boundaries. Any security layer is external to this package and connected
-through IPC barriers.
-
-### Architecture
-
-```
-mesh_recv → receive → route → process (LLM backend) → respond → mesh_send
-                                                      ↑
-                                         coordinator routes by prefix:
-                                         echo:       → echo specialist
-                                         summarize:  → summarizer specialist
-                                         (default)   → echo
-```
-
-- **State graph**: LangGraph `StateGraph` with `AgentState` (messages, channel,
-  sender, routing_decision, response, metadata).
-- **LLM backends**: `echo` (test), `grok` (xAI), `glm5p2` (Fireworks GLM-5p2).
-  Any OpenAI-compatible endpoint can be added.
-- **MCP tools**: `MeshSendTool`, `MeshRecvTool`, `MeshStatusTool` — LangChain
-  tool wrappers that call the MCP server over HTTP.
-- **Streaming bridge**: chunks LLM responses to fit DCF-Text's per-message cap
-  with UTF-8 boundary safety (never splits mid-character).
-- **Coordinator graph**: prefix-based routing to specialist subgraphs. Add new
-  specialists by registering a process function.
-
-### CLI
+**Full documentation:** [`langgraph_agents/README.md`](langgraph_agents/README.md)
 
 ```bash
-# List configured agents
-dcf-agent agents --config langgraph_agents/agents.jsonc
-
-# List available LLM backends
-dcf-agent backends
-
-# One-shot: send a message, get response
-dcf-agent chat --backend echo "hello mesh"
-dcf-agent chat --graph coordinator "echo: test routing"
-
-# Start the mesh poll loop (long-lived)
-dcf-agent run --config langgraph_agents/agents.jsonc
-
-# Query mesh endpoint status
-dcf-agent status --mesh-url http://127.0.0.1:8765
+nix run .#agent -- backends          # list LLM backends
+nix run .#agent-serve                # HTTP API server
+nix run .#agent-mcp                  # MCP server (stdio)
+nix develop .#agents                 # dev shell
+docker run -p 8000:8000 alh477/dcf-agent
 ```
-
-Every CLI command prints a Sierpinski triangle greeting banner.
-
-### TUI
-
-```bash
-dcf-agent tui --config langgraph_agents/agents.jsonc
-```
-
-Interactive Textual-based TUI with:
-- Agent config sidebar (left)
-- Message log (main panel, scrolling)
-- Input bar — type a message, press Enter to process
-- `Ctrl+B` — cycle LLM backend
-- `Ctrl+G` — cycle graph type (base / coordinator)
-- `Ctrl+S` — query mesh status
-- `Ctrl+T` — toggle Sierpinski triangle display
-- `Ctrl+C` — quit
-
-### Nix integration
-
-```bash
-# Run the CLI or TUI directly
-nix run .#agent -- backends
-nix run .#agent-tui
-
-# Dev shell with everything on PATH
-nix develop .#agents
-dcf-agent backends
-dcf-agent-tui
-```
-
-### Configuration (`agents.jsonc`)
-
-```jsonc
-{
-  "agents": [
-    {
-      "name": "echo-agent",
-      "graph": "base",
-      "llm_backend": "echo",
-      "channel": "echo",
-      "mesh_url": "http://127.0.0.1:8765"
-    },
-    {
-      "name": "glm5p2-agent",
-      "graph": "coordinator",
-      "llm_backend": "glm5p2",
-      "channel": "glm",
-      "mesh_url": "http://127.0.0.1:8765"
-    }
-  ]
-}
-```
-
-### Use cases
-
-- **Disconnected/edge deployments**: agents communicate over UDP, acoustic,
-  SDR, or any DCF transport — no internet required.
-- **Multi-agent coordination**: a coordinator routes messages to specialists.
-  Add translators, analysts, coders — they plug into the graph.
-- **Pluggable LLM backends**: echo for testing, Grok via xAI, GLM-5p2 via
-  Fireworks. Any OpenAI-compatible endpoint works.
-- **Realtime mesh integration**: agents poll the mesh via MCP, process through
-  a LangGraph state machine, and respond back. The streaming bridge chunks
-  responses to fit DCF-Text's frame limit.
-- **Export-compliant**: encryption-free by design. Safe for EAR/ITAR-regulated
-  environments where cryptographic layers are restricted.
-
-### Tests
-
-```bash
-cd langgraph_agents && pytest -v    # 60 tests
-```
-
-### Lisp DSL integration
-
-The Lisp SDK (`lisp/src/hydramesh.lisp`) has native agent functions that call
-the API server over HTTP. No external HTTP library needed — the implementation
-uses usocket + flexi-streams (already in the dependency closure).
-
-```lisp
-(dcf-agent-health)                         ;; check API server
-(dcf-agent-backends)                       ;; list LLM backends
-(dcf-agent-providers)                      ;; list provider presets
-(dcf-agent-chat "hello" :backend "echo")   ;; one-shot chat
-(dcf-agent-chat "echo: test" :graph "coordinator")
-(dcf-agent-chat "hello" :backend "glm5p2") ;; GLM-5p2 via Fireworks
-(dcf-agent-set-url "http://192.168.1.50:8000")  ;; point at remote API
-```
-
-CLI subcommands:
-```bash
-hydramesh agent-health
-hydramesh agent-backends
-hydramesh agent-providers
-hydramesh agent-chat "hello"
-```
-
-Encryption-free for export control purposes — the Lisp agent integration
-communicates over plaintext HTTP to the API server, same as the rest of
-the DCF transport.
 
 ## Documentation
 
