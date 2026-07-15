@@ -674,6 +674,27 @@
               text = ''exec ${meshPython}/bin/python ${self}/matrix-bridge/mesh_mcp.py http "$@"'';
             };
             mkApp = drv: bin: { type = "app"; program = "${drv}/bin/${bin}"; };
+            # LangGraph agent CLI + TUI (python withPackages; the scripts
+            # self-resolve langgraph_agents via sys.path manipulation).
+            agentPython = pkgs.python3.withPackages (ps: with ps; [
+              langgraph langchain-core httpx pydantic rich textual pytest
+            ]);
+            agentCLI = pkgs.writeShellApplication {
+              name = "dcf-agent";
+              runtimeInputs = [ agentPython ];
+              text = ''
+                export PYTHONPATH="${self}/langgraph_agents''${PYTHONPATH:+:$PYTHONPATH}"
+                exec ${agentPython}/bin/python -m langgraph_agents.cli "$@"
+              '';
+            };
+            agentTUI = pkgs.writeShellApplication {
+              name = "dcf-agent-tui";
+              runtimeInputs = [ agentPython ];
+              text = ''
+                export PYTHONPATH="${self}/langgraph_agents''${PYTHONPATH:+:$PYTHONPATH}"
+                exec ${agentPython}/bin/python -m langgraph_agents.tui "$@"
+              '';
+            };
           in {
             a2a = mkApp interactive "dcf-a2a";
             a2a-demo = mkApp demo "dcf-a2a-demo";
@@ -683,6 +704,8 @@
             mesh-agent = mkApp meshAgent "dcf-mesh-agent";
             mesh-http = mkApp meshHttp "dcf-mesh-http";
             mesh-viz = mkApp viz "dcf-mesh-viz";
+            agent = mkApp agentCLI "dcf-agent";
+            agent-tui = mkApp agentTUI "dcf-agent-tui";
             default = mkApp interactive "dcf-a2a";
           };
 
@@ -797,6 +820,34 @@
               echo "  cargo run --manifest-path web/bridge/Cargo.toml -- --listen 127.0.0.1:7000"
             '';
             meta.description = "HydraMesh browser WASM client + WS↔UDP bridge dev shell";
+          };
+
+          # LangGraph agent system (langgraph_agents/). The CLI and TUI are
+          # available as `nix run .#agent` / `nix run .#agent-tui`; this shell
+          # is for development — run tests, edit code, iterate.
+          #   nix develop .#agents
+          #   dcf-agent backends                      # list LLM backends
+          #   dcf-agent chat --backend echo "hi"      # one-shot
+          #   dcf-agent agents --config langgraph_agents/agents.jsonc
+          #   dcf-agent-tui                            # interactive TUI
+          #   cd langgraph_agents && pytest -v         # run tests
+          agents = pkgs.mkShell {
+            packages = [
+              (pkgs.python3.withPackages (ps: with ps; [
+                langgraph langchain-core httpx pydantic rich textual
+                pytest pytest-asyncio
+              ]))
+            ];
+            shellHook = ''
+              export PYTHONPATH="${self}/langgraph_agents''${PYTHONPATH:+:$PYTHONPATH}"
+              echo "◈ HydraMesh LangGraph agent shell"
+              echo "  dcf-agent backends                     # list LLM backends"
+              echo "  dcf-agent chat --backend echo 'hi'     # one-shot chat"
+              echo "  dcf-agent agents --config langgraph_agents/agents.jsonc"
+              echo "  dcf-agent-tui                           # interactive TUI"
+              echo "  cd langgraph_agents && pytest -v        # run tests"
+            '';
+            meta.description = "HydraMesh LangGraph agent CLI/TUI dev shell";
           };
         };
       }

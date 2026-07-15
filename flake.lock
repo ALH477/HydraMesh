@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "demod-quanta-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1783892749,
+        "narHash": "sha256-6YT3bcSUbtFngu8GaqwgoF3QAh85Ecd2uBIeUVrM7vA=",
+        "owner": "ALH477",
+        "repo": "DeMoD",
+        "rev": "271ff10abdf451c34e42eb5217070d6b41ded654",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ALH477",
+        "repo": "DeMoD",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -84,6 +100,7 @@
     },
     "root": {
       "inputs": {
+        "demod-quanta-src": "demod-quanta-src",
         "flake-utils": "flake-utils",
         "janus-c-src": "janus-c-src",
         "nixpkgs": "nixpkgs",

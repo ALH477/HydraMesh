@@ -18,6 +18,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio"]
+cli = ["rich>=13.0"]
+tui = ["rich>=13.0", "textual>=0.50"]
+
+[project.scripts]
+dcf-agent = "langgraph_agents.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["langgraph_agents/tests"]
