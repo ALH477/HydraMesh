@@ -45,7 +45,11 @@
            :dcf-db-insert :dcf-db-query :dcf-db-delete :dcf-db-search :dcf-db-flush
            :dcf-send-audio :dcf-send-position :dcf-send-game-event
            :dcf-begin-transaction :dcf-commit-transaction :dcf-rollback-transaction
-           :run-tests :dcf-help :main :dcf-add-peer :dcf-remove-peer :dcf-list-peers))
+           :run-tests :dcf-help :main :dcf-add-peer :dcf-remove-peer :dcf-list-peers
+           ;; Agent system integration
+           :dcf-agent-chat :dcf-agent-list :dcf-agent-backends
+           :dcf-agent-providers :dcf-agent-health :dcf-agent-set-url
+           :*agent-api-url*))
 
 (in-package :d-lisp)
 
@@ -1281,6 +1285,15 @@ matching is case- and punctuation-insensitive (immune to cl-json key mangling)."
 (dcf-send-game-event 1 \"SHOOT|player1|rifle\")
 (dcf-send-audio #(16r01 16r02 ...))  ; 20ms chunk
 
+**Agent System (LLM agents via Python API server):**
+(dcf-agent-health)                     ; check API server
+(dcf-agent-backends)                   ; list LLM backends
+(dcf-agent-providers)                  ; list provider presets
+(dcf-agent-chat \"hello\" :backend \"echo\")
+(dcf-agent-chat \"echo: test\" :graph \"coordinator\")
+(dcf-agent-chat \"hello\" :backend \"glm5p2\")
+(dcf-agent-set-url \"http://192.168.1.50:8000\")
+
 **CLI:** sbcl --load hydramesh.lisp --eval '(main \"help\")'
 
 Repo: https://github.com/ALH477/DeMoD-Communication-Framework"))
@@ -1322,6 +1335,19 @@ Repo: https://github.com/ALH477/DeMoD-Communication-Framework"))
              ((string= command "db-insert") (print (apply #'dcf-db-insert *node* cmd-args)))
              ((string= command "db-query") (print (apply #'dcf-db-query *node* cmd-args)))
              ((string= command "test") (sb-ext:exit :code (if (run-tests) 0 1)))
+             ;; Agent system commands
+             ((string= command "agent-chat")
+              (print (apply #'dcf-agent-chat cmd-args)))
+             ((string= command "agent-list")
+              (print (dcf-agent-list)))
+             ((string= command "agent-backends")
+              (print (dcf-agent-backends)))
+             ((string= command "agent-providers")
+              (print (dcf-agent-providers)))
+             ((string= command "agent-health")
+              (print (dcf-agent-health)))
+             ((string= command "agent-set-url")
+              (print (dcf-agent-set-url (first cmd-args))))
              (t (format t "Unknown: ~A. Try 'help'.~%" command)))))
     (error (e)
       (format t "Error: ~A~%" e))))
@@ -1395,5 +1421,205 @@ Repo: https://github.com/ALH477/DeMoD-Communication-Framework"))
 
 (eval-when (:load-toplevel :execute)
   (certify-wire-codec))
+
+;; ============================================================================
+;; AGENT SYSTEM INTEGRATION — LLM agents via the Python API server
+;; ============================================================================
+;;
+;; The langgraph_agents/ Python package provides a universal API system:
+;;   - HTTP API server (FastAPI): /chat, /agents, /backends, /providers,
+;;     /mesh/send, /mesh/recv, /mesh/status, /ws
+;;   - Universal MCP server: agent_chat, agent_list, backend_list, etc.
+;;   - Universal LLM backend: any OpenAI-compatible API (Fireworks, OpenAI,
+;;     Grok, Ollama, DeepSeek, OpenRouter)
+;;
+;; These Lisp functions are native DSL forms that call the API server over
+;; HTTP. Encryption-free for export control purposes — the agent system
+;; communicates over the same plaintext DCF transport.
+;;
+;; The HTTP client is a minimal usocket-based implementation (no Drakma
+;; dependency needed — keeps the Nix closure unchanged).
+
+(defparameter *agent-api-url* "http://127.0.0.1:8000"
+  "Base URL for the langgraph_agents API server.")
+
+(defparameter *agent-api-timeout* 30
+  "HTTP timeout in seconds for agent API calls.")
+
+;; --- Minimal HTTP client over usocket -----------------------------------------
+
+(defun http-post-json (url json-string)
+  "Send a POST request with JSON body, return (status-code . response-body).
+   Minimal HTTP/1.1 over TCP using usocket — no external HTTP library needed."
+  (let* ((uri (parse-http-url url))
+         (host (getf uri :host))
+         (port (getf uri :port))
+         (path (getf uri :path)))
+    (usocket:with-client-socket (sock stream host port
+                                  :element-type '(unsigned-byte 8)
+                                  :timeout *agent-api-timeout*)
+      (let ((flex (flexi-streams:make-flexi-stream stream :external-format :utf-8))
+            (body (map '(vector (unsigned-byte 8))
+                       #'char-code json-string)))
+        ;; Send request
+        (format flex "POST ~A HTTP/1.1~%Host: ~A~%Content-Type: application/json~%Content-Length: ~A~%Connection: close~%~%"
+                path host (length body))
+        (write-sequence body stream)
+        (force-output flex)
+        ;; Read response
+        (read-http-response flex)))))
+
+(defun http-get-json (url)
+  "Send a GET request, return (status-code . response-body)."
+  (let* ((uri (parse-http-url url))
+         (host (getf uri :host))
+         (port (getf uri :port))
+         (path (getf uri :path)))
+    (usocket:with-client-socket (sock stream host port
+                                  :element-type '(unsigned-byte 8)
+                                  :timeout *agent-api-timeout*)
+      (let ((flex (flexi-streams:make-flexi-stream stream :external-format :utf-8)))
+        (format flex "GET ~A HTTP/1.1~%Host: ~A~%Connection: close~%~%" path host)
+        (force-output flex)
+        (read-http-response flex)))))
+
+(defun parse-http-url (url)
+  "Parse http://host:port/path into a plist."
+  (let* ((no-scheme (if (string-equal url "http://" :end1 7)
+                        (subseq url 7)
+                        url))
+         (slash-pos (position #\/ no-scheme))
+         (hostport (if slash-pos (subseq no-scheme 0 slash-pos) no-scheme))
+         (path (if slash-pos (subseq no-scheme slash-pos) "/"))
+         (colon-pos (position (code-char 58) hostport))
+         (host (if colon-pos (subseq hostport 0 colon-pos) hostport))
+         (port (if colon-pos (parse-integer (subseq hostport (1+ colon-pos)))
+                   80)))
+    (list :host host :port port :path path)))
+
+(defun read-http-response (stream)
+  "Read a complete HTTP response from a flexi-stream. Return (status . body)."
+  ;; Read status line
+  (let ((status-line (read-line stream nil "")))
+    (let ((status-code (parse-integer
+                         (subseq status-line
+                                 (1+ (position #\Space status-line))
+                                 (position #\Space status-line
+                                           :start (1+ (position #\Space status-line))))
+                         :junk-allowed t)))
+      ;; Skip headers until empty line
+      (loop for line = (read-line stream nil "")
+            until (or (string= line "") (string= line (string #\Return))))
+      ;; Read body
+      (let ((body (with-output-to-string (out)
+                    (loop for char = (read-char stream nil nil)
+                          while char do (write-char char out)))))
+        (cons status-code body)))))
+
+;; --- Agent DSL functions -----------------------------------------------------
+
+(defun dcf-agent-chat (message &key (backend "echo") (graph "base")
+                                  (channel "lisp") (sender "lisp-client"))
+  "Send a message to a LangGraph agent and get a response.
+
+  (dcf-agent-chat \"hello\" :backend \"echo\")
+  (dcf-agent-chat \"echo: test\" :graph \"coordinator\")
+  (dcf-agent-chat \"hello\" :backend \"glm5p2\" :graph \"coordinator\")
+
+Returns the response text, or signals an error if the API server is down."
+  (let* ((json-obj (list (cons "message" message)
+                         (cons "backend" backend)
+                         (cons "graph" graph)
+                         (cons "channel" channel)
+                         (cons "sender" sender)))
+         (json-str (cl-json:encode-json-to-string json-obj))
+         (resp (http-post-json (format nil "~A/chat" *agent-api-url*) json-str)))
+    (if (= (car resp) 200)
+        (let ((parsed (cl-json:decode-json-from-string (cdr resp))))
+          (rest (assoc :response parsed)))
+        (signal-dcf-error :agent-api
+          (format nil "Agent API error ~A: ~A" (car resp) (cdr resp))))))
+
+(defun dcf-agent-list ()
+  "List all configured agents from the API server.
+
+  (dcf-agent-list)
+  => ((:NAME . \"echo-agent\") (:GRAPH . \"base\") ...)
+
+Returns a list of agent config alists."
+  (let ((resp (http-get-json (format nil "~A/agents" *agent-api-url*))))
+    (if (= (car resp) 200)
+        (cl-json:decode-json-from-string (cdr resp))
+        (signal-dcf-error :agent-api
+          (format nil "Agent API error ~A: ~A" (car resp) (cdr resp))))))
+
+(defun dcf-agent-backends ()
+  "List available LLM backends and provider presets.
+
+  (dcf-agent-backends)
+  => (:BACKENDS (\"echo\" \"glm5p2\" \"grok\") :PROVIDERS (\"fireworks\" \"openai\" ...))
+
+Returns a plist of backends and providers."
+  (let ((resp (http-get-json (format nil "~A/backends" *agent-api-url*))))
+    (if (= (car resp) 200)
+        (cl-json:decode-json-from-string (cdr resp))
+        (signal-dcf-error :agent-api
+          (format nil "Agent API error ~A: ~A" (car resp) (cdr resp))))))
+
+(defun dcf-agent-providers ()
+  "List available provider presets (fireworks, openai, grok, ollama, etc.).
+
+  (dcf-agent-providers)
+  => (\"fireworks\" \"openai\" \"grok\" \"ollama\" \"deepseek\" \"openrouter\")
+
+Returns a list of provider name strings."
+  (let ((resp (http-get-json (format nil "~A/providers" *agent-api-url*))))
+    (if (= (car resp) 200)
+        (cl-json:decode-json-from-string (cdr resp))
+        (signal-dcf-error :agent-api
+          (format nil "Agent API error ~A: ~A" (car resp) (cdr resp))))))
+
+(defun dcf-agent-health ()
+  "Check the API server health.
+
+  (dcf-agent-health)
+  => (:STATUS \"ok\" :BACKENDS (\"echo\" \"glm5p2\" \"grok\") ...)
+
+Returns a plist with status, backends, and providers."
+  (let ((resp (http-get-json (format nil "~A/health" *agent-api-url*))))
+    (if (= (car resp) 200)
+        (cl-json:decode-json-from-string (cdr resp))
+        (signal-dcf-error :agent-api
+          (format nil "Agent API error ~A: ~A" (car resp) (cdr resp))))))
+
+(defun dcf-agent-set-url (url)
+  "Set the agent API server URL.
+
+  (dcf-agent-set-url \"http://192.168.1.50:8000\")"
+
+  (setf *agent-api-url* url)
+  (format nil "Agent API URL set to: ~A" url))
+
+;; --- Agent tests (fiveam) ----------------------------------------------------
+
+#+fiveam
+(fiveam:test agent-http-parse-url-test
+  "parse-http-url should correctly parse http://host:port/path"
+  (let ((uri (parse-http-url "http://127.0.0.1:8000/chat")))
+    (fiveam:is (string= (getf uri :host) "127.0.0.1"))
+    (fiveam:is (= (getf uri :port) 8000))
+    (fiveam:is (string= (getf uri :path) "/chat")))
+  (let ((uri (parse-http-url "http://example.com/api")))
+    (fiveam:is (string= (getf uri :host) "example.com"))
+    (fiveam:is (= (getf uri :port) 80))
+    (fiveam:is (string= (getf uri :path) "/api"))))
+
+#+fiveam
+(fiveam:test agent-set-url-test
+  "dcf-agent-set-url should update *agent-api-url*"
+  (let ((old *agent-api-url*))
+    (dcf-agent-set-url "http://test:9999")
+    (fiveam:is (string= *agent-api-url* "http://test:9999"))
+    (setf *agent-api-url* old)))
 
 ;; End

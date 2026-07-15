@@ -816,8 +816,36 @@ dcf-agent-tui
 ### Tests
 
 ```bash
-cd langgraph_agents && pytest -v    # 48 tests
+cd langgraph_agents && pytest -v    # 60 tests
 ```
+
+### Lisp DSL integration
+
+The Lisp SDK (`lisp/src/hydramesh.lisp`) has native agent functions that call
+the API server over HTTP. No external HTTP library needed — the implementation
+uses usocket + flexi-streams (already in the dependency closure).
+
+```lisp
+(dcf-agent-health)                         ;; check API server
+(dcf-agent-backends)                       ;; list LLM backends
+(dcf-agent-providers)                      ;; list provider presets
+(dcf-agent-chat "hello" :backend "echo")   ;; one-shot chat
+(dcf-agent-chat "echo: test" :graph "coordinator")
+(dcf-agent-chat "hello" :backend "glm5p2") ;; GLM-5p2 via Fireworks
+(dcf-agent-set-url "http://192.168.1.50:8000")  ;; point at remote API
+```
+
+CLI subcommands:
+```bash
+hydramesh agent-health
+hydramesh agent-backends
+hydramesh agent-providers
+hydramesh agent-chat "hello"
+```
+
+Encryption-free for export control purposes — the Lisp agent integration
+communicates over plaintext HTTP to the API server, same as the rest of
+the DCF transport.
 
 ## Documentation
 
