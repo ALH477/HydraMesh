@@ -43,6 +43,45 @@
           ${protobuf}/bin/protoc -I${self} ${flags} ${self}/messages.proto ${self}/services.proto
           cp -r . $out/${outDir}
         '';
+        # LangGraph agent system — Python env + CLI/TUI/serve/mcp wrappers.
+        # Defined in the outer scope so both `packages` (docker images) and
+        # `apps` (nix run) can reference them.
+        agentPython = pkgs.python3.withPackages (ps: with ps; [
+          langgraph langchain-core httpx pydantic rich textual pytest
+          fastapi uvicorn mcp
+        ]);
+        agentCLI = pkgs.writeShellApplication {
+          name = "dcf-agent";
+          runtimeInputs = [ agentPython ];
+          text = ''
+            export PYTHONPATH="${self}/langgraph_agents''${PYTHONPATH:+:$PYTHONPATH}"
+            exec ${agentPython}/bin/python -m langgraph_agents.cli "$@"
+          '';
+        };
+        agentTUI = pkgs.writeShellApplication {
+          name = "dcf-agent-tui";
+          runtimeInputs = [ agentPython ];
+          text = ''
+            export PYTHONPATH="${self}/langgraph_agents''${PYTHONPATH:+:$PYTHONPATH}"
+            exec ${agentPython}/bin/python -m langgraph_agents.tui "$@"
+          '';
+        };
+        agentServe = pkgs.writeShellApplication {
+          name = "dcf-agent-serve";
+          runtimeInputs = [ agentPython ];
+          text = ''
+            export PYTHONPATH="${self}/langgraph_agents''${PYTHONPATH:+:$PYTHONPATH}"
+            exec ${agentPython}/bin/python -m langgraph_agents.cli serve "$@"
+          '';
+        };
+        agentMCP = pkgs.writeShellApplication {
+          name = "dcf-agent-mcp";
+          runtimeInputs = [ agentPython ];
+          text = ''
+            export PYTHONPATH="${self}/langgraph_agents''${PYTHONPATH:+:$PYTHONPATH}"
+            exec ${agentPython}/bin/python -m langgraph_agents.cli mcp "$@"
+          '';
+        };
       in
       {
         packages = rec {
@@ -478,11 +517,10 @@
           docker-dcf-agent = pkgs.dockerTools.buildLayeredImage {
             name = "alh477/dcf-agent";
             tag = "latest";
-            contents = [ agentCLI agentTUI agentServe agentMCP agentPython pkgs.cacert ];
+            contents = [ agentCLI agentPython pkgs.cacert ];
             config = {
               Entrypoint = [ "${agentCLI}/bin/dcf-agent" ];
               Cmd = [ "serve" "--host" "0.0.0.0" "--port" "8000" ];
-              Env = [ "PYTHONPATH=${self}/langgraph_agents" ];
               ExposedPorts = { "8000/tcp" = {}; };
               Labels = { "org.opencontainers.image.source" = "https://github.com/ALH477/HydraMesh"; };
             };
@@ -694,44 +732,6 @@
               text = ''exec ${meshPython}/bin/python ${self}/matrix-bridge/mesh_mcp.py http "$@"'';
             };
             mkApp = drv: bin: { type = "app"; program = "${drv}/bin/${bin}"; };
-            # LangGraph agent CLI + TUI (python withPackages; the scripts
-            # self-resolve langgraph_agents via sys.path manipulation).
-            agentPython = pkgs.python3.withPackages (ps: with ps; [
-              langgraph langchain-core httpx pydantic rich textual pytest
-              fastapi uvicorn mcp
-            ]);
-            agentCLI = pkgs.writeShellApplication {
-              name = "dcf-agent";
-              runtimeInputs = [ agentPython ];
-              text = ''
-                export PYTHONPATH="${self}/langgraph_agents''${PYTHONPATH:+:$PYTHONPATH}"
-                exec ${agentPython}/bin/python -m langgraph_agents.cli "$@"
-              '';
-            };
-            agentTUI = pkgs.writeShellApplication {
-              name = "dcf-agent-tui";
-              runtimeInputs = [ agentPython ];
-              text = ''
-                export PYTHONPATH="${self}/langgraph_agents''${PYTHONPATH:+:$PYTHONPATH}"
-                exec ${agentPython}/bin/python -m langgraph_agents.tui "$@"
-              '';
-            };
-            agentServe = pkgs.writeShellApplication {
-              name = "dcf-agent-serve";
-              runtimeInputs = [ agentPython ];
-              text = ''
-                export PYTHONPATH="${self}/langgraph_agents''${PYTHONPATH:+:$PYTHONPATH}"
-                exec ${agentPython}/bin/python -m langgraph_agents.cli serve "$@"
-              '';
-            };
-            agentMCP = pkgs.writeShellApplication {
-              name = "dcf-agent-mcp";
-              runtimeInputs = [ agentPython ];
-              text = ''
-                export PYTHONPATH="${self}/langgraph_agents''${PYTHONPATH:+:$PYTHONPATH}"
-                exec ${agentPython}/bin/python -m langgraph_agents.cli mcp "$@"
-              '';
-            };
           in {
             a2a = mkApp interactive "dcf-a2a";
             a2a-demo = mkApp demo "dcf-a2a-demo";
