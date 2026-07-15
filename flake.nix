@@ -808,7 +808,7 @@
           };
 
           lisp = pkgs.mkShell {
-            packages = [ pkgs.sbcl pkgs.quicklisp ];
+            packages = [ pkgs.sbcl ];
             inputsFrom = [ self.packages.${system}.streamdb ];
             shellHook = ''
               export LD_LIBRARY_PATH=${self.packages.${system}.streamdb}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
