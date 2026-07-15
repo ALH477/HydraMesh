@@ -106,6 +106,7 @@ Present today (certified or shipping):
 - **Interoperates with JANUS (NATO STANAG 4748)**: a `janus:` transport carries the 17-byte frame as JANUS **cargo** over the ratified underwater-acoustic standard (FH-BFSK + conv FEC), so a DCF mesh can exchange frames with real JANUS gear. It shells out to the **GPL-3.0** janus-c reference as a *separate process* (never linked), keeping the LGPL library clean; an optional `nix build .#janus-c` dependency that CI skips when absent. A transport beneath the quantum (frame opaque, certificate untouched) — verified byte-exact round-trip via the standard encoder/decoder. See [`Documentation/DCF_JANUS_SPEC.md`](Documentation/DCF_JANUS_SPEC.md).
 - **Runs over UDP _or_ radio (DCF-SDR + FEC)**: a complex-baseband IQ modem (GFSK / QPSK / 16-QAM / OOK·AM / AFSK-over-FM) carries frames to a **SoapySDR** device (HackRF / RTL-SDR / Pluto / LimeSDR) or a hardware-agnostic `.cf32` file, made reliable by a **systematic Reed-Solomon + interleaver FEC** that _corrects_ the bit errors a lossy RF/acoustic link injects (not just CRC-detects them). The **RS-FEC bytes are certified byte-for-byte in all 13 wire-codec languages**; the IQ waveform is loopback-tested. See [`Documentation/DCF_SDR_SPEC.md`](Documentation/DCF_SDR_SPEC.md) and [`Documentation/DCF_FEC_SPEC.md`](Documentation/DCF_FEC_SPEC.md).
 - **Handshakeless, encryption-free design**: low-overhead framing for real-time use; encryption-free by design for EAR/ITAR export compliance.
+- **LangGraph multi-agent system (`langgraph_agents/`)**: LLM-powered agents that communicate over the DCF mesh via MCP tools. Pluggable backends (echo, Grok, GLM-5p2 via Fireworks), coordinator-based routing to specialist subgraphs, UTF-8-safe streaming bridge for DCF-Text chunking, and a Rich-powered CLI + Textual TUI with Sierpinski greeting banner. Encryption-free for export control purposes — agents communicate over the same plaintext DCF transport, not a separate encrypted channel.
 - **Open Source**: LGPL-3.0 (library) ensures transparency and community contributions.
 
 Planned / in progress (design goals, not the current release):
@@ -685,6 +686,138 @@ StreamDB is currently integrated only into the HydraMesh-Lisp SDK to prototype i
 
 ### DeMoD's GPLv3-Complete StreamDB: Democratizing Bleeding-Edge Tech
 DeMoD LLC developed the only complete GPLv3 version of StreamDB from Iain Ballard's incomplete C# repo, reimplementing it in Rust for safety and performance. This ensures bleeding-edge features (e.g., trie indexing, MVCC-like versioning) are freely available, promoting open innovation in embedded storage and aligning with HydraMesh's FOSS ethos. By open-sourcing under GPLv3, DeMoD democratizes tech typically locked in proprietary systems, enabling developers to build advanced, cost-free solutions.
+
+## LangGraph Multi-Agent System (`langgraph_agents/`)
+
+The `langgraph_agents/` package adds LLM-powered agents that communicate over
+the DCF mesh in realtime using the Model Context Protocol (MCP). Agents are
+built as LangGraph state graphs (receive → route → process → respond) with
+pluggable LLM backends and MCP tool wrappers for `mesh_send`, `mesh_recv`,
+and `mesh_status`.
+
+### Export control
+
+The agent system is **encryption-free** for export control purposes. Agents
+communicate over the same plaintext DCF transport — there is no separate
+encrypted channel. This keeps the system within EAR/ITAR export compliance
+boundaries. Any security layer is external to this package and connected
+through IPC barriers.
+
+### Architecture
+
+```
+mesh_recv → receive → route → process (LLM backend) → respond → mesh_send
+                                                      ↑
+                                         coordinator routes by prefix:
+                                         echo:       → echo specialist
+                                         summarize:  → summarizer specialist
+                                         (default)   → echo
+```
+
+- **State graph**: LangGraph `StateGraph` with `AgentState` (messages, channel,
+  sender, routing_decision, response, metadata).
+- **LLM backends**: `echo` (test), `grok` (xAI), `glm5p2` (Fireworks GLM-5p2).
+  Any OpenAI-compatible endpoint can be added.
+- **MCP tools**: `MeshSendTool`, `MeshRecvTool`, `MeshStatusTool` — LangChain
+  tool wrappers that call the MCP server over HTTP.
+- **Streaming bridge**: chunks LLM responses to fit DCF-Text's per-message cap
+  with UTF-8 boundary safety (never splits mid-character).
+- **Coordinator graph**: prefix-based routing to specialist subgraphs. Add new
+  specialists by registering a process function.
+
+### CLI
+
+```bash
+# List configured agents
+dcf-agent agents --config langgraph_agents/agents.jsonc
+
+# List available LLM backends
+dcf-agent backends
+
+# One-shot: send a message, get response
+dcf-agent chat --backend echo "hello mesh"
+dcf-agent chat --graph coordinator "echo: test routing"
+
+# Start the mesh poll loop (long-lived)
+dcf-agent run --config langgraph_agents/agents.jsonc
+
+# Query mesh endpoint status
+dcf-agent status --mesh-url http://127.0.0.1:8765
+```
+
+Every CLI command prints a Sierpinski triangle greeting banner.
+
+### TUI
+
+```bash
+dcf-agent tui --config langgraph_agents/agents.jsonc
+```
+
+Interactive Textual-based TUI with:
+- Agent config sidebar (left)
+- Message log (main panel, scrolling)
+- Input bar — type a message, press Enter to process
+- `Ctrl+B` — cycle LLM backend
+- `Ctrl+G` — cycle graph type (base / coordinator)
+- `Ctrl+S` — query mesh status
+- `Ctrl+T` — toggle Sierpinski triangle display
+- `Ctrl+C` — quit
+
+### Nix integration
+
+```bash
+# Run the CLI or TUI directly
+nix run .#agent -- backends
+nix run .#agent-tui
+
+# Dev shell with everything on PATH
+nix develop .#agents
+dcf-agent backends
+dcf-agent-tui
+```
+
+### Configuration (`agents.jsonc`)
+
+```jsonc
+{
+  "agents": [
+    {
+      "name": "echo-agent",
+      "graph": "base",
+      "llm_backend": "echo",
+      "channel": "echo",
+      "mesh_url": "http://127.0.0.1:8765"
+    },
+    {
+      "name": "glm5p2-agent",
+      "graph": "coordinator",
+      "llm_backend": "glm5p2",
+      "channel": "glm",
+      "mesh_url": "http://127.0.0.1:8765"
+    }
+  ]
+}
+```
+
+### Use cases
+
+- **Disconnected/edge deployments**: agents communicate over UDP, acoustic,
+  SDR, or any DCF transport — no internet required.
+- **Multi-agent coordination**: a coordinator routes messages to specialists.
+  Add translators, analysts, coders — they plug into the graph.
+- **Pluggable LLM backends**: echo for testing, Grok via xAI, GLM-5p2 via
+  Fireworks. Any OpenAI-compatible endpoint works.
+- **Realtime mesh integration**: agents poll the mesh via MCP, process through
+  a LangGraph state machine, and respond back. The streaming bridge chunks
+  responses to fit DCF-Text's frame limit.
+- **Export-compliant**: encryption-free by design. Safe for EAR/ITAR-regulated
+  environments where cryptographic layers are restricted.
+
+### Tests
+
+```bash
+cd langgraph_agents && pytest -v    # 48 tests
+```
 
 ## Documentation
 
