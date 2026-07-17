@@ -37,6 +37,20 @@ signal is not certified across languages.
 | 2 | PSK | 2 | QPSK, carrier phase {0,90,180,270}° (Gray) |
 | 3 | QAM | 4 | 16-QAM, I/Q levels {-3,-1,1,3} (Gray) |
 
+## Acoustic medium profiles
+
+The live audio path (`python/modem/`) defines three medium profiles optimized for different physical channels. All use FSK (modulation id 0) with Bell-202-style mark/space tones, but differ in baud rate, frequency placement, and preamble length:
+
+| profile | mark (Hz) | space (Hz) | baud | preamble | use case |
+|---------|-----------|------------|------|----------|----------|
+| standard | 1200 | 2200 | 300 | 80 bits | acoustic (speaker↔mic), Bell-202 AFSK |
+| handheld | 1200 | 1800 | 300 | 240 bits | walkie-talkie radio, mid-band tones, long AGC keyup |
+| aux-cable | 1000 | 1500 | 1200 | 16 bits | wired line-level (3.5mm/TRS), 4× faster |
+
+The `aux-cable` profile is optimized for **wired connections** where the channel has flat frequency response, no AGC settling, and minimal noise. The higher baud rate (1200 vs 300) and shorter preamble (16 vs 80 bits) yield ~4× lower latency for control ops: a 17-byte frame takes ~113ms over aux cable vs ~453ms over acoustic.
+
+The C SDK (`hydramodem/src/hydra_profile.c`) provides `hydra_profile_aux_cable()` which configures the MFSK modem for the same channel: 1200/2400 Hz orthogonal tones at 1200 baud, 16-symbol preamble. Both Python and C implementations interoperate over the same physical cable.
+
 ## Mapping rule (the certified law)
 
 ```
