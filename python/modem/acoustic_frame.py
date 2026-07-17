@@ -37,6 +37,7 @@ MSGLEN = 17                                 # a DeModFrame is 17 bytes
 PROFILES = {
     "standard": {"mark": 1200.0, "space": 2200.0, "baud": 300, "preamble_bits": 80},
     "handheld": {"mark": 1200.0, "space": 1800.0, "baud": 300, "preamble_bits": 240},
+    "aux-cable": {"mark": 1000.0, "space": 1500.0, "baud": 1200, "preamble_bits": 16},
 }
 
 
