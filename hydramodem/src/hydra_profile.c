@@ -19,6 +19,25 @@ void hydra_profile_default(hydra_profile *p)
     /* derived fields are filled by hydra_profile_init() */
 }
 
+void hydra_profile_aux_cable(hydra_profile *p)
+{
+    /* Aux-cable: wired line-level (3.5mm/TRS). 4x faster than default.
+     * Tones 1200/2400 Hz at 1200 baud — orthogonal (both are integer multiples of baud).
+     * Short preamble (16 syms) since cable has no AGC settling.
+     * Matches python/modem/acoustic_frame.py "aux-cable" profile behavior. */
+    p->sample_rate   = 48000.0;
+    p->baud          = 1200.0;
+    p->n_tones       = 2;
+    p->base_freq     = 1200.0;
+    p->tone_spacing  = 1200.0;
+    p->preamble_syms = 16;
+    p->sync_word     = 0x2DD4u;
+    p->fec_mode      = HYDRA_FEC_CONV;
+    p->interleave    = 1;
+    p->tx_gain       = 0.9;
+    /* derived fields are filled by hydra_profile_init() */
+}
+
 static int ilog2_pow2(int n)
 {
     int b = 0;

@@ -63,6 +63,12 @@ typedef struct {
  *   sync 0x2DD4, FEC off, gain 0.9. Matches faust/hydramodem_{tx,rx}.dsp. */
 void hydra_profile_default(hydra_profile *p);
 
+/* Aux-cable profile: wired line-level connection (3.5mm/TRS).
+ *   1200 baud (4x faster than default), tones 1200/2400 Hz (orthogonal at 48 kHz),
+ *   16-symbol preamble (short — no AGC settling needed on cable), FEC convolutional.
+ *   Matches python/modem/acoustic_frame.py "aux-cable" profile behavior. */
+void hydra_profile_aux_cable(hydra_profile *p);
+
 /* Compute derived fields and validate. Returns 0 on success, <0 on bad config:
  * n_tones not a power of two, non-positive rates, highest tone above Nyquist, or
  * tones not integer-cycle (base_freq / tone_spacing not integer multiples of the
