@@ -8,7 +8,7 @@
 // Non-blocking receive with short timeout for responsiveness.
 // Compile: gcc -shared -o libdcf_udp_transport.so dcf_udp_transport.c -I../include -fPIC
 
-#include <dcf_sdk/dcf_plugin_manager.h>  // For ITransport
+#include "dcf_transport_v1.h"
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <netinet/in.h>

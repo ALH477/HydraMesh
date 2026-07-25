@@ -129,6 +129,34 @@ jobs:
           cmake --build /tmp/cbuild --target dcfnode test_proto_certify test_modulation_certify test_mesh_certify test_modem_loopback test_modem_fec
           ctest --test-dir /tmp/cbuild -R "proto_certify|modulation_certify|mesh_certify|modem_loopback|modem_fec" --output-on-failure
 
+  # The 4-module spine's unit suite + the pinned regression suite (C4/H2/C6
+  # class + the StreamDB C5 test), in three configs: plain, ASan+UBSan, TSan.
+  # Before this job the unit suite never ran in CI at all.
+  c-sdk-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Plain build + full ctest (unit, regressions, all C certs)
+        run: |
+          cmake -S C_SDK -B /tmp/cb -DDCF_BUILD_NODE=ON -DDCF_BUILD_TESTS=ON -DDCF_BUILD_EXAMPLES=OFF
+          cmake --build /tmp/cb -j"$(nproc)"
+          ctest --test-dir /tmp/cb --output-on-failure
+
+      - name: ASan+UBSan (unit + regressions + streamdb)
+        run: |
+          cmake -S C_SDK -B /tmp/cb-asan -DDCF_SAN=address -DDCF_BUILD_NODE=OFF -DDCF_BUILD_TESTS=ON -DDCF_BUILD_EXAMPLES=OFF
+          cmake --build /tmp/cb-asan -j"$(nproc)" --target dcf_tests test_regressions test_streamdb_regress
+          ctest --test-dir /tmp/cb-asan -R "unit_tests|regressions|streamdb_regress" --output-on-failure
+
+      - name: TSan (unit + regressions + streamdb)
+        run: |
+          # TSan rejects the high ASLR entropy of modern runner kernels.
+          sudo sysctl vm.mmap_rnd_bits=28 || true
+          cmake -S C_SDK -B /tmp/cb-tsan -DDCF_SAN=thread -DDCF_BUILD_NODE=OFF -DDCF_BUILD_TESTS=ON -DDCF_BUILD_EXAMPLES=OFF
+          cmake --build /tmp/cb-tsan -j"$(nproc)" --target dcf_tests test_regressions test_streamdb_regress
+          ctest --test-dir /tmp/cb-tsan -R "unit_tests|regressions|streamdb_regress" --output-on-failure
+
   certify-hydramodem:
     runs-on: ubuntu-latest
     steps:

@@ -17,7 +17,10 @@ option(DCF_BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(DCF_BUILD_EXAMPLES "Build examples" ON)
 option(DCF_BUILD_NODE "Build the dcfnode UDP mesh node (ProtoMessage transport)" ON)
 option(DCF_MODEM_AUDIO "Link a live-audio backend into the Faust modem transport" OFF)
-option(DCF_ENABLE_SANITIZERS "Enable address/thread sanitizers" OFF)
+option(DCF_ENABLE_SANITIZERS "Deprecated alias for -DDCF_SAN=address" OFF)
+set(DCF_SAN "OFF" CACHE STRING
+    "Sanitizer configuration: OFF, address (ASan+UBSan), thread (TSan), undefined (UBSan only)")
+set_property(CACHE DCF_SAN PROPERTY STRINGS OFF address thread undefined)
 option(DCF_ENABLE_ARCH_NATIVE "Enable -march=native for latency benchmark" OFF)
 option(DCF_ENABLE_COVERAGE "Enable code coverage" OFF)
 option(DCF_ENABLE_LTO "Enable link-time optimization" OFF)
@@ -110,9 +113,22 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     set(DCF_HARDENING_SHARED ${DCF_HARDENING_BASE} -fPIC -ftls-model=global-dynamic)
 endif()
 
-# Sanitizers
-if(DCF_ENABLE_SANITIZERS)
-    set(DCF_SANITIZER_FLAGS -fsanitize=address,undefined -fno-omit-frame-pointer)
+# Sanitizers. ASan and TSan are mutually exclusive, so this is a single-choice
+# knob rather than a boolean: address = ASan+UBSan, thread = TSan, undefined =
+# UBSan alone. DCF_ENABLE_SANITIZERS is kept as a back-compat alias.
+if(DCF_ENABLE_SANITIZERS AND DCF_SAN STREQUAL "OFF")
+    set(DCF_SAN "address")
+endif()
+if(NOT DCF_SAN STREQUAL "OFF")
+    if(DCF_SAN STREQUAL "address")
+        set(DCF_SANITIZER_FLAGS -fsanitize=address,undefined -fno-omit-frame-pointer)
+    elseif(DCF_SAN STREQUAL "thread")
+        set(DCF_SANITIZER_FLAGS -fsanitize=thread -fno-omit-frame-pointer)
+    elseif(DCF_SAN STREQUAL "undefined")
+        set(DCF_SANITIZER_FLAGS -fsanitize=undefined -fno-omit-frame-pointer)
+    else()
+        message(FATAL_ERROR "DCF_SAN must be OFF, address, thread, or undefined (got '${DCF_SAN}')")
+    endif()
 endif()
 
 # Coverage
@@ -216,7 +232,7 @@ if(DCF_BUILD_STATIC)
         )
     endif()
     
-    if(DCF_ENABLE_SANITIZERS)
+    if(DCF_SANITIZER_FLAGS)
         target_link_options(dcf_static PUBLIC ${DCF_SANITIZER_FLAGS})
     endif()
     if(DCF_ENABLE_COVERAGE)
@@ -274,7 +290,7 @@ if(DCF_BUILD_SHARED)
         target_link_options(dcf_shared PRIVATE -fno-lto -fPIC)
     endif()
     
-    if(DCF_ENABLE_SANITIZERS)
+    if(DCF_SANITIZER_FLAGS)
         target_link_options(dcf_shared PUBLIC ${DCF_SANITIZER_FLAGS})
     endif()
     if(DCF_ENABLE_COVERAGE)
@@ -308,7 +324,7 @@ if(DCF_BUILD_TESTS)
     target_link_libraries(dcf_tests PRIVATE dcf::dcf)
     target_compile_options(dcf_tests PRIVATE ${DCF_WARNINGS})
     
-    if(DCF_ENABLE_SANITIZERS)
+    if(DCF_SANITIZER_FLAGS)
         target_compile_options(dcf_tests PRIVATE ${DCF_SANITIZER_FLAGS})
         target_link_options(dcf_tests PRIVATE ${DCF_SANITIZER_FLAGS})
     endif()
@@ -323,6 +339,60 @@ if(DCF_BUILD_TESTS)
         TIMEOUT 60
         ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1"
     )
+
+    # Regression suite: pins the fixed crashers/races (C4, H2, C6-class).
+    # Run it in every DCF_SAN config — the sanitizers are half the assertion.
+    add_executable(test_regressions tests/unit/test_regressions.c)
+    target_include_directories(test_regressions PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_link_libraries(test_regressions PRIVATE dcf::dcf)
+    if(DCF_SANITIZER_FLAGS)
+        target_compile_options(test_regressions PRIVATE ${DCF_SANITIZER_FLAGS})
+        target_link_options(test_regressions PRIVATE ${DCF_SANITIZER_FLAGS})
+    endif()
+    add_test(NAME regressions COMMAND test_regressions)
+    set_tests_properties(regressions PROPERTIES TIMEOUT 120)
+
+    # StreamDB C5 regression — the first C-level test of lisp/streamdb.
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../lisp/streamdb/streamdb.c)
+        add_executable(test_streamdb_regress
+            tests/test_streamdb_regress.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/../lisp/streamdb/streamdb.c)
+        target_include_directories(test_streamdb_regress PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../lisp/streamdb)
+        # streamdb.c uses strdup/usleep/PTHREAD_MUTEX_RECURSIVE; expose the
+        # POSIX surface explicitly since CMAKE_C_EXTENSIONS is OFF here.
+        target_compile_definitions(test_streamdb_regress PRIVATE
+            _DEFAULT_SOURCE _XOPEN_SOURCE=700)
+        target_link_libraries(test_streamdb_regress PRIVATE Threads::Threads)
+        if(DCF_SANITIZER_FLAGS)
+            target_compile_options(test_streamdb_regress PRIVATE ${DCF_SANITIZER_FLAGS})
+            target_link_options(test_streamdb_regress PRIVATE ${DCF_SANITIZER_FLAGS})
+        endif()
+        add_test(NAME streamdb_regress COMMAND test_streamdb_regress)
+    endif()
+
+    # Adapter certification binaries. These were previously compiled only by
+    # raw gcc lines in wire-certify.yml; registering them here means one
+    # `ctest` run covers the full C certification surface.
+    foreach(cert wire superpack fec audio game text sstv snake monitor)
+        add_executable(test_${cert}_certify tests/test_${cert}_certify.c)
+        target_include_directories(test_${cert}_certify PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../codec)
+        target_link_libraries(test_${cert}_certify PRIVATE m)
+        add_test(NAME ${cert}_certify COMMAND test_${cert}_certify
+                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    endforeach()
+
+    add_executable(test_snake_dsp tests/test_snake_dsp.c)
+    target_include_directories(test_snake_dsp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../codec)
+    target_link_libraries(test_snake_dsp PRIVATE m)
+    add_test(NAME snake_dsp COMMAND test_snake_dsp)
+
+    add_executable(test_snake_l2 tests/test_snake_l2.c)
+    target_include_directories(test_snake_l2 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../codec)
+    target_link_libraries(test_snake_l2 PRIVATE m)
+    add_test(NAME snake_l2 COMMAND test_snake_l2)
     
     # Latency test for audio benchmarking (only if the source is present)
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/latency/latency_test.c)
@@ -332,7 +402,7 @@ if(DCF_BUILD_TESTS)
             ${DCF_WARNINGS}
             -O3 $<$<BOOL:${DCF_ENABLE_ARCH_NATIVE}>:-march=native>
         )
-        if(DCF_ENABLE_SANITIZERS)
+        if(DCF_SANITIZER_FLAGS)
             target_compile_options(latency_test PRIVATE ${DCF_SANITIZER_FLAGS})
             target_link_options(latency_test PRIVATE ${DCF_SANITIZER_FLAGS})
         endif()

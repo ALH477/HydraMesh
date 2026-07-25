@@ -72,6 +72,10 @@
 #define THREAD_CREATE(t, f, a) (t = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)f, a, 0, NULL)) != NULL ? 0 : GetLastError()
 #define THREAD_JOIN(t) WaitForSingleObject(t, INFINITE); CloseHandle(t)
 #define SLEEP_MS(ms) Sleep(ms)
+/* running-flag: written by streamdb_free, read by the flush thread */
+#define ATOMIC_FLAG_TYPE volatile LONG
+#define ATOMIC_FLAG_LOAD(p) InterlockedCompareExchange((volatile LONG*)(p), 0, 0)
+#define ATOMIC_FLAG_STORE(p, v) InterlockedExchange((volatile LONG*)(p), (v))
 #elif defined(__unix__) || defined(__APPLE__) || defined(__linux__)
 #include <pthread.h>
 #include <unistd.h>
@@ -84,6 +88,12 @@
 #define THREAD_CREATE(t, f, a) pthread_create(&t, NULL, f, a)
 #define THREAD_JOIN(t) pthread_join(t, NULL)
 #define SLEEP_MS(ms) usleep((ms) * 1000)
+/* running-flag: written by streamdb_free, read by the flush thread. volatile
+ * is not synchronization — TSan flagged the plain int on its first C run. */
+#include <stdatomic.h>
+#define ATOMIC_FLAG_TYPE atomic_int
+#define ATOMIC_FLAG_LOAD(p) atomic_load(p)
+#define ATOMIC_FLAG_STORE(p, v) atomic_store((p), (v))
 #else
 #define MUTEX_TYPE int
 #define MUTEX_INIT(m) (*(m) = 0, 0)
@@ -94,6 +104,9 @@
 #define THREAD_CREATE(t, f, a) (0)
 #define THREAD_JOIN(t) ((void)0)
 #define SLEEP_MS(ms) ((void)0)
+#define ATOMIC_FLAG_TYPE int
+#define ATOMIC_FLAG_LOAD(p) (*(p))
+#define ATOMIC_FLAG_STORE(p, v) (*(p) = (v))
 #endif
 
 /* Constants */
@@ -117,7 +130,7 @@ typedef struct StreamDB {
     char* file_path;
     int is_file_backend;
     volatile int dirty;
-    volatile int running;
+    ATOMIC_FLAG_TYPE running;
     THREAD_TYPE auto_thread;
     int auto_flush_interval_ms;
 } StreamDB;
@@ -164,7 +177,7 @@ StreamDB* streamdb_init(const char* file_path, int flush_interval_ms) {
     db->file_path = file_path ? strdup(file_path) : NULL;
     db->is_file_backend = (file_path != NULL);
     db->dirty = 0;
-    db->running = 1;
+    ATOMIC_FLAG_STORE(&db->running, 1);
     db->auto_flush_interval_ms = flush_interval_ms > 0 ? flush_interval_ms : DEFAULT_FLUSH_INTERVAL_MS;
     
     if (MUTEX_INIT(&db->mutex) != 0) {
@@ -193,13 +206,13 @@ StreamDB* streamdb_init(const char* file_path, int flush_interval_ms) {
         if (db->auto_flush_interval_ms > 0) {
             if (THREAD_CREATE(db->auto_thread, auto_flush_thread, db) != 0) {
                 fprintf(stderr, "Warning: Failed to start auto-flush thread\n");
-                db->running = 0;
+                ATOMIC_FLAG_STORE(&db->running, 0);
             }
         } else {
-            db->running = 0;
+            ATOMIC_FLAG_STORE(&db->running, 0);
         }
     } else {
-        db->running = 0;
+        ATOMIC_FLAG_STORE(&db->running, 0);
     }
     
     return db;
@@ -555,7 +568,7 @@ int streamdb_flush(StreamDB* db) {
 /* Background auto-flush thread */
 static void* auto_flush_thread(void* arg) {
     StreamDB* db = (StreamDB*)arg;
-    while (db->running) {
+    while (ATOMIC_FLAG_LOAD(&db->running)) {
         SLEEP_MS(db->auto_flush_interval_ms);
         MUTEX_LOCK(&db->mutex);
         if (db->dirty) {
@@ -584,8 +597,8 @@ void streamdb_free(StreamDB* db) {
     if (!db) return;
     
     /* Stop and join auto-flush thread */
-    if (db->is_file_backend && db->running) {
-        db->running = 0;
+    if (db->is_file_backend && ATOMIC_FLAG_LOAD(&db->running)) {
+        ATOMIC_FLAG_STORE(&db->running, 0);
         THREAD_JOIN(db->auto_thread);
     }
 

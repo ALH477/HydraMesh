@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 #define _DEFAULT_SOURCE /* strdup under -std=c11 */
-#include <dcf_sdk/dcf_plugin_manager.h>
+#include "dcf_transport_v1.h"
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <stdlib.h>
