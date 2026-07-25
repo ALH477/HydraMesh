@@ -646,11 +646,19 @@
             '';
             installPhase = ''
               mkdir -p $out/bin
-              for t in dcf_loopback tx_campaign rx_campaign frame_tx frame_rx sense_node; do
-                install -m755 hydramodem/dcf-tools/build/$t $out/bin/
+              # Ship everything build.sh actually produces. sstv_send/sstv_recv and
+              # snake_loopback were being compiled and then discarded, so the image
+              # lacked the SSTV tools the docs advertise. snake_source/snake_mixer
+              # need snake_ipc.h from the separate DeMoD audio-stack repo and are
+              # skipped in a hermetic build — hence the existence check.
+              for t in dcf_loopback tx_campaign rx_campaign frame_tx frame_rx sense_node \
+                       sstv_send sstv_recv snake_loopback snake_source snake_mixer; do
+                if [ -x hydramodem/dcf-tools/build/$t ]; then
+                  install -m755 hydramodem/dcf-tools/build/$t $out/bin/
+                fi
               done
             '';
-            meta.description = "HydraModem CLI tools (frame_tx/frame_rx, campaigns, sense_node)";
+            meta.description = "HydraModem CLI tools (frame_tx/frame_rx, campaigns, sense_node, SSTV, snake)";
             meta.license = pkgs.lib.licenses.lgpl3Only;
           };
 

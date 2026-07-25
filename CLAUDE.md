@@ -613,8 +613,10 @@ bootstrap environments.
 Node Docker images are hermetic Nix `dockerTools` builds (`nix build .#docker-<name>`,
 or `docker/build-and-push.sh`): `docker-dcf-{go,rust,c,cpp,python,nodejs,gns}` (UDP/
 gRPC/GNS nodes) and **`docker-hydramodem`** — the acoustic-modem toolbox
-(`frame_tx`/`frame_rx`/`tx_campaign`/`rx_campaign`/`dcf_loopback`/`sense_node` on PATH;
-a WAV/file PHY, default cmd = the interop self-test) and **`docker-hydramesh`** — the
+(`frame_tx`/`frame_rx`/`tx_campaign`/`rx_campaign`/`dcf_loopback`/`sense_node`/
+`sstv_send`/`sstv_recv`/`snake_loopback` on PATH; a WAV/file PHY, default cmd = the
+interop self-test). `snake_source`/`snake_mixer` need `snake_ipc.h` from the separate
+DeMoD audio-stack repo (`$DEMOD_IPC_INCLUDE`) and are skipped in hermetic builds and **`docker-hydramesh`** — the
 Common Lisp SDK CLI node (`hydramesh` + StreamDB; versioned `2.2.0`, default cmd = its
 FiveAM self-test). The hermetic `docker-hydramesh` is now canonical for the
 `alh477/hydramesh` image; the traditional `lisp/Dockerfile` remains as a fallback.
