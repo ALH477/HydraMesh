@@ -42,8 +42,11 @@ docker run --rm "$CPP" version 2>&1 | grep -qi "gRPC node" && pass "dcf-cpp" || 
 docker run --rm "$HML" version 2>&1 | grep -q "2.2.0"          && pass "hydramesh (Lisp)" || fail "hydramesh version"
 # Cross-cert: the Lisp node self-certifies the DeModFrame wire codec against the
 # same anchors as every other language (frame CRC 0xA963 roundtrip, etc.) — its
-# `test` suite must be 16/16. This is the contract-level interop guarantee.
-docker run --rm "$HML" test 2>&1 | grep -q "Pass: 16"          && pass "hydramesh wire/adapter self-cert (16/16, agrees on DeModFrame)" || fail "hydramesh wire cert"
+# `test` suite must be green. Assert "no failures" rather than a hardcoded check
+# count: the count legitimately grows as the SDK gains tests (it went 16 -> 23
+# when the agent DSL landed), and pinning it turned suite *growth* into a red
+# interop run.
+docker run --rm "$HML" test 2>&1 | grep -qE "Fail: 0 \( *0%\)" && pass "hydramesh wire/adapter self-cert (green, agrees on DeModFrame)" || fail "hydramesh wire cert"
 
 echo "== 2. ProtoMessage/UDP mesh: dcf-go / dcf-rs / dcf-c =="
 docker run -d --name go-hub --network "$NET" "$GO" start --bind 0.0.0.0:7777 >/dev/null; sleep 1
