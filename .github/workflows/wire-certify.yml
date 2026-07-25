@@ -64,6 +64,15 @@ jobs:
           diff /tmp/fec_vectors.gen.h  codec/fec_vectors.gen.h
           python3 -m unittest python/tests/test_fec.py -v
 
+      - name: DCF-Pipe — regenerate control vectors, diff copies, verify transfer laws
+        run: |
+          python3 python/MCP/gen_pipe_vectors.py /tmp/pipe_vectors.json
+          diff /tmp/pipe_vectors.json   Documentation/pipe_vectors.json
+          diff /tmp/pipe_vectors.json   python/MCP/pipe_vectors.json
+          diff /tmp/pipe_vectors.gen.h  codec/pipe_vectors.gen.h
+          python3 python/dcf/pipe/laws.py
+          python3 -m unittest python/tests/test_pipe.py -v
+
       - name: SDR/IQ + acoustic + egress + transport/bridge — loopback tests + smokes
         run: |
           python3 -m unittest python/tests/test_iq_loopback.py python/tests/test_acoustic.py \
@@ -118,6 +127,11 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_fec_certify C_SDK/tests/test_fec_certify.c
           /tmp/test_fec_certify
+
+      - name: Build and run C DCF-Pipe control certification
+        run: |
+          gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_pipe_certify C_SDK/tests/test_pipe_certify.c
+          /tmp/test_pipe_certify
 
       - name: Build and run C modulation + mesh certification + node/modem (cmake)
         run: |
@@ -195,6 +209,7 @@ jobs:
           cargo test --test certify_modulation
           cargo test --test certify_mesh
           cargo test --test certify_fec
+          cargo test --test certify_pipe
 
   # DCF-SPA authorizer: token codec + verification + lifecycle (Rust unit +
   # cross-language check that a Python-built HMAC token verifies in Rust).

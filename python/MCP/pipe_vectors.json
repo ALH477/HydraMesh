@@ -1,0 +1,203 @@
+{
+  "format": "DCF-Pipe control codec v1",
+  "anchors": {
+    "fnv_empty": "0x811C9DC5",
+    "fnv_hello": "0x4F9F2CAB"
+  },
+  "open": [
+    {
+      "session_id": 0,
+      "total_len": 0,
+      "chunk_size": 1,
+      "checksum": 0,
+      "bytes": "0001000000000000000100000000"
+    },
+    {
+      "session_id": 7,
+      "total_len": 100000,
+      "chunk_size": 1400,
+      "checksum": 3735928559,
+      "bytes": "00010007000186a00578deadbeef"
+    },
+    {
+      "session_id": 31,
+      "total_len": 4294967295,
+      "chunk_size": 8188,
+      "checksum": 0,
+      "bytes": "0001001fffffffff1ffc00000000"
+    },
+    {
+      "session_id": 1,
+      "total_len": 17,
+      "chunk_size": 4,
+      "checksum": 2166136261,
+      "bytes": "00010001000000110004811c9dc5"
+    }
+  ],
+  "credit": [
+    {
+      "session_id": 0,
+      "credit": 0,
+      "bytes": "0101000000000000"
+    },
+    {
+      "session_id": 7,
+      "credit": 32,
+      "bytes": "0101000700000020"
+    },
+    {
+      "session_id": 31,
+      "credit": 4294967295,
+      "bytes": "0101001fffffffff"
+    }
+  ],
+  "sack": [
+    {
+      "session_id": 0,
+      "base": 0,
+      "bitmap": "",
+      "bytes": "020100000000000000"
+    },
+    {
+      "session_id": 7,
+      "base": 10,
+      "bitmap": "05",
+      "bytes": "020100070000000a0105"
+    },
+    {
+      "session_id": 7,
+      "base": 0,
+      "bitmap": "ff01",
+      "bytes": "020100070000000002ff01"
+    },
+    {
+      "session_id": 31,
+      "base": 1000000,
+      "bitmap": "80",
+      "bytes": "0201001f000f42400180"
+    }
+  ],
+  "nack": [
+    {
+      "session_id": 0,
+      "missing": [],
+      "bytes": "0301000000"
+    },
+    {
+      "session_id": 7,
+      "missing": [
+        3,
+        9,
+        4000000
+      ],
+      "bytes": "03010007030000000300000009003d0900"
+    },
+    {
+      "session_id": 31,
+      "missing": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "bytes": "0301001f050000000000000001000000020000000300000004"
+    }
+  ],
+  "done": [
+    {
+      "session_id": 0,
+      "bytes": "04010000"
+    },
+    {
+      "session_id": 7,
+      "bytes": "04010007"
+    },
+    {
+      "session_id": 31,
+      "bytes": "0401001f"
+    }
+  ],
+  "abort": [
+    {
+      "session_id": 0,
+      "reason": 0,
+      "bytes": "0501000000"
+    },
+    {
+      "session_id": 7,
+      "reason": 1,
+      "bytes": "0501000701"
+    },
+    {
+      "session_id": 31,
+      "reason": 3,
+      "bytes": "0501001f03"
+    }
+  ],
+  "chunk": [
+    {
+      "session_id": 0,
+      "chunk_seq": 0,
+      "payload": "",
+      "bytes": "000000000000"
+    },
+    {
+      "session_id": 7,
+      "chunk_seq": 42,
+      "payload": "68656c6c6f",
+      "bytes": "00070000002a68656c6c6f"
+    },
+    {
+      "session_id": 31,
+      "chunk_seq": 4294967295,
+      "payload": "000102030405060708090a0b0c0d0e0f",
+      "bytes": "001fffffffff000102030405060708090a0b0c0d0e0f"
+    }
+  ],
+  "fnv": [
+    {
+      "data": "",
+      "checksum": 2166136261
+    },
+    {
+      "data": "68656c6c6f",
+      "checksum": 1335831723
+    },
+    {
+      "data": "313233343536373839",
+      "checksum": 3146166556
+    },
+    {
+      "data": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "checksum": 152284517
+    }
+  ],
+  "counts": [
+    {
+      "total_len": 0,
+      "chunk_size": 1400,
+      "n": 0
+    },
+    {
+      "total_len": 1400,
+      "chunk_size": 1400,
+      "n": 1
+    },
+    {
+      "total_len": 1401,
+      "chunk_size": 1400,
+      "n": 2
+    },
+    {
+      "total_len": 100000,
+      "chunk_size": 1400,
+      "n": 72
+    },
+    {
+      "total_len": 17,
+      "chunk_size": 4,
+      "n": 5
+    }
+  ]
+}

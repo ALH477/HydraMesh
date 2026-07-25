@@ -10,6 +10,7 @@ pub mod game;
 pub mod mesh;
 pub mod modulation;
 pub mod monitor;
+pub mod pipe;
 pub mod snake;
 pub mod sstv;
 pub mod superpack;

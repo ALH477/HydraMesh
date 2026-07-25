@@ -264,6 +264,47 @@ cd codec && cargo test --test certify_superpack            # Rust
 gcc -std=c11 -I codec C_SDK/tests/test_superpack_certify.c -lm -o /tmp/sc && /tmp/sc  # C
 ```
 
+## DCF-Pipe (lossless bulk transfer: DCF as the control plane)
+
+The wire quantum as a **control layer** steering a dumb, fast data lane — the adapter
+family's missing high-throughput path. Control messages (**OPEN/CREDIT/SACK/NACK/DONE/
+ABORT**) ride ordinary frames and are byte-certified across Python/C/Rust; the data lane is
+a separate stateless datagram stream (`[session_id u16 | chunk_seq u32 | payload]`), a
+transport *beneath* the quantum like UDP/JANUS/HydraModem. The 246-vector certificate is
+untouched. Spec: `Documentation/DCF_PIPE_SPEC.md`.
+
+- **The invariant — Φ = N − |R| (the deficit).** The transfer-level analogue of the CRC
+  syndrome: one well-founded scalar that is simultaneously a safety invariant (Φ monotone,
+  R always correct ⇒ |R|=N means byte-exact) and a termination variant (Φ→0 for any
+  drop < 1). `DONE ⟺ Φ = 0 ⟺ object byte-exact`. Clean links finish in exactly **⌈N/W⌉
+  rounds** with zero retransmits — *Φ's slope is the throughput*. Implemented as a checked
+  monitor in `python/dcf/pipe/invariant.py`; `python/dcf/pipe/laws.py` sweeps it plus five
+  derived laws (INTEGRITY / LOSSLESS / FEC-FORWARD / FLOW-BOUND / IDEMPOTENT).
+- **Loss recovery is two-tier:** in-budget bit corruption heals *forward* via the certified
+  DCF-FEC layer (no round trip); a wholly dropped chunk is NACKed and retransmitted. The
+  receiver advances an **authorization horizon** by one window per round, so "in flight" vs
+  "dropped" is decided by *round, not position* — a lost final chunk is still recovered, and
+  the invariant is timing-agnostic (a 2 ms LAN round == a 2 min acoustic round).
+- **Flow control is receiver-driven credit** (not sender congestion windows): simpler and
+  naturally rate-limiting for a fleet of known devices.
+- **Link profiles** (`pipe.profile(name)`): `lan` (1400 B, nparity 16, W 16) vs
+  **`hydramodem` (256 B, nparity 0, W 2)** — on the ~8–12 B/s acoustic link airtime is the
+  only scarce resource, so the modem's own conv-FEC+interleaver does the correcting and
+  DCF-Pipe adds no second parity layer (measured on-air overhead < 3%, vs ~58% if
+  double-FEC'd). Losslessness is unchanged: a chunk the PHY can't recover just never
+  arrives, which is exactly Φ's NACK path.
+- **References:** `python/MCP/pipelab_core.py` (canonical), `codec/demod_pipe.h` (C),
+  `codec/src/pipe.rs` (Rust); runtime `python/dcf/pipe/`. Vectors:
+  `Documentation/pipe_vectors.json` (+ `python/MCP/` copy) and `codec/pipe_vectors.gen.h`.
+
+```sh
+python3 python/MCP/gen_pipe_vectors.py /tmp/pv.json            # regen + verify laws
+cd codec && cargo test --test certify_pipe                     # Rust
+gcc -std=c11 -I codec C_SDK/tests/test_pipe_certify.c -o /tmp/pc && /tmp/pc  # C
+python3 python/dcf/pipe/laws.py                                # transfer laws + Φ sweep
+cd python && python3 -m unittest tests.test_pipe -v            # loopback/lossy/hydramodem
+```
+
 ## DCF-Mesh (self-healing redundancy over the wire)
 
 A control adapter (not a new wire format) for self-healing meshes: the payload of a

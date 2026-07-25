@@ -377,7 +377,7 @@ if(DCF_BUILD_TESTS)
     # Adapter certification binaries. These were previously compiled only by
     # raw gcc lines in wire-certify.yml; registering them here means one
     # `ctest` run covers the full C certification surface.
-    foreach(cert wire superpack fec audio game text sstv snake monitor)
+    foreach(cert wire superpack fec audio game text sstv snake monitor pipe)
         add_executable(test_${cert}_certify tests/test_${cert}_certify.c)
         target_include_directories(test_${cert}_certify PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/../codec)
