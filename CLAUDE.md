@@ -28,6 +28,10 @@ Read these first — they are normative:
   REPORT/ROLE control, election + failover) as a `MsgMesh` control adapter.
 - `Documentation/DCF_SECURITY_EXPOSURE.md` — the plaintext wire's exposure and the
   WireGuard / external-crypto deployment rule.
+- `Documentation/DCF_SPA_SPEC.md` — single-packet port authorization: an
+  **authentication-only** (EAR99) side channel that gates mesh data ports, NOT a
+  wire format (the certificate is untouched). Implemented in `spa/` (Rust
+  `dcf-spa-authorizer` + `python/dcf/spa/knock.py`).
 - `Documentation/DCF_CODE_REVIEW.md` — frank, module-by-module status (consult
   before trusting any module's surface area).
 

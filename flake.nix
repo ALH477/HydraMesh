@@ -293,6 +293,26 @@
             meta.mainProgram = "dcf-ws-bridge";
           };
 
+          # DCF-SPA single-packet port authorizer. Authentication-only side
+          # channel (EAR99; see Documentation/DCF_SPA_SPEC.md §3); runtime needs
+          # `nft` on PATH to edit the allow-set (wrapped in via makeBinaryWrapper).
+          dcf-spa-authorizer = pkgs.rustPlatform.buildRustPackage {
+            pname = "dcf-spa-authorizer";
+            version = "0.1.0";
+            src = self;
+            cargoRoot = "spa";
+            buildAndTestSubdir = "spa";
+            cargoLock.lockFile = self + "/spa/Cargo.lock";
+            nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
+            postInstall = ''
+              wrapProgram $out/bin/dcf-spa-authorizer \
+                --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.nftables ]}
+            '';
+            meta.description = "DCF-SPA single-packet port authorizer (authentication-only)";
+            meta.license = pkgs.lib.licenses.lgpl3Only;
+            meta.mainProgram = "dcf-spa-authorizer";
+          };
+
           # FFmpeg with the native DCF-Audio demuxer built in. DCF-Audio is an
           # adapter over the 17-byte wire quantum; ff_dcf_demuxer reuses the
           # certified C reassembler (codec/demod_audio.h) so `ffmpeg -f dcf -i

@@ -196,6 +196,24 @@ jobs:
           cargo test --test certify_mesh
           cargo test --test certify_fec
 
+  # DCF-SPA authorizer: token codec + verification + lifecycle (Rust unit +
+  # cross-language check that a Python-built HMAC token verifies in Rust).
+  # Authentication-only side channel; touches no wire vectors.
+  spa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Rust authorizer tests (+ Python cross-language)
+        working-directory: spa
+        run: cargo test
+      - name: Python knock-client tests
+        working-directory: python
+        run: python3 -m unittest tests.test_spa -v
+
   certify-wasm:
     runs-on: ubuntu-latest
     steps:
