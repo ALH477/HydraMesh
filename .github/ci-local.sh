@@ -95,9 +95,9 @@ nixjob() { # nixjob <name> <tool> <"nixpkgs#pkg …"> <cmd…>
 
 nixjob node node "nixpkgs#nodejs" 'node JS/nodejs/test/certify.js && node JS/nodejs/test/certify_superpack.js'
 nixjob lua lua "nixpkgs#lua5_4" 'lua lua/selftest.lua && lua lua/dcf_jam.lua --passphrase ci-jam --codec pcm --blocks 20 && lua lua/dcf_superpack.lua'
-nixjob lisp sbcl "nixpkgs#sbcl" 'sbcl --non-interactive --load lisp/src/wire.lisp'
-nixjob java javac "nixpkgs#jdk" 'javac -d '"$WORK"'/jout java/com/demod/dcf/Frame.java java/com/demod/dcf/Certify.java java/com/demod/dcf/SuperPack.java java/com/demod/dcf/SuperPackCertify.java && java -cp '"$WORK"'/jout com.demod.dcf.Certify Documentation/golden_vectors.json && java -cp '"$WORK"'/jout com.demod.dcf.SuperPackCertify Documentation/superpack_vectors.json'
-nixjob kotlin kotlinc "nixpkgs#kotlin nixpkgs#jdk" 'kotlinc kotlin/src/main/kotlin/dcf/Frame.kt kotlin/src/main/kotlin/dcf/SuperPack.kt kotlin/src/main/kotlin/dcf/Certify.kt -include-runtime -d '"$WORK"'/kcert.jar && java -cp '"$WORK"'/kcert.jar dcf.CertifyKt Documentation/golden_vectors.json'
+nixjob lisp sbcl "nixpkgs#sbcl" 'sbcl --non-interactive --load lisp/src/wire.lisp --load lisp/src/fec.lisp'
+nixjob java javac "nixpkgs#jdk" 'javac -d '"$WORK"'/jout java/com/demod/dcf/Frame.java java/com/demod/dcf/Certify.java java/com/demod/dcf/SuperPack.java java/com/demod/dcf/SuperPackCertify.java java/com/demod/dcf/FEC.java java/com/demod/dcf/FECCertify.java && java -cp '"$WORK"'/jout com.demod.dcf.Certify Documentation/golden_vectors.json && java -cp '"$WORK"'/jout com.demod.dcf.SuperPackCertify Documentation/superpack_vectors.json && java -cp '"$WORK"'/jout com.demod.dcf.FECCertify Documentation/fec_vectors.json'
+nixjob kotlin kotlinc "nixpkgs#kotlin nixpkgs#jdk" 'kotlinc kotlin/src/main/kotlin/dcf/Frame.kt kotlin/src/main/kotlin/dcf/SuperPack.kt kotlin/src/main/kotlin/dcf/FEC.kt kotlin/src/main/kotlin/dcf/Certify.kt -include-runtime -d '"$WORK"'/kcert.jar && java -cp '"$WORK"'/kcert.jar dcf.CertifyKt Documentation/golden_vectors.json'
 
 # Haskell — compile with a pinned package set, env-files disabled.
 echo "== certify-haskell =="

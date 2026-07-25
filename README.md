@@ -40,9 +40,14 @@ wire codec is golden-vector-verified in CI. Each language **graduates to
 
 | Tier | Languages | What it means |
 |------|-----------|---------------|
-| **Certified** | **C** (`C_SDK/`), **Rust** (`codec/`), **Python** (`python/MCP/`, the reference), **Lua** (`GUI/wirelab.lua` + `lua/`), **Go** (`go/`), **Java** (`java/com/demod/dcf/`), **Node.js** (`JS/nodejs/`), **Perl** (`perl/`), **C++** (`cpp/include/dcf/`) | Golden-vector wire codec. C/Rust/Python/Lua are **green in CI today**; Go, Java, Node.js, Perl, and C++ each certify all 246 vectors via `certify-go`/`-java`/`-node`/`-perl`/`-cpp`. **Go has now graduated from a wire codec to a full stdlib-only SDK** — certified wire + game/audio/text adapters and a UDP `DcfNode` (`go/node`), with `certify-go` running `go vet`, `go test ./...`, and `go test -race ./node/`. These are the only implementations you should treat as bindings. Lua additionally certifies the audio L2 framing. |
-| **Design** | **Haskell** (`haskell/`), **Kotlin** (`kotlin/`), **Swift** (`swift/`), **Lisp** (`lisp/`) | Full codec + cert with a CI job, but **not yet proven green** here (no GHC/kotlinc/swift/sbcl in the dev env to pre-verify): Haskell has `certify-haskell`; Kotlin has `certify-kotlin` (a Gradle module with a UDP `DcfNode.kt`); Swift has `certify-swift` (a SwiftPM package + XCTest cert); Lisp has `certify-lisp` (a dependency-free `lisp/src/wire.lisp` under bare SBCL) plus a load-time self-cert and the folded C7–C9 fixes. Promising, not yet certified. |
-| **Experimental — building** | _(none)_ | Every advertised language now has a wire codec — see the Certified and Design tiers above. |
+| **Certified** | **C** (`C_SDK/`), **Rust** (`codec/`), **Python** (`python/MCP/`, the reference), **Lua** (`GUI/wirelab.lua` + `lua/`), **Go** (`go/`), **Java** (`java/com/demod/dcf/`), **Node.js** (`JS/nodejs/`), **Perl** (`perl/`), **C++** (`cpp/include/dcf/`), **Haskell** (`haskell/`), **Kotlin** (`kotlin/`), **Swift** (`swift/`), **Lisp** (`lisp/`) | Golden-vector wire codec, each certifying all 246 vectors via its `certify-<lang>` CI job (ungated, every push/PR). C/Rust/Python/Lua run without an extra toolchain; the rest use a hosted toolchain (`haskell-actions`, `setup-kotlin`, `swift-actions`, apt `sbcl`). **Go has graduated from a wire codec to a full stdlib-only SDK** — certified wire + game/audio/text adapters and a UDP `DcfNode` (`go/node`), with `certify-go` running `go vet`, `go test ./...`, and `go test -race ./node/`. Lua additionally certifies the audio L2 framing. **Lisp** certifies the full 109 encode + 137 syndrome vectors (and the FEC vector set) by reading the canonical JSON directly through a small in-tree reader — still no Quicklisp — via `lisp/src/{wire,fec}.lisp` under bare SBCL. These are the only implementations you should treat as bindings. |
+| **Experimental — building** | _(none)_ | Every advertised language is Certified above. |
+
+> Local pre-verification note: the dev shell ships C/Rust/Python/Go/Lua/Node/Perl/
+> C++ toolchains; Haskell/Kotlin/Swift/Lisp are verified by their hosted CI jobs
+> (and reproducibly via `nix shell nixpkgs#{ghc,kotlin,swift,sbcl}` / `make ci-local`).
+> Swift specifically cannot be pre-verified under the Nix Swift-on-Linux wrapper
+> (no `swift-test` subcommand); the `certify-swift` runner is authoritative.
 
 > The C SDK is intentionally narrow: only four modules compile and ship
 > (`dcf_platform`, `dcf_error`, `dcf_ringbuf`, `dcf_connpool`). See
@@ -620,16 +625,16 @@ gcc -std=c11 -Wall -Wextra -I codec C_SDK/tests/test_wire_certify.c -lm -o /tmp/
 Per-language unit tests (where they exist):
 - **C SDK**: `cd C_SDK && mkdir build && cd build && cmake .. && make && ctest` (the wire cert is `C_SDK/tests/test_wire_certify.c`; `tests/legacy/` is quarantined and not built).
 - **Python**: `pytest python/tests/`.
-- **Lisp**: `sbcl --non-interactive --load lisp/src/wire.lisp` certifies the wire codec (CI-gated via `certify-lisp`); the full SDK (`lisp/src/hydramesh.lisp`) self-certifies on load.
+- **Lisp**: `sbcl --non-interactive --load lisp/src/wire.lisp --load lisp/src/fec.lisp` certifies all 246 wire vectors + the FEC vector set against `Documentation/{golden,fec}_vectors.json` (dependency-free, no Quicklisp; CI job `certify-lisp`); the full SDK (`lisp/src/hydramesh.lisp`) self-certifies on load.
 - **Go**: `cd go && go test ./...` — certifies the wire codec (246 golden vectors) plus the
   game/audio/text adapters, and exercises the stdlib-only UDP `DcfNode` SDK (ProtoMessage
   transport, peer RTT, reliable-ARQ) via a two-node loopback integration test.
 - **Java**: `javac -d /tmp/jout java/com/demod/dcf/Frame.java java/com/demod/dcf/Certify.java && java -cp /tmp/jout com.demod.dcf.Certify` — certifies all 246 vectors.
-- **Kotlin**: `cd kotlin && gradle run` (or the `certify-kotlin` CI job) — certifies the codec; CI-gated (no local kotlinc in the dev env).
+- **Kotlin**: `cd kotlin && gradle run` (or the `certify-kotlin` CI job) — certifies all 246 vectors + SuperPack + FEC.
 - **Node.js**: `node JS/nodejs/test/certify.js` (or `npm --prefix JS/nodejs run certify`) — certifies all 246 vectors.
 - **Perl**: `cd perl && prove -l t/` (or `perl Makefile.PL && make test`) — certifies all 246 vectors.
 - **C++**: `g++ -std=c++17 -I cpp/include cpp/tests/certify.cpp -o cert && ./cert` (or `cmake . && ctest`) — certifies all 246 vectors.
-- **Swift**: `cd swift && swift test` — certifies the codec (CI-gated via `certify-swift`; no local Swift toolchain in the dev env).
+- **Swift**: `cd swift && swift test` — certifies all 246 vectors + SuperPack + FEC (CI job `certify-swift`; the Nix Swift-on-Linux wrapper lacks `swift-test`, so the hosted runner is authoritative locally).
 - **Integration** (RTT grouping, failover, AUTO-mode role assignment, StreamDB persistence): **planned**, not implemented in the current release.
 
 ### Enhanced Benefits of StreamDB Integration in HydraMesh-Lisp

@@ -8,6 +8,27 @@ reserved for when the full advertised language set is green in CI.
 ## [Unreleased]
 
 ### Added
+- **DCF-SPA** (`spa/`) — single-packet port authorization: an authentication-only (EAR99) side
+  channel that gates HydraMesh data ports. Rust `dcf-spa-authorizer` (HMAC-SHA256 / Ed25519
+  token verification, nonce-replay + freshness lifecycle, nftables granter) + `python/dcf/spa/`
+  knock client; `certify-spa` CI job (unit + Rust↔Python cross-language). Spec:
+  `Documentation/DCF_SPA_SPEC.md`. The wire certificate is untouched.
+- **C SDK hardening + regression suite.** `DCF_SAN=address|thread|undefined` sanitizer configs;
+  new `test_regressions` (C4/H2/C6) and `test_streamdb_regress` (C5, the first C-level StreamDB
+  test) run under ASan+UBSan and TSan in a new `c-sdk-unit` CI job — the unit suite had never
+  run in CI. All previously-orphaned C certify binaries are now CMake/ctest targets.
+- **`DCF_BUILD_PLUGINS`** compile-only target + `include/dcf_transport_v1.h` (the real v1 plugin
+  ABI), replacing the phantom `<dcf_sdk/...>` include path.
+
+### Changed
+- **UDP receive truncation closed** across all C paths (MTU buffers + `MSG_TRUNC` fail-closed);
+  `dcf_proto_serialize` takes a capacity; connpool/logging races fixed; `dcf_once` added.
+- **Certification completed.** Haskell/Kotlin/Swift/Lisp are Certified (ungated `certify-*`
+  jobs). Lisp now certifies the full 246 wire vectors + FEC set from the canonical JSON via a
+  dependency-free in-tree reader (was an embedded subset); the `certify-lisp` Quicklisp step is
+  `continue-on-error`.
+- **Header→impl gap closed**: `dcf_interface.h`/`dcf_plugin_manager.h` moved to
+  `include/experimental/`; every header left in `include/` has a shipping implementation.
 - **Go SDK graduation** (`go/`). The Go binding goes from a certified wire codec to a full
   **stdlib-only** SDK mirroring the working Rust subset:
   - Certified **game** (`go/game`), **audio** (`go/audio`), and **text** (`go/text`) adapters,
@@ -37,9 +58,9 @@ reserved for when the full advertised language set is green in CI.
 ### Changed
 - `flake.nix`: added `meta.license = lgpl3Only` to every derivation; fixed three source paths
   (`nodejs` → `JS/nodejs`, `docs` → `Documentation`, `streamdb` → `lisp/streamdb`); switched
-  `dcf-rust` to a deterministic `cargoLock.lockFile` (no precomputed hash). The Go `vendorHash`,
-  npm `npmDepsHash`, and streamdb `cargoHash` are `lib.fakeHash` placeholders — the real values
-  require a `nix` build environment (unavailable here); fill via `nix build` (see `DCF_BACKLOG.md`).
+  `dcf-rust` to a deterministic `cargoLock.lockFile` (no precomputed hash). No `lib.fakeHash`
+  placeholders remain: Go uses `vendorHash = null` (stdlib-only), nodejs needs no lockfile hash,
+  and streamdb is a C derivation (not Rust). Added the `dcf-spa-authorizer` package.
 
 ## [0.3.0] - 2026-06-17
 

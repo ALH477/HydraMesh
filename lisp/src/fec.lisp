@@ -12,7 +12,7 @@
 (defpackage :dcf-fec
   (:use :cl)
   (:export :rs-encode :rs-decode :interleave :deinterleave
-           :encode-message :decode-message :certify))
+           :encode-message :decode-message :certify :certify-golden))
 (in-package :dcf-fec)
 
 (defconstant +gf-prim+ #x11D)
@@ -208,10 +208,56 @@
       (assert (string= (bh (decode-message bad)) m17) () "burst recover")))
   :certified)
 
+;; ── full-certificate cert against Documentation/fec_vectors.json ─────────────
+;; Reuses the dependency-free JSON reader in dcf-wire (wire.lisp loads first in
+;; CI), so the FEC cert reads the same canonical file every other language does.
+
+(defun %find-fec-vectors ()
+  (dolist (p '("Documentation/fec_vectors.json"
+               "../Documentation/fec_vectors.json"
+               "../../Documentation/fec_vectors.json"))
+    (when (probe-file p) (return p))))
+
+(defun certify-golden (path)
+  "Certify every fec_vectors.json case: encode, single-codeword correct,
+multi-codeword message blobs + round-trip, and the burst case."
+  (unless (find-package :dcf-wire)
+    (error "dcf-fec: certify-golden needs dcf-wire's JSON reader (load wire.lisp first)"))
+  (let* ((root (funcall (intern "JSON-PARSE-FILE" :dcf-wire) path))
+         (jget (intern "JGET" :dcf-wire))
+         (hexb (intern "HEX->BYTES" :dcf-wire))
+         (np (funcall jget root "nparity")))
+    (flet ((jg (o k) (funcall jget o k))
+           (hb (s) (funcall hexb s)))
+      (let ((ne 0) (nc 0) (nm 0))
+        (dolist (o (jg root "cases"))
+          (assert (string= (bh (rs-encode (hb (jg o "msg")) np)) (jg o "code"))
+                  () "fec encode[~D]" ne)
+          (incf ne))
+        (dolist (o (jg root "correct"))
+          (multiple-value-bind (m %n) (rs-decode (hb (jg o "corrupt")) np 17)
+            (declare (ignore %n))
+            (assert (string= (bh m) (jg o "msg")) () "fec correct[~D]" nc))
+          (incf nc))
+        (dolist (o (jg root "messages"))
+          (let ((blob (encode-message (hb (jg o "msg")) np)))
+            (assert (string= (bh blob) (jg o "blob")) () "fec message[~D] blob" nm)
+            (assert (string= (bh (decode-message blob)) (jg o "msg"))
+                    () "fec message[~D] roundtrip" nm))
+          (incf nm))
+        (let ((burst (jg root "message_burst")))
+          (assert (string= (bh (decode-message (hb (jg burst "corrupt")))) (jg burst "msg"))
+                  () "fec burst"))
+        (values ne nc nm)))))
+
 (eval-when (:load-toplevel :execute)
   (handler-case
-      (progn (certify)
-             (format t "~&;; dcf-fec (lisp): CERTIFIED — RS(GF256) encode + correct + multi-codeword~%"))
+      (let ((golden (%find-fec-vectors)))
+        (certify)
+        (if (and golden (find-package :dcf-wire))
+            (multiple-value-bind (e c m) (certify-golden golden)
+              (format t "~&;; dcf-fec (lisp): CERTIFIED — ~D encode + ~D correct + ~D message vectors + burst~%" e c m))
+            (format t "~&;; dcf-fec (lisp): CERTIFIED (embedded subset; fec_vectors.json or dcf-wire not found)~%")))
     (error (e)
       (format *error-output* "~&;; dcf-fec (lisp): FAILED — ~A~%" e)
       #+sbcl (sb-ext:exit :code 1))))
