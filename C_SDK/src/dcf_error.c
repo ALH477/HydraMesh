@@ -44,12 +44,22 @@ static struct {
     DCFLoggerConfig config;
     FILE* log_file;
     dcf_mutex_t mutex;
-    bool initialized;
+    dcf_atomic_bool initialized;
     DCFLogStats stats;
     dcf_atomic_int current_level;
-} g_logger = {
-    .initialized = false
-};
+} g_logger;
+
+/* Both logger locks are created exactly once and never destroyed: a thread
+ * can always be about to log, so destroying the mutex (as the old shutdown
+ * did) raced every late logger. Init/shutdown transitions serialize on
+ * g_log_init_lock; the first initializer wins, later ones see ALREADY. */
+static dcf_once_t g_log_once = DCF_ONCE_INIT;
+static dcf_mutex_t g_log_init_lock;
+
+static void log_locks_once(void) {
+    dcf_mutex_init(&g_log_init_lock);
+    dcf_mutex_init(&g_logger.mutex);
+}
 
 /* ANSI color codes */
 static const char* const log_colors[] = {
@@ -292,63 +302,73 @@ int dcf_capture_stack_trace(DCFStackFrame* frames, int max_frames, int skip) {
  * ============================================================================ */
 
 DCFError dcf_log_init(const DCFLoggerConfig* config) {
-    if (g_logger.initialized) return DCF_ERR_ALREADY_INITIALIZED;
-    
-    dcf_mutex_init(&g_logger.mutex);
-    
+    dcf_once(&g_log_once, log_locks_once);
+    dcf_mutex_lock(&g_log_init_lock);
+    if (dcf_atomic_load(&g_logger.initialized)) {
+        dcf_mutex_unlock(&g_log_init_lock);
+        return DCF_ERR_ALREADY_INITIALIZED;
+    }
+
     if (config) {
         memcpy(&g_logger.config, config, sizeof(DCFLoggerConfig));
     } else {
         DCFLoggerConfig defaults = DCF_LOGGER_CONFIG_DEFAULT;
         memcpy(&g_logger.config, &defaults, sizeof(DCFLoggerConfig));
     }
-    
+
     dcf_atomic_store(&g_logger.current_level, g_logger.config.min_level);
-    
+
     /* Open log file if configured */
     if (g_logger.config.log_to_file && g_logger.config.log_file_path[0]) {
         g_logger.log_file = fopen(g_logger.config.log_file_path, "a");
         if (!g_logger.log_file) {
-            dcf_mutex_destroy(&g_logger.mutex);
+            dcf_mutex_unlock(&g_log_init_lock);
             return DCF_ERR_IO_FAIL;
         }
     }
-    
+
 #ifdef DCF_PLATFORM_POSIX
     if (g_logger.config.log_to_syslog) {
         openlog("dcf", LOG_PID | LOG_NDELAY, LOG_USER);
     }
 #endif
-    
-    g_logger.initialized = true;
+
+    dcf_atomic_store(&g_logger.initialized, true);
+    dcf_mutex_unlock(&g_log_init_lock);
     return DCF_SUCCESS;
 }
 
 void dcf_log_shutdown(void) {
-    if (!g_logger.initialized) return;
-    
+    dcf_once(&g_log_once, log_locks_once);
+    dcf_mutex_lock(&g_log_init_lock);
+    if (!dcf_atomic_load(&g_logger.initialized)) {
+        dcf_mutex_unlock(&g_log_init_lock);
+        return;
+    }
+
     dcf_log_flush();
-    
+
     dcf_mutex_lock(&g_logger.mutex);
-    
+
     if (g_logger.log_file) {
         fclose(g_logger.log_file);
         g_logger.log_file = NULL;
     }
-    
+
 #ifdef DCF_PLATFORM_POSIX
     if (g_logger.config.log_to_syslog) {
         closelog();
     }
 #endif
-    
-    g_logger.initialized = false;
+
     dcf_mutex_unlock(&g_logger.mutex);
-    dcf_mutex_destroy(&g_logger.mutex);
+    dcf_atomic_store(&g_logger.initialized, false);
+    dcf_mutex_unlock(&g_log_init_lock);
+    /* g_logger.mutex is intentionally left alive; see log_locks_once. */
 }
 
 void dcf_log_flush(void) {
-    if (!g_logger.initialized) return;
+    if (!dcf_atomic_load(&g_logger.initialized)) return;
     
     dcf_mutex_lock(&g_logger.mutex);
     if (g_logger.log_file) fflush(g_logger.log_file);
@@ -387,8 +407,11 @@ bool dcf_log_is_enabled(DCFLogLevel level) {
 
 void dcf_log_write_v(DCFLogLevel level, const char* file, int line,
                      const char* func, const char* fmt, va_list args) {
-    if (!g_logger.initialized) {
+    if (!dcf_atomic_load(&g_logger.initialized)) {
+        /* Thread-safe lazy default: dcf_log_init serializes internally, so
+         * two first-loggers can race here and exactly one initializes. */
         dcf_log_init(&(DCFLoggerConfig){.min_level = DCF_LOG_WARN});
+        if (!dcf_atomic_load(&g_logger.initialized)) return;
     }
     if (!dcf_log_is_enabled(level)) return;
     
@@ -555,6 +578,19 @@ static int g_crash_log_fd = -1;
 static struct sigaction g_old_handlers[32];
 static const int crash_signals[] = { SIGSEGV, SIGABRT, SIGFPE, SIGILL, SIGBUS };
 
+/* write() everything, tolerating short writes and EINTR; signal-safe. */
+static void crash_write(int fd, const char* buf, size_t n) {
+    while (n > 0) {
+        ssize_t w = write(fd, buf, n);
+        if (w <= 0) {
+            if (w < 0 && errno == EINTR) continue;
+            return;
+        }
+        buf += w;
+        n -= (size_t)w;
+    }
+}
+
 static void crash_handler(int sig) {
     /* Async-signal-safe: only use write(), backtrace_symbols_fd(), and
      * signal-safe functions. No fopen/fprintf/malloc/free/ctime/strsignal
@@ -575,10 +611,10 @@ static void crash_handler(int sig) {
     /* g_crash_log_fd is set by dcf_crash_handler_set_log_file (or remains -1) */
     if (g_crash_log_fd >= 0) fd = g_crash_log_fd;
 
-    write(fd, crash_prefix, sizeof(crash_prefix) - 1);
-    write(fd, sigbuf, (size_t)len + 1);
+    crash_write(fd, crash_prefix, sizeof(crash_prefix) - 1);
+    crash_write(fd, sigbuf, (size_t)len + 1);
 
-    write(fd, stack_prefix, sizeof(stack_prefix) - 1);
+    crash_write(fd, stack_prefix, sizeof(stack_prefix) - 1);
     void* frames[64];
     int n = backtrace(frames, 64);
     backtrace_symbols_fd(frames, n, fd);
@@ -596,12 +632,22 @@ static void crash_handler(int sig) {
 
 DCFError dcf_crash_handler_install(void) {
 #ifdef DCF_PLATFORM_POSIX
+    /* Pre-warm backtrace(): its first call may dlopen/malloc (libgcc lazy
+     * init), which is not signal-safe — take that hit here, outside any
+     * signal context, so the in-handler call is a plain walk. */
+    void* warm[4];
+    (void)backtrace(warm, 4);
+
     for (size_t i = 0; i < sizeof(crash_signals) / sizeof(crash_signals[0]); i++) {
+        int signo = crash_signals[i];
+        if (signo < 0 || (size_t)signo >= sizeof(g_old_handlers) / sizeof(g_old_handlers[0]))
+            continue; /* keep the saved-handler table in bounds */
         struct sigaction sa;
         sa.sa_handler = crash_handler;
         sigemptyset(&sa.sa_mask);
         sa.sa_flags = SA_RESETHAND;
-        sigaction(crash_signals[i], &sa, &g_old_handlers[crash_signals[i]]);
+        if (sigaction(signo, &sa, &g_old_handlers[signo]) != 0)
+            return DCF_ERR_IO_FAIL;
     }
     return DCF_SUCCESS;
 #else
@@ -612,7 +658,10 @@ DCFError dcf_crash_handler_install(void) {
 void dcf_crash_handler_uninstall(void) {
 #ifdef DCF_PLATFORM_POSIX
     for (size_t i = 0; i < sizeof(crash_signals) / sizeof(crash_signals[0]); i++) {
-        sigaction(crash_signals[i], &g_old_handlers[crash_signals[i]], NULL);
+        int signo = crash_signals[i];
+        if (signo < 0 || (size_t)signo >= sizeof(g_old_handlers) / sizeof(g_old_handlers[0]))
+            continue;
+        sigaction(signo, &g_old_handlers[signo], NULL);
     }
 #endif
 }

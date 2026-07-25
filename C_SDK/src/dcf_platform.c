@@ -224,6 +224,10 @@ void dcf_secure_zero(void* ptr, size_t size) {
 
 #ifdef DCF_PLATFORM_POSIX
 
+int dcf_once(dcf_once_t* once, void (*init_fn)(void)) {
+    return pthread_once(once, init_fn);
+}
+
 int dcf_mutex_init(dcf_mutex_t* mutex) {
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
@@ -452,6 +456,16 @@ int dcf_event_wait(dcf_event_t* event, uint64_t timeout_ms) {
  * ============================================================================ */
 
 #ifdef DCF_PLATFORM_WINDOWS
+
+static BOOL CALLBACK dcf_once_trampoline(PINIT_ONCE once, PVOID param, PVOID* ctx) {
+    (void)once; (void)ctx;
+    ((void (*)(void))param)();
+    return TRUE;
+}
+
+int dcf_once(dcf_once_t* once, void (*init_fn)(void)) {
+    return InitOnceExecuteOnce(once, dcf_once_trampoline, (PVOID)init_fn, NULL) ? 0 : -1;
+}
 
 int dcf_mutex_init(dcf_mutex_t* mutex) {
     InitializeCriticalSection(mutex);

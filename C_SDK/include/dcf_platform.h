@@ -290,6 +290,17 @@ extern "C" {
     #endif
 #endif
 
+/* One-time initialization */
+#ifdef DCF_PLATFORM_WINDOWS
+    typedef INIT_ONCE dcf_once_t;
+    #define DCF_ONCE_INIT INIT_ONCE_STATIC_INIT
+#else
+    typedef pthread_once_t dcf_once_t;
+    #define DCF_ONCE_INIT PTHREAD_ONCE_INIT
+#endif
+/* Runs init_fn exactly once across all threads; safe to call concurrently. */
+DCF_API int dcf_once(dcf_once_t* once, void (*init_fn)(void));
+
 /* Mutex operations */
 DCF_API int dcf_mutex_init(dcf_mutex_t* mutex);
 DCF_API int dcf_mutex_destroy(dcf_mutex_t* mutex);

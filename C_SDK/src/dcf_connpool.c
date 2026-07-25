@@ -339,9 +339,12 @@ void dcf_connpool_destroy(DCFConnPool* pool, bool graceful) {
     /* Stop background threads */
     dcf_connpool_stop(pool);
     
-    /* Wait for pending acquisitions if graceful */
+    /* Wait for pending acquisitions if graceful — bounded, so destroy can
+     * never hang forever on a waiter that misses the stop broadcast. */
     if (graceful) {
-        while (dcf_atomic_load(&pool->pending_acquisitions) > 0) {
+        uint64_t deadline = dcf_time_monotonic_ms() + 5000;
+        while (dcf_atomic_load(&pool->pending_acquisitions) > 0 &&
+               dcf_time_monotonic_ms() < deadline) {
             dcf_sleep_ms(10);
         }
     }
@@ -416,7 +419,12 @@ DCFError dcf_connpool_drain(DCFConnPool* pool, uint32_t timeout_ms) {
     
     uint64_t deadline = dcf_time_monotonic_ms() + timeout_ms;
     
-    while (pool->active_connections > 0) {
+    for (;;) {
+        /* active_connections is guarded by peers_lock; snapshot under it. */
+        dcf_rwlock_rdlock(&pool->peers_lock);
+        size_t active = pool->active_connections;
+        dcf_rwlock_unlock(&pool->peers_lock);
+        if (active == 0) break;
         if (dcf_time_monotonic_ms() >= deadline) {
             return DCF_ERR_TIMEOUT;
         }
@@ -435,9 +443,17 @@ DCFPooledConn* dcf_connpool_acquire(DCFConnPool* pool, const char* peer_id,
     if (!pool || !peer_id) return NULL;
     if (dcf_atomic_load(&pool->draining)) return NULL;
     
-    uint32_t actual_timeout = (timeout_ms == 0) ? 
-        pool->config.acquire_timeout_ms : (uint32_t)timeout_ms;
-    uint64_t deadline = dcf_time_monotonic_ms() + actual_timeout;
+    /* timeout_ms: 0 = config default, < 0 = wait indefinitely. The old code
+     * cast a negative straight to uint32_t, turning "forever" into ~49 days
+     * of misarithmetic on the deadline. */
+    uint64_t deadline;
+    if (timeout_ms < 0) {
+        deadline = UINT64_MAX;
+    } else {
+        uint32_t actual_timeout = (timeout_ms == 0) ?
+            pool->config.acquire_timeout_ms : (uint32_t)timeout_ms;
+        deadline = dcf_time_monotonic_ms() + actual_timeout;
+    }
     
     dcf_atomic_fetch_add(&pool->pending_acquisitions, 1);
     dcf_atomic_fetch_add(&pool->stats.acquisitions_total, 1);
@@ -828,17 +844,60 @@ void dcf_connpool_close_all(DCFConnPool* pool) {
 
 void dcf_connpool_get_stats(const DCFConnPool* pool, DCFConnPoolStats* stats) {
     if (!pool || !stats) return;
-    
-    memcpy(stats, &pool->stats, sizeof(DCFConnPoolStats));
-    stats->total_connections = pool->total_connections;
-    stats->idle_connections = pool->idle_connections;
-    stats->active_connections = pool->active_connections;
-    stats->pending_acquisitions = dcf_atomic_load(&pool->pending_acquisitions);
+
+    /* The size_t counters are guarded by peers_lock; the const in the
+     * signature is logical (no observable mutation), so locking is fine.
+     * The stats fields are atomics updated lock-free — copy them with
+     * atomic loads, never memcpy (racy, and UB on _Atomic objects). */
+    DCFConnPool* p = (DCFConnPool*)pool;
+    dcf_rwlock_rdlock(&p->peers_lock);
+    stats->total_connections = p->total_connections;
+    stats->idle_connections = p->idle_connections;
+    stats->active_connections = p->active_connections;
+    dcf_rwlock_unlock(&p->peers_lock);
+    stats->pending_acquisitions = dcf_atomic_load(&p->pending_acquisitions);
+
+#define DCF_STAT_COPY(field) dcf_atomic_init(&stats->field, dcf_atomic_load(&p->stats.field))
+    DCF_STAT_COPY(connections_created);
+    DCF_STAT_COPY(connections_destroyed);
+    DCF_STAT_COPY(connections_failed);
+    DCF_STAT_COPY(connections_evicted);
+    DCF_STAT_COPY(connections_timed_out);
+    DCF_STAT_COPY(acquisitions_total);
+    DCF_STAT_COPY(acquisitions_succeeded);
+    DCF_STAT_COPY(acquisitions_failed);
+    DCF_STAT_COPY(acquisitions_timed_out);
+    DCF_STAT_COPY(acquisition_wait_time_us);
+    DCF_STAT_COPY(validations_total);
+    DCF_STAT_COPY(validations_failed);
+    DCF_STAT_COPY(circuit_opens);
+    DCF_STAT_COPY(circuit_half_opens);
+    DCF_STAT_COPY(circuit_closes);
+    DCF_STAT_COPY(fast_fails);
+#undef DCF_STAT_COPY
 }
 
 void dcf_connpool_reset_stats(DCFConnPool* pool) {
     if (!pool) return;
-    memset(&pool->stats, 0, sizeof(DCFConnPoolStats));
+    /* Atomic stores, not memset: other threads may be bumping these. */
+#define DCF_STAT_ZERO(field) dcf_atomic_store(&pool->stats.field, 0)
+    DCF_STAT_ZERO(connections_created);
+    DCF_STAT_ZERO(connections_destroyed);
+    DCF_STAT_ZERO(connections_failed);
+    DCF_STAT_ZERO(connections_evicted);
+    DCF_STAT_ZERO(connections_timed_out);
+    DCF_STAT_ZERO(acquisitions_total);
+    DCF_STAT_ZERO(acquisitions_succeeded);
+    DCF_STAT_ZERO(acquisitions_failed);
+    DCF_STAT_ZERO(acquisitions_timed_out);
+    DCF_STAT_ZERO(acquisition_wait_time_us);
+    DCF_STAT_ZERO(validations_total);
+    DCF_STAT_ZERO(validations_failed);
+    DCF_STAT_ZERO(circuit_opens);
+    DCF_STAT_ZERO(circuit_half_opens);
+    DCF_STAT_ZERO(circuit_closes);
+    DCF_STAT_ZERO(fast_fails);
+#undef DCF_STAT_ZERO
 }
 
 /* ============================================================================
