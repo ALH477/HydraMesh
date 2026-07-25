@@ -23,6 +23,9 @@ jobs:
       - name: Verify wire laws and regenerate golden vectors
         run: python3 python/MCP/verify_laws.py /tmp/golden_vectors.json
 
+      - name: Diff the regenerated C mirror of the certificate
+        run: diff /tmp/golden_vectors.gen.h codec/golden_vectors.gen.h
+
       - name: Diff regenerated golden vectors against committed
         run: |
           python3 -c "
