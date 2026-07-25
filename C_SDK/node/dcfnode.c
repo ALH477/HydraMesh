@@ -83,7 +83,8 @@ static int send_proto(const char *host, int port, uint8_t msg_type,
     int fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     if (fd < 0) { freeaddrinfo(res); return -1; }
     uint8_t buf[DCF_PROTO_HEADER_LEN + 4096];
-    size_t n = dcf_proto_serialize(msg_type, 0, now_us(), payload, plen, buf);
+    size_t n = dcf_proto_serialize(msg_type, 0, now_us(), payload, plen, buf, sizeof buf);
+    if (n == 0) { close(fd); freeaddrinfo(res); return -1; }
     ssize_t sent = sendto(fd, buf, n, 0, res->ai_addr, res->ai_addrlen);
     close(fd);
     freeaddrinfo(res);
@@ -145,19 +146,24 @@ static int cmd_start(int argc, char **argv) {
 
     uint64_t last_tick = dcf_mesh_now_us();
     for (;;) {
-        uint8_t dg[2048];
+        uint8_t dg[DCF_PROTO_HEADER_LEN + 4096]; /* matches send_proto's max */
         struct sockaddr_in from;
         socklen_t fl = sizeof(from);
-        ssize_t r = recvfrom(fd, dg, sizeof(dg), 0, (struct sockaddr *)&from, &fl);
-        if (r > 0) {
+        /* MSG_TRUNC reports the true datagram length so oversize input is
+         * dropped loudly instead of parsed as a silently clipped message. */
+        ssize_t r = recvfrom(fd, dg, sizeof(dg), MSG_TRUNC, (struct sockaddr *)&from, &fl);
+        if (r > (ssize_t)sizeof(dg)) {
+            fprintf(stderr, "dcfnode: dropped %zd-byte datagram (max %zu)\n", r, sizeof(dg));
+        } else if (r > 0) {
             char fip[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &from.sin_addr, fip, sizeof fip);
             uint8_t mt; uint32_t seq, plen; uint64_t ts; const uint8_t *p;
             if (dcf_proto_deserialize(dg, (size_t)r, &mt, &seq, &ts, &p, &plen)) {
                 if (mt == DCF_MSG_PING) {
                     uint8_t pb[DCF_PROTO_HEADER_LEN];
-                    size_t n = dcf_proto_serialize(DCF_MSG_PONG, seq, ts, NULL, 0, pb);
-                    sendto(fd, pb, n, 0, (struct sockaddr *)&from, fl);
+                    size_t n = dcf_proto_serialize(DCF_MSG_PONG, seq, ts, NULL, 0, pb, sizeof pb);
+                    if (n == 0 || sendto(fd, pb, n, 0, (struct sockaddr *)&from, fl) != (ssize_t)n)
+                        fprintf(stderr, "dcfnode: PONG send to %s failed\n", fip);
                 } else if (mt == DCF_MSG_PONG && mesh_on) {
                     uint64_t now = dcf_mesh_now_us();
                     dcf_mesh_on_pong(&mesh, &from, ts < now ? (int)((now - ts) / 1000) : 0);

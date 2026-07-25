@@ -38,10 +38,11 @@
 
 #define DCF_PROTO_HEADER_LEN 17u
 
-/* Serialise into out[] (must hold DCF_PROTO_HEADER_LEN + payload_len); returns total bytes. */
+/* Serialise into out[out_cap]; returns total bytes, or 0 if out_cap is too small. */
 static inline size_t dcf_proto_serialize(uint8_t msg_type, uint32_t seq, uint64_t ts,
                                          const uint8_t *payload, uint32_t payload_len,
-                                         uint8_t *out) {
+                                         uint8_t *out, size_t out_cap) {
+    if (out_cap < (size_t)DCF_PROTO_HEADER_LEN + payload_len) return 0;
     out[0] = msg_type;
     out[1] = (uint8_t)(seq >> 24); out[2] = (uint8_t)(seq >> 16);
     out[3] = (uint8_t)(seq >> 8);  out[4] = (uint8_t)seq;

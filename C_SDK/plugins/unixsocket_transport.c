@@ -1,8 +1,26 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 #include <dcf_sdk/dcf_plugin_manager.h>
+#include <arpa/inet.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+
+/* Cap on a wire-declared message length; anything larger is a framing error. */
+#define UNIXSOCKET_MAX_MSG (1u << 20)
+
+/* recv() on SOCK_STREAM may return short; loop until exactly n bytes or error. */
+static bool recv_full(int fd, void* buf, size_t n) {
+    uint8_t* p = (uint8_t*)buf;
+    while (n > 0) {
+        ssize_t r = recv(fd, p, n, 0);
+        if (r <= 0) return false;
+        p += r;
+        n -= (size_t)r;
+    }
+    return true;
+}
 
 typedef struct {
     int sock;
@@ -26,8 +44,10 @@ bool unixsocket_setup(void* self, const char* path, int unused) {
 }
 
 bool unixsocket_send(void* self, const uint8_t* data, size_t size, const char* target) {
-    UnixSocketTransport* ust = (UnixSocketTransport*)self;
+    (void)self;
+    if (size == 0 || size > UNIXSOCKET_MAX_MSG) return false;
     int client_sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (client_sock < 0) return false;
     struct sockaddr_un target_addr;
     memset(&target_addr, 0, sizeof(target_addr));
     target_addr.sun_family = AF_UNIX;
@@ -36,24 +56,38 @@ bool unixsocket_send(void* self, const uint8_t* data, size_t size, const char* t
         close(client_sock);
         return false;
     }
-    uint32_t len = htonl(size);
-    send(client_sock, &len, sizeof(len), 0);
-    ssize_t sent = send(client_sock, data, size, 0);
+    uint32_t len = htonl((uint32_t)size);
+    bool ok = send(client_sock, &len, sizeof(len), 0) == (ssize_t)sizeof(len);
+    ok = ok && send(client_sock, data, size, 0) == (ssize_t)size;
     close(client_sock);
-    return sent == size;
+    return ok;
 }
 
 uint8_t* unixsocket_receive(void* self, size_t* size) {
     UnixSocketTransport* ust = (UnixSocketTransport*)self;
+    *size = 0;
     int client_sock = accept(ust->sock, NULL, NULL);
     if (client_sock < 0) return NULL;
     uint32_t len;
-    recv(client_sock, &len, sizeof(len), 0);
+    if (!recv_full(client_sock, &len, sizeof(len))) {
+        close(client_sock);
+        return NULL;
+    }
     len = ntohl(len);
+    /* The length is wire-supplied: cap it before trusting it with malloc. */
+    if (len == 0 || len > UNIXSOCKET_MAX_MSG) {
+        close(client_sock);
+        return NULL;
+    }
     uint8_t* buf = malloc(len);
-    *size = recv(client_sock, buf, len, 0);
+    if (!buf) {
+        close(client_sock);
+        return NULL;
+    }
+    bool ok = recv_full(client_sock, buf, len);
     close(client_sock);
-    if (*size != len) { free(buf); return NULL; }
+    if (!ok) { free(buf); return NULL; }
+    *size = len;
     return buf;
 }
 

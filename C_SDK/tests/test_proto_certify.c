@@ -21,7 +21,12 @@ int main(void) {
     /* golden: type=1 seq=42 ts=0x0102030405060708 payload=01 02 03 */
     uint8_t payload[3] = {0x01, 0x02, 0x03};
     uint8_t buf[64];
-    size_t n = dcf_proto_serialize(1, 42, 0x0102030405060708ull, payload, 3, buf);
+    size_t n = dcf_proto_serialize(1, 42, 0x0102030405060708ull, payload, 3, buf, sizeof buf);
+    if (n == 0) { fprintf(stderr, "FAIL serialize: capacity rejected\n"); return 1; }
+    /* capacity guard: a too-small buffer must be refused, not overflowed */
+    if (dcf_proto_serialize(1, 42, 0, payload, 3, buf, DCF_PROTO_HEADER_LEN + 2) != 0) {
+        fprintf(stderr, "FAIL serialize capacity guard\n"); fails++;
+    }
     char got[160];
     hex(buf, n, got);
     const char *want = "010000002a010203040506070800000003010203";

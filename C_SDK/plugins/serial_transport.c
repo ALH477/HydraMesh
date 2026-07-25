@@ -2,6 +2,7 @@
 #include <dcf_sdk/dcf_plugin_manager.h>
 #include <termios.h>
 #include <fcntl.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 typedef struct {
@@ -35,10 +36,14 @@ bool serial_send(void* self, const uint8_t* data, size_t size, const char* targe
 
 uint8_t* serial_receive(void* self, size_t* size) {
     SerialTransport* st = (SerialTransport*)self;
+    *size = 0;
     uint8_t* buf = malloc(1024);
-    *size = read(st->fd, buf, 1024);
-    if (*size <= 0) { free(buf); return NULL; }
-    // COBS decode (simplified)
+    if (!buf) return NULL;
+    /* Capture the signed return first: read() = -1 stored straight into a
+     * size_t made the <= 0 check unfirable and returned SIZE_MAX-length junk. */
+    ssize_t n = read(st->fd, buf, 1024);
+    if (n <= 0) { free(buf); return NULL; }
+    *size = (size_t)n;
     return buf;
 }
 

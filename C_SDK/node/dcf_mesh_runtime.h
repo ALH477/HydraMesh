@@ -140,12 +140,22 @@ static inline dcf_mesh_peer_t *dcf_mesh_peer_by_addr(dcf_mesh_node_t *m, const s
     return NULL;
 }
 
-/* Send a ProtoMessage from the bound socket to a peer address. */
-static inline void dcf_mesh_send(dcf_mesh_node_t *m, const struct sockaddr_in *to,
-                                 uint8_t msg_type, const uint8_t *payload, uint32_t plen) {
+/* Send a ProtoMessage from the bound socket to a peer address.
+ * Returns 0 on success, -1 on oversize payload or send failure (also logged,
+ * so mesh control traffic never disappears without a trace). */
+static inline int dcf_mesh_send(dcf_mesh_node_t *m, const struct sockaddr_in *to,
+                                uint8_t msg_type, const uint8_t *payload, uint32_t plen) {
     uint8_t buf[DCF_PROTO_HEADER_LEN + 512];
-    size_t n = dcf_proto_serialize(msg_type, 0, dcf_mesh_now_us(), payload, plen, buf);
-    sendto(m->fd, buf, n, 0, (const struct sockaddr *)to, sizeof(*to));
+    size_t n = dcf_proto_serialize(msg_type, 0, dcf_mesh_now_us(), payload, plen, buf, sizeof buf);
+    if (n == 0) {
+        fprintf(stderr, "mesh: payload %u too large for control send (type %u)\n", plen, msg_type);
+        return -1;
+    }
+    if (sendto(m->fd, buf, n, 0, (const struct sockaddr *)to, sizeof(*to)) != (ssize_t)n) {
+        fprintf(stderr, "mesh: control send failed (type %u)\n", msg_type);
+        return -1;
+    }
+    return 0;
 }
 
 /* PONG path: mark the peer answered + record RTT. */
