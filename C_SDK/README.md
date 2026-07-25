@@ -8,11 +8,17 @@ narrow: only **four modules compile and install** — `dcf_platform`, `dcf_error
 `dcf_ringbuf`, `dcf_connpool` (the `DCF_SOURCES` list in `CMakeLists.txt`). These
 provide the low-level primitives below.
 
-> **What ships vs. what is declared.** The public headers and the source tree
-> declare more than the build delivers. Anything under `include/experimental/`,
-> `plugins/experimental/`, and `tests/legacy/` is **quarantined and does not
-> build** — including the high-level client API (`dcf_client_*`). Do not rely on
-> those symbols; the examples below use only the four compiled modules.
+> **What ships vs. what is declared.** Every header in `include/` now has a
+> real implementation behind it: the four modules above plus
+> `dcf_transport_v1.h` (the v1 plugin ABI, a plain struct). Everything
+> declaration-only lives in `include/experimental/` (including the high-level
+> client API `dcf_client_*`, `dcf_interface.h`, and `dcf_plugin_manager.h`) —
+> those are **design references, quarantined, not built, not installed**.
+> Likewise `plugins/experimental/` and `tests/legacy/`. The sound v1 transport
+> plugins (`plugins/*.c`) compile against `dcf_transport_v1.h` under
+> `-DDCF_BUILD_PLUGINS=ON` as a bit-rot guard; no shipped loader dlopens them
+> yet. Sanitizer builds: `-DDCF_SAN=address|thread|undefined` (the `c-sdk-unit`
+> CI job runs plain + ASan + TSan, including the pinned regression suite).
 
 ## Features (shipping modules)
 

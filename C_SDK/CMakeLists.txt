@@ -16,6 +16,7 @@ option(DCF_BUILD_TESTS "Build unit tests" ON)
 option(DCF_BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(DCF_BUILD_EXAMPLES "Build examples" ON)
 option(DCF_BUILD_NODE "Build the dcfnode UDP mesh node (ProtoMessage transport)" ON)
+option(DCF_BUILD_PLUGINS "Compile the v1 transport plugins (bit-rot guard; nothing loads them yet)" OFF)
 option(DCF_MODEM_AUDIO "Link a live-audio backend into the Faust modem transport" OFF)
 option(DCF_ENABLE_SANITIZERS "Deprecated alias for -DDCF_SAN=address" OFF)
 set(DCF_SAN "OFF" CACHE STRING
@@ -177,6 +178,7 @@ set(DCF_HEADERS
     include/dcf_error.h
     include/dcf_ringbuf.h
     include/dcf_connpool.h
+    include/dcf_transport_v1.h
 )
 
 set(DCF_SOURCES
@@ -448,6 +450,52 @@ if(DCF_BUILD_NODE)
         target_include_directories(test_mesh_certify PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../codec)
         add_test(NAME mesh_certify COMMAND test_mesh_certify)
     endif()
+endif()
+
+# ============================================================================
+# v1 transport plugins — compile-only bit-rot guard
+#
+# No shipped loader dlopens these yet (the plugin manager is a design
+# reference in include/experimental/), but compiling them keeps the code
+# honest: before this target existed, none of them could even build, and
+# several shipped real bugs (see DCF_CODE_REVIEW.md H1/M3/C6).
+# plugins/experimental/ stays excluded — those are quarantined by design.
+# ============================================================================
+
+if(DCF_BUILD_PLUGINS)
+    set(DCF_PLUGIN_SOURCES
+        plugins/DOOM_udp_transport.c
+        plugins/dcf_udp_transport.c
+        plugins/serial_transport.c
+        plugins/namedpipe_transport.c
+        plugins/unixsocket_transport.c
+    )
+    # Plugins with optional system dependencies
+    check_include_file("netinet/sctp.h" HAVE_SCTP_H)
+    check_include_file("linux/can.h" HAVE_LINUX_CAN_H)
+    check_include_file("modbus/modbus.h" HAVE_MODBUS_H)
+    if(HAVE_SCTP_H)
+        list(APPEND DCF_PLUGIN_SOURCES plugins/sctp_transport.c)
+    endif()
+    if(HAVE_LINUX_CAN_H)
+        list(APPEND DCF_PLUGIN_SOURCES plugins/can_transport.c)
+    endif()
+    if(HAVE_MODBUS_H)
+        list(APPEND DCF_PLUGIN_SOURCES plugins/modbus_transport.c)
+    endif()
+
+    foreach(plugin_src ${DCF_PLUGIN_SOURCES})
+        get_filename_component(plugin_name ${plugin_src} NAME_WE)
+        add_library(plugin_${plugin_name} MODULE ${plugin_src})
+        target_include_directories(plugin_${plugin_name} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/include)
+        target_compile_options(plugin_${plugin_name} PRIVATE ${DCF_WARNINGS})
+        set_target_properties(plugin_${plugin_name} PROPERTIES
+            OUTPUT_NAME "dcf_${plugin_name}")
+        if(plugin_name STREQUAL "modbus_transport")
+            target_link_libraries(plugin_${plugin_name} PRIVATE modbus)
+        endif()
+    endforeach()
 endif()
 
 # ============================================================================

@@ -1,4 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+//
+// EXPERIMENTAL — declaration only, no implementation ships. This header is a
+// design reference: dcf_interface_execute / dcf_interface_tui_start exist
+// nowhere in the built library, and the dcf_client.h it depends on is itself
+// experimental. Moved out of the public include/ so nothing can include a
+// header whose symbols don't link.
 #ifndef DCF_INTERFACE_H
 #define DCF_INTERFACE_H
 #include "dcf_types.h"   /* canonical DCFCmd (DCF_CMD_UNKNOWN=0 ...) lives here */

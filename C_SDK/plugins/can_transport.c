@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+#define _DEFAULT_SOURCE /* struct ifreq from net/if.h under -std=c11 */
 #include "dcf_transport_v1.h"
 #include <linux/can.h>
 #include <linux/can/raw.h>
 #include <net/if.h>
-#include <sys/socket.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 typedef struct {
     int sock;
