@@ -76,6 +76,20 @@ jobs:
           python3 python/dcf/pipe/laws.py
           python3 -m unittest python/tests/test_pipe.py -v
 
+      - name: HydraPack — regenerate vectors, diff the committed copies
+        run: |
+          python3 python/MCP/gen_hydrapack_vectors.py /tmp/hydrapack_vectors.json
+          diff /tmp/hydrapack_vectors.json   Documentation/hydrapack_vectors.json
+          diff /tmp/hydrapack_vectors.json   python/MCP/hydrapack_vectors.json
+          diff /tmp/hydrapack_vectors.gen.h  codec/hydrapack_vectors.gen.h
+
+      - name: Multi-Control — regenerate vectors, diff the committed copies
+        run: |
+          python3 python/MCP/gen_pipemulti_vectors.py /tmp/pipemulti_vectors.json
+          diff /tmp/pipemulti_vectors.json   Documentation/pipemulti_vectors.json
+          diff /tmp/pipemulti_vectors.json   python/MCP/pipemulti_vectors.json
+          diff /tmp/pipemulti_vectors.gen.h  codec/pipemulti_vectors.gen.h
+
       - name: SDR/IQ + acoustic + egress + transport/bridge — loopback tests + smokes
         run: |
           python3 -m unittest python/tests/test_iq_loopback.py python/tests/test_acoustic.py \
@@ -135,6 +149,16 @@ jobs:
         run: |
           gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_pipe_certify C_SDK/tests/test_pipe_certify.c
           /tmp/test_pipe_certify
+
+      - name: Build and run C HydraPack serialization certification
+        run: |
+          gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_hydrapack_certify C_SDK/tests/test_hydrapack_certify.c
+          /tmp/test_hydrapack_certify
+
+      - name: Build and run C Multi-Control certification
+        run: |
+          gcc -std=c11 -Wall -Wextra -I codec -o /tmp/test_pipemulti_certify C_SDK/tests/test_pipemulti_certify.c
+          /tmp/test_pipemulti_certify
 
       - name: Build and run C modulation + mesh certification + node/modem (cmake)
         run: |
@@ -213,6 +237,8 @@ jobs:
           cargo test --test certify_mesh
           cargo test --test certify_fec
           cargo test --test certify_pipe
+          cargo test --test certify_hydrapack
+          cargo test --test certify_pipemulti
 
   # DCF-SPA authorizer: token codec + verification + lifecycle (Rust unit +
   # cross-language check that a Python-built HMAC token verifies in Rust).

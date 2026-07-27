@@ -1,0 +1,392 @@
+{
+ "format": "DCF-Pipe Multi-Control v0.1 (byte-certified)",
+ "spec": "Parallel Pipe control bus: up to 3 steady-state commands in one 4-byte DeModFrame payload. Byte-aligned layout: byte0 = magic|count|flags, bytes 1-3 = command slots. Magic=11b (byte0>=0xC0). Reserved opcode 111 rejected. Active-Set mapping and 1-bit param context are runtime state.",
+ "constants": {
+  "mc_version": 1,
+  "payload_len": 4,
+  "magic_mask": 192,
+  "magic": 192,
+  "max_count": 3,
+  "opcodes": {
+   "0": "NOP",
+   "1": "CREDIT_DELTA",
+   "2": "ACK_CUMUL",
+   "3": "ACK_SELECTIVE",
+   "4": "NACK_ONE",
+   "5": "DONE_HINT",
+   "6": "ABORT_HINT"
+  },
+  "reserved_opcode": 7
+ },
+ "theorem": "Matching these main + reject + discriminator vectors pins the C and Rust implementations to this reference.  The magic anchor (byte0 >= 0xC0) cleanly partitions Multi-Control from classic Pipe control (byte0 0..5) and from audio CTRL descriptors (byte0 <= 124, top 2 bits 00/01).  The 246-vector wire certificate and pipe_vectors.json are untouched.",
+ "main": [
+  {
+   "name": "anchor_count1_NOP",
+   "count": 1,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 0,
+     "opcode": 0,
+     "opcode_name": "NOP",
+     "param_lsb": 0
+    }
+   ],
+   "bytes": "d0000000"
+  },
+  {
+   "name": "count1_mixed",
+   "count": 1,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 0,
+     "opcode": 1,
+     "opcode_name": "CREDIT_DELTA",
+     "param_lsb": 1
+    }
+   ],
+   "bytes": "d00c0000"
+  },
+  {
+   "name": "count2_mixed",
+   "count": 2,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 0,
+     "opcode": 1,
+     "opcode_name": "CREDIT_DELTA",
+     "param_lsb": 1
+    },
+    {
+     "local_idx": 2,
+     "opcode": 2,
+     "opcode_name": "ACK_CUMUL",
+     "param_lsb": 0
+    }
+   ],
+   "bytes": "e00c9000"
+  },
+  {
+   "name": "count3_mixed",
+   "count": 3,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 0,
+     "opcode": 1,
+     "opcode_name": "CREDIT_DELTA",
+     "param_lsb": 1
+    },
+    {
+     "local_idx": 2,
+     "opcode": 2,
+     "opcode_name": "ACK_CUMUL",
+     "param_lsb": 0
+    },
+    {
+     "local_idx": 3,
+     "opcode": 6,
+     "opcode_name": "ABORT_HINT",
+     "param_lsb": 1
+    }
+   ],
+   "bytes": "f00c90f4"
+  },
+  {
+   "name": "opcode_NOP",
+   "count": 1,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 2,
+     "opcode": 0,
+     "opcode_name": "NOP",
+     "param_lsb": 1
+    }
+   ],
+   "bytes": "d0840000"
+  },
+  {
+   "name": "opcode_CREDIT_DELTA",
+   "count": 1,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 2,
+     "opcode": 1,
+     "opcode_name": "CREDIT_DELTA",
+     "param_lsb": 1
+    }
+   ],
+   "bytes": "d08c0000"
+  },
+  {
+   "name": "opcode_ACK_CUMUL",
+   "count": 1,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 2,
+     "opcode": 2,
+     "opcode_name": "ACK_CUMUL",
+     "param_lsb": 1
+    }
+   ],
+   "bytes": "d0940000"
+  },
+  {
+   "name": "opcode_ACK_SELECTIVE",
+   "count": 1,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 2,
+     "opcode": 3,
+     "opcode_name": "ACK_SELECTIVE",
+     "param_lsb": 1
+    }
+   ],
+   "bytes": "d09c0000"
+  },
+  {
+   "name": "opcode_NACK_ONE",
+   "count": 1,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 2,
+     "opcode": 4,
+     "opcode_name": "NACK_ONE",
+     "param_lsb": 1
+    }
+   ],
+   "bytes": "d0a40000"
+  },
+  {
+   "name": "opcode_DONE_HINT",
+   "count": 1,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 2,
+     "opcode": 5,
+     "opcode_name": "DONE_HINT",
+     "param_lsb": 1
+    }
+   ],
+   "bytes": "d0ac0000"
+  },
+  {
+   "name": "opcode_ABORT_HINT",
+   "count": 1,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 2,
+     "opcode": 6,
+     "opcode_name": "ABORT_HINT",
+     "param_lsb": 1
+    }
+   ],
+   "bytes": "d0b40000"
+  },
+  {
+   "name": "param_credit_delta_lsb0",
+   "count": 1,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 0,
+     "opcode": 1,
+     "opcode_name": "CREDIT_DELTA",
+     "param_lsb": 0
+    }
+   ],
+   "bytes": "d0080000"
+  },
+  {
+   "name": "param_credit_delta_lsb1",
+   "count": 1,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 0,
+     "opcode": 1,
+     "opcode_name": "CREDIT_DELTA",
+     "param_lsb": 1
+    }
+   ],
+   "bytes": "d00c0000"
+  },
+  {
+   "name": "local_idx_0",
+   "count": 1,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 0,
+     "opcode": 3,
+     "opcode_name": "ACK_SELECTIVE",
+     "param_lsb": 0
+    }
+   ],
+   "bytes": "d0180000"
+  },
+  {
+   "name": "local_idx_1",
+   "count": 1,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 1,
+     "opcode": 3,
+     "opcode_name": "ACK_SELECTIVE",
+     "param_lsb": 0
+    }
+   ],
+   "bytes": "d0580000"
+  },
+  {
+   "name": "local_idx_2",
+   "count": 1,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 2,
+     "opcode": 3,
+     "opcode_name": "ACK_SELECTIVE",
+     "param_lsb": 0
+    }
+   ],
+   "bytes": "d0980000"
+  },
+  {
+   "name": "local_idx_3",
+   "count": 1,
+   "flags": 0,
+   "cmds": [
+    {
+     "local_idx": 3,
+     "opcode": 3,
+     "opcode_name": "ACK_SELECTIVE",
+     "param_lsb": 0
+    }
+   ],
+   "bytes": "d0d80000"
+  }
+ ],
+ "reject": [
+  {
+   "name": "pack_reserved_opcode_raises",
+   "byte_input": "d0380000",
+   "expect": "raises_on_unpack",
+   "unpack_raised": true
+  },
+  {
+   "name": "unpack_count0_raises",
+   "byte_input": "c0000000",
+   "expect": "raises_on_unpack",
+   "unpack_raised": true
+  },
+  {
+   "name": "unpack_bad_magic_raises",
+   "byte_input": "40000000",
+   "expect": "raises_on_unpack",
+   "unpack_raised": true
+  },
+  {
+   "name": "unpack_nonzero_flags_raises",
+   "byte_input": "d1000000",
+   "expect": "raises_on_unpack",
+   "unpack_raised": true
+  },
+  {
+   "name": "unpack_pad_bits_raises",
+   "byte_input": "d0010000",
+   "expect": "raises_on_unpack",
+   "unpack_raised": true
+  },
+  {
+   "name": "unpack_unused_slot_nonzero_raises",
+   "byte_input": "e00c9044",
+   "expect": "raises_on_unpack",
+   "unpack_raised": true
+  }
+ ],
+ "discriminator": [
+  {
+   "name": "anchor_count1_NOP",
+   "byte0_hex": "d0",
+   "is_multicontrol": true,
+   "is_classic_pipe": false
+  },
+  {
+   "name": "count1_mixed",
+   "byte0_hex": "d0",
+   "is_multicontrol": true,
+   "is_classic_pipe": false
+  },
+  {
+   "name": "count2_mixed",
+   "byte0_hex": "e0",
+   "is_multicontrol": true,
+   "is_classic_pipe": false
+  },
+  {
+   "name": "count3_mixed",
+   "byte0_hex": "f0",
+   "is_multicontrol": true,
+   "is_classic_pipe": false
+  },
+  {
+   "name": "opcode_NOP",
+   "byte0_hex": "d0",
+   "is_multicontrol": true,
+   "is_classic_pipe": false
+  },
+  {
+   "name": "classic_open",
+   "byte0_hex": "00",
+   "is_multicontrol": false,
+   "is_classic_pipe": true
+  },
+  {
+   "name": "classic_credit",
+   "byte0_hex": "01",
+   "is_multicontrol": false,
+   "is_classic_pipe": true
+  },
+  {
+   "name": "classic_sack",
+   "byte0_hex": "02",
+   "is_multicontrol": false,
+   "is_classic_pipe": true
+  },
+  {
+   "name": "classic_nack",
+   "byte0_hex": "03",
+   "is_multicontrol": false,
+   "is_classic_pipe": true
+  },
+  {
+   "name": "classic_done",
+   "byte0_hex": "04",
+   "is_multicontrol": false,
+   "is_classic_pipe": true
+  },
+  {
+   "name": "classic_abort",
+   "byte0_hex": "05",
+   "is_multicontrol": false,
+   "is_classic_pipe": true
+  },
+  {
+   "name": "audio_ctrl_desc",
+   "byte0_hex": "7c",
+   "is_multicontrol": false,
+   "is_classic_pipe": false
+  }
+ ]
+}

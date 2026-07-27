@@ -1,0 +1,414 @@
+{
+ "format": "HydraPack v0.1 quantum + pipe serialization (byte-certified)",
+ "spec": "Plane-aware serialization above DeModFrame + DCF-Pipe. Quantum descriptor (4B, byte-aligned): [schema_id_hi, schema_id_lo, (version<<4)|flags, payload_byte_len]. Pipe: packed bytes + FNV-1a-32. OpenPipe: OPEN[14] + [schema_id_hi, schema_id_lo, (version<<4)|flags].",
+ "constants": {
+  "hydrapack_version": 1,
+  "default_threshold": 120,
+  "quantum_len": 4,
+  "desc_payload_max": 255,
+  "field_kinds": [
+   "u",
+   "i",
+   "bool",
+   "enum",
+   "bits",
+   "struct"
+  ]
+ },
+ "schemas": [
+  {
+   "id": 0,
+   "version": 1,
+   "fields": [
+    {
+     "name": "x",
+     "kind": "u",
+     "width": 10
+    },
+    {
+     "name": "y",
+     "kind": "u",
+     "width": 10
+    },
+    {
+     "name": "v",
+     "kind": "i",
+     "width": 8
+    },
+    {
+     "name": "hot",
+     "kind": "bool"
+    }
+   ]
+  },
+  {
+   "id": 1,
+   "version": 1,
+   "fields": [
+    {
+     "name": "sensor_type",
+     "kind": "u",
+     "width": 8
+    },
+    {
+     "name": "value",
+     "kind": "i",
+     "width": 16
+    },
+    {
+     "name": "flags",
+     "kind": "u",
+     "width": 8
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "version": 1,
+   "fields": [
+    {
+     "name": "cmd",
+     "kind": "enum",
+     "width": 4,
+     "enum_values": {
+      "IDLE": 0,
+      "MOVE": 1,
+      "FIRE": 2,
+      "STOP": 3
+     }
+    },
+    {
+     "name": "mode",
+     "kind": "enum",
+     "width": 4,
+     "enum_values": {
+      "AUTO": 0,
+      "MANUAL": 1,
+      "SAFE": 2
+     }
+    },
+    {
+     "name": "param",
+     "kind": "i",
+     "width": 16
+    },
+    {
+     "name": "seq",
+     "kind": "u",
+     "width": 8
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "version": 1,
+   "fields": [
+    {
+     "name": "x",
+     "kind": "u",
+     "width": 12
+    },
+    {
+     "name": "y",
+     "kind": "u",
+     "width": 12
+    },
+    {
+     "name": "vx",
+     "kind": "i",
+     "width": 8
+    },
+    {
+     "name": "vy",
+     "kind": "i",
+     "width": 8
+    },
+    {
+     "name": "heading",
+     "kind": "u",
+     "width": 8
+    },
+    {
+     "name": "flags",
+     "kind": "u",
+     "width": 8
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "version": 1,
+   "fields": [
+    {
+     "name": "p0",
+     "kind": "u",
+     "width": 12
+    },
+    {
+     "name": "p1",
+     "kind": "u",
+     "width": 12
+    },
+    {
+     "name": "p2",
+     "kind": "u",
+     "width": 12
+    },
+    {
+     "name": "p3",
+     "kind": "u",
+     "width": 12
+    },
+    {
+     "name": "p4",
+     "kind": "u",
+     "width": 12
+    },
+    {
+     "name": "p5",
+     "kind": "u",
+     "width": 12
+    },
+    {
+     "name": "p6",
+     "kind": "u",
+     "width": 12
+    },
+    {
+     "name": "p7",
+     "kind": "u",
+     "width": 12
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "version": 1,
+   "fields": [
+    {
+     "name": "pos",
+     "kind": "struct",
+     "sub_fields": [
+      {
+       "name": "x",
+       "kind": "u",
+       "width": 12
+      },
+      {
+       "name": "y",
+       "kind": "u",
+       "width": 12
+      }
+     ]
+    },
+    {
+     "name": "vel",
+     "kind": "struct",
+     "sub_fields": [
+      {
+       "name": "vx",
+       "kind": "i",
+       "width": 8
+      },
+      {
+       "name": "vy",
+       "kind": "i",
+       "width": 8
+      }
+     ]
+    },
+    {
+     "name": "id",
+     "kind": "u",
+     "width": 8
+    }
+   ]
+  }
+ ],
+ "theorem": "Matching these quantum + pipe + openpipe vectors pins the C and Rust implementations to this reference.  The bit-packer is big-endian, MSB-first, zero-padded; all field types in v0.1 are fixed-width, so packed_size is a pure function of the schema.  The 246-vector wire certificate is untouched.",
+ "quantum": {
+  "single": [
+   {
+    "schema_id": 0,
+    "version": 1,
+    "value": {
+     "x": 1000,
+     "y": 700,
+     "v": -3,
+     "hot": true
+    },
+    "quanta": [
+     "fa2bcfd8"
+    ]
+   },
+   {
+    "schema_id": 1,
+    "version": 1,
+    "value": {
+     "sensor_type": 2,
+     "value": -32000,
+     "flags": 15
+    },
+    "quanta": [
+     "0283000f"
+    ]
+   },
+   {
+    "schema_id": 2,
+    "version": 1,
+    "value": {
+     "cmd": 1,
+     "mode": 2,
+     "param": -300,
+     "seq": 42
+    },
+    "quanta": [
+     "12fed42a"
+    ]
+   }
+  ],
+  "multi": [
+   {
+    "schema_id": 3,
+    "version": 1,
+    "flags": 5,
+    "value": {
+     "x": 3500,
+     "y": 2800,
+     "vx": -12,
+     "vy": 7,
+     "heading": 180,
+     "flags": 66
+    },
+    "quanta": [
+     "00031507",
+     "dacaf0f4",
+     "07b44200"
+    ]
+   },
+   {
+    "schema_id": 4,
+    "version": 1,
+    "flags": 5,
+    "value": {
+     "p0": 17,
+     "p1": 117,
+     "p2": 217,
+     "p3": 317,
+     "p4": 417,
+     "p5": 517,
+     "p6": 617,
+     "p7": 717
+    },
+    "quanta": [
+     "0004150c",
+     "0110750d",
+     "913d1a12",
+     "052692cd"
+    ]
+   },
+   {
+    "schema_id": 5,
+    "version": 1,
+    "flags": 5,
+    "value": {
+     "pos": {
+      "x": 3500,
+      "y": 2800
+     },
+     "vel": {
+      "vx": -1,
+      "vy": 2
+     },
+     "id": 42
+    },
+    "quanta": [
+     "00051506",
+     "dacaf0ff",
+     "022a0000"
+    ]
+   }
+  ]
+ },
+ "pipe": [
+  {
+   "schema_id": 3,
+   "version": 1,
+   "value": {
+    "x": 3500,
+    "y": 2800,
+    "vx": -12,
+    "vy": 7,
+    "heading": 180,
+    "flags": 66
+   },
+   "buffer": "dacaf0f407b442",
+   "checksum": 2347908880
+  },
+  {
+   "schema_id": 4,
+   "version": 1,
+   "value": {
+    "p0": 17,
+    "p1": 117,
+    "p2": 217,
+    "p3": 317,
+    "p4": 417,
+    "p5": 517,
+    "p6": 617,
+    "p7": 717
+   },
+   "buffer": "0110750d913d1a12052692cd",
+   "checksum": 522779034
+  },
+  {
+   "schema_id": 5,
+   "version": 1,
+   "value": {
+    "pos": {
+     "x": 3500,
+     "y": 2800
+    },
+    "vel": {
+     "vx": -1,
+     "vy": 2
+    },
+    "id": 42
+   },
+   "buffer": "dacaf0ff022a",
+   "checksum": 1044029012
+  }
+ ],
+ "openpipe": [
+  {
+   "session_id": 1,
+   "total_len": 1000,
+   "chunk_size": 256,
+   "checksum": 3735928559,
+   "schema_id": 3,
+   "schema_version": 1,
+   "flags": 0,
+   "bytes": "00010001000003e80100deadbeef000310"
+  },
+  {
+   "session_id": 2,
+   "total_len": 65535,
+   "chunk_size": 1400,
+   "checksum": 19088743,
+   "schema_id": 4,
+   "schema_version": 1,
+   "flags": 5,
+   "bytes": "000100020000ffff057801234567000415"
+  },
+  {
+   "session_id": 65535,
+   "total_len": 0,
+   "chunk_size": 1,
+   "checksum": 2166136261,
+   "schema_id": 5,
+   "schema_version": 1,
+   "flags": 15,
+   "bytes": "0001ffff000000000001811c9dc500051f"
+  }
+ ]
+}

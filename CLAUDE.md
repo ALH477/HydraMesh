@@ -26,6 +26,12 @@ Read these first — they are normative:
   bidirectional low-latency PCM **cue plane** (`CTRL` 9:7), locked to a `BEACON` media clock.
 - `Documentation/DCF_MESH_SPEC.md` — self-healing redundancy (peer-health FSM,
   REPORT/ROLE control, election + failover) as a `MsgMesh` control adapter.
+- `Documentation/HYDRAPACK_SPEC.md` — universal serialization above DeModFrame + Pipe:
+  a declarative schema model, plane-aware emission (quantum vs Pipe), and byte-certified
+  bit-packing across C/Rust/Python. Not a new wire format; the library intermediary.
+- `Documentation/DCF_PIPE_MULTI_SPEC.md` — DCF-Pipe Multi-Control: up to 3 steady-state
+  DCF-Pipe commands packed into one 4-byte DeModFrame payload for concurrent pipe
+  steering. Control adapter; pipe_vectors.json untouched.
 - `Documentation/DCF_SECURITY_EXPOSURE.md` — the plaintext wire's exposure and the
   WireGuard / external-crypto deployment rule.
 - `Documentation/DCF_SPA_SPEC.md` — single-packet port authorization: an
@@ -303,6 +309,80 @@ cd codec && cargo test --test certify_pipe                     # Rust
 gcc -std=c11 -I codec C_SDK/tests/test_pipe_certify.c -o /tmp/pc && /tmp/pc  # C
 python3 python/dcf/pipe/laws.py                                # transfer laws + Φ sweep
 cd python && python3 -m unittest tests.test_pipe -v            # loopback/lossy/hydramodem
+```
+
+## HydraPack (universal serialization above DeModFrame + Pipe)
+
+The single serialization layer that sits above both HydraMesh data planes. An
+application value goes in; either a sequence of 4-byte quanta (for the wire
+quantum / adapter path) or a contiguous byte buffer (for the DCF-Pipe data plane)
+comes out. The choice is driven by size and schema policy. HydraPack never
+invents a new wire format; it only decides *how* application values are turned
+into the representations already defined by the quantum and by Pipe.
+
+- **Declarative schema model:** a `Schema` = ordered list of `Field`s
+  (`uN`/`iN`/`bool`/`enum`/`bits`/`struct` in v0.1; `blob`/`optional`/`fixed[N]`
+  deferred to v0.2). A generic `BitReader`/`BitWriter` drives pack/unpack — no
+  per-schema hand-written code. `packed_size` is a pure function of (schema,
+  value); in v0.1 (fixed-width types only) it's schema-only.
+- **Plane-aware emission:** `if packed_size <= threshold (default 120 B) → quantum;
+  else → pipe`. The decision is pure and deterministic.
+- **Quantum descriptor (4 bytes, byte-aligned, big-endian):**
+  `[schema_id_hi, schema_id_lo, (version<<4)|flags, payload_byte_len]`.
+  Single-quantum messages (packed <= 4 B) carry no descriptor — schema is implied
+  by context.
+- **OpenPipe (17 bytes):** 14-byte OPEN (from the certified Pipe codec) + 3 bytes
+  `[schema_id_hi, schema_id_lo, (version<<4)|flags]`. A plain-Pipe receiver sees
+  a valid 14-byte OPEN; a HydraPack receiver reads the schema extension. The
+  `pipe_vectors.json` certificate is untouched.
+- **Byte-certified across C/Rust/Python.** Two vector families: quantum vectors
+  (value → list of 4-byte quanta) and pipe vectors (value → buffer + FNV-1a
+  checksum). The 246-vector wire certificate is untouched — HydraPack feeds
+  payload bytes to adapters and buffers to Pipe; it never touches DeModFrame.
+- **References:** `python/MCP/hydrapack_core.py` (canonical), `codec/demod_hydrapack.h`
+  (C), `codec/src/hydrapack.rs` (Rust). Vectors: `Documentation/hydrapack_vectors.json`
+  (+ identical `python/MCP/` copy) and `codec/hydrapack_vectors.gen.h`. Spec:
+  `Documentation/HYDRAPACK_SPEC.md`.
+
+```sh
+python3 python/MCP/gen_hydrapack_vectors.py /tmp/hp.json     # regen + verify laws
+cd codec && cargo test --test certify_hydrapack              # Rust
+gcc -std=c11 -I codec C_SDK/tests/test_hydrapack_certify.c -o /tmp/hp && /tmp/hp  # C
+```
+
+## DCF-Pipe Multi-Control (concurrent pipe steering)
+
+A **control adapter** over the 17-byte DeModFrame: up to **3** steady-state DCF-Pipe
+commands packed into **one 4-byte** payload, so a node can steer up to 3 concurrent
+pipes per quantum on bandwidth-scarce links. It is NOT a new wire format and does NOT
+replace classic Pipe control messages — OPEN, large NACK/SACK, ABORT/DONE still ride the
+original single-session formats. `pipe_vectors.json` is untouched.
+
+- **Byte-aligned layout (exactly 4 bytes):** `byte0 = [magic:2|count:2|flags:4] =
+  0xC0 | (count<<4) | flags`; `bytes 1-3 = cmd slots` (one byte each, bits 7-2 used,
+  1-0 zero-pad). Max count = 3 (the cost of strict byte alignment). Magic = `11b` →
+  byte0 >= 0xC0, a clean discriminator from classic Pipe (byte0 0..5) and audio CTRL
+  descriptors (byte0 <= 124).
+- **Command byte:** `(local_idx<<6) | (opcode<<3) | (param_lsb<<2)`. Opcodes: NOP,
+  CREDIT_DELTA, ACK_CUMUL, ACK_SELECTIVE, NACK_ONE, DONE_HINT, ABORT_HINT (0..6);
+  opcode 111 reserved and rejected. The 1-bit `param_lsb` is packed raw; resolving it
+  against per-pipe context (last credit, two ack bases, two missing seqs) is runtime
+  state, NOT byte-certified.
+- **v0.1 scope:** codec-only (pack/unpack the 4-byte message). Active-Set mapping
+  (local_idx ↔ session_id) is caller-managed, not byte-certified.
+- **Byte-certified across C/Rust/Python.** Three vector families: main (pack→compare
+  + round-trip), reject (illegal buffers raise), discriminator (is_multicontrol over
+  MC + classic Pipe + audio). The 246-vector wire certificate and pipe_vectors.json
+  are untouched.
+- **References:** `python/MCP/pipemulti_core.py` (canonical), `codec/demod_pipemulti.h`
+  (C), `codec/src/pipemulti.rs` (Rust). Vectors: `Documentation/pipemulti_vectors.json`
+  (+ identical `python/MCP/` copy) and `codec/pipemulti_vectors.gen.h`. Spec:
+  `Documentation/DCF_PIPE_MULTI_SPEC.md`.
+
+```sh
+python3 python/MCP/gen_pipemulti_vectors.py /tmp/mc.json          # regen + verify laws
+cd codec && cargo test --test certify_pipemulti                   # Rust
+gcc -std=c11 -I codec C_SDK/tests/test_pipemulti_certify.c -o /tmp/mc && /tmp/mc  # C
 ```
 
 ## DCF-Mesh (self-healing redundancy over the wire)

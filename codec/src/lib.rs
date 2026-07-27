@@ -7,10 +7,12 @@ pub use frame::{crc16_ccitt, Frame, FrameError, FrameType, BROADCAST, FRAME_SIZE
 pub mod audio;
 pub mod fec;
 pub mod game;
+pub mod hydrapack;
 pub mod mesh;
 pub mod modulation;
 pub mod monitor;
 pub mod pipe;
+pub mod pipemulti;
 pub mod snake;
 pub mod sstv;
 pub mod superpack;
