@@ -34,6 +34,62 @@ if HAVE:
 
 
 @unittest.skipUnless(HAVE, "numpy required for the bridge")
+class TestBridgeGate(unittest.TestCase):
+    """The bridge relays, delivers and learns from valid DeModFrames only (the gate
+    `punctim io` applies). FALSE is a real false HydraModem output: 17 bytes that passed
+    HydraModem's CRC-16 on random data (hydramodem/docs/RECEIVER.md, "False frames")."""
+    FALSE = bytes.fromhex("41ee14814dfec5e9d589fcfe339e08af79")
+
+    def _run(self, frame, **kw):
+        a, b = _Recording("a"), _Recording("b")
+        got = []
+        br = Bridge([a, b], on_frame=lambda f, m: got.append(f), **kw)
+        br.start()
+        try:
+            br._on_frame("a", frame, {"transport": "a"})
+            time.sleep(0.05)
+        finally:
+            br.stop()
+        return br, b.tx, got
+
+    def test_false_hydramodem_frame_is_not_relayed(self):
+        br, tx, got = self._run(self.FALSE)
+        self.assertEqual((tx, got, br.relayed, br.rejected), ([], [], 0, 1))
+        self.assertEqual(br.stats["rejected"], 1)
+
+    def test_bad_crc_is_rejected(self):
+        f = bytearray(_frame()); f[16] ^= 1
+        br, tx, _ = self._run(bytes(f))
+        self.assertEqual((tx, br.rejected), ([], 1))
+
+    def test_wrong_version_is_rejected(self):
+        f = bytearray(_frame()); f[1] = (2 << 4) | (f[1] & 0x0F)
+        br, tx, _ = self._run(bytes(f))
+        self.assertEqual((tx, br.rejected), ([], 1))
+
+    def test_valid_frame_still_relayed(self):
+        f = _frame()
+        br, tx, got = self._run(f)
+        self.assertEqual((tx, got, br.rejected), ([f], [f], 0))
+
+    def test_rejected_frame_is_not_learned(self):
+        a, b, c = _Recording("a"), _Recording("b"), _Recording("c")
+        br = Bridge([a, b, c], route="egress")
+        br._on_frame("a", self.FALSE, {"transport": "a"})
+        self.assertEqual(br._fwd, {})
+        self.assertEqual(br._seen, {})
+
+    def test_no_validate_relays_anything(self):
+        br, tx, _ = self._run(self.FALSE, validate=False)
+        self.assertEqual((tx, br.rejected), ([self.FALSE], 0))
+
+    def test_inject_refuses_an_invalid_frame(self):
+        br = Bridge([_Recording("a")])
+        with self.assertRaises(ValueError):
+            br.inject(self.FALSE)
+
+
+@unittest.skipUnless(HAVE, "numpy required for the bridge")
 class TestBridgeFlood(unittest.TestCase):
     def _drain(self, t):  # run the sender once, synchronously-ish
         time.sleep(0.05)
