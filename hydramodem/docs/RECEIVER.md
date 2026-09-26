@@ -172,13 +172,17 @@ version nibble 1, CRC-16 over bytes 0..14 in 15..16). `frame_rx`, `poly_rx`,
 payload. The DeModFrame gate is applied later by `punctim io` in all five
 CLIs (`python/dcf/medium.py` `run_io` → `mediumlab_core.gate`, and
 `dcf_medium_gate` in `C_SDK/node/punctim.c`, plus the Rust, Go and Node ports).
-It is on by default and `--no-validate` turns it off. Python's
-`Transport._deliver` does **not** apply the gate, and neither does
-`dcf.bridge.Bridge`. The bridge forwards a gate-failing frame to every other
-transport (`wire.decode` raises, so `dst` falls back to broadcast). This was
-checked with a loopback bridge and the false payload
-`41ee14814dfec5e9d589fcfe339e08af79`, which was relayed. On the
-`dcf-bridge` path the HydraModem CRC is therefore the only guard.
+It is on by default and `--no-validate` turns it off. `dcf.bridge.Bridge`
+(`dcf-bridge`) applies the same gate, on by default (`validate=False` /
+`--no-validate` turns it off); a rejected frame is counted in `stats["rejected"]`
+and is not relayed, delivered or learned from. Before that gate the bridge
+forwarded a gate-failing frame to every other transport (`wire.decode` raised,
+so `dst` fell back to broadcast): the false payload
+`41ee14814dfec5e9d589fcfe339e08af79` was relayed by a loopback bridge, and
+`python/tests/test_bridge.py` `TestBridgeGate` now pins that it is not. Python's
+`Transport._deliver` still does **not** apply the gate: a program that reads a
+transport directly, without `punctim io` or the bridge, must gate frames itself
+(`mediumlab_core.gate`).
 
 **The two CRCs are not independent in the obvious way.** CRC-16/CCITT-FALSE has
 no final XOR, so a message followed by its own big-endian CRC has a CRC of

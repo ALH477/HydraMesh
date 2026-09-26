@@ -16,6 +16,13 @@ Routing:
     (off-grid) dst goes to the configured **uplink** transport — the Starlink/cellular
     backhaul. The mesh-wide orientation is computed by `meshlab_core.egress_routes`
     (see `dcf.modem`'s uplink demo); the bridge datapath is the per-node realization.
+
+Frame gate: a frame is relayed, delivered or learned from only if it is a valid
+DeModFrame (sync 0xD3, version nibble 1, CRC-16/CCITT-FALSE over bytes 0..14) -- the same
+gate `punctim io` applies (DCF_MEDIUM_SPEC.md). A medium's own check can pass bytes that
+are not a frame: HydraModem's CRC-16 lets random data through at about 2^-16 per decode
+(hydramodem/docs/RECEIVER.md, "False frames"), and before this gate the bridge broadcast
+such bytes to every other transport. `validate=False` (`--no-validate`) turns it off.
 """
 import os
 import sys
@@ -27,6 +34,7 @@ for _mcp in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "MCP
     if os.path.isdir(_mcp):
         sys.path.insert(0, _mcp)
 import wirelab_core as wire  # noqa: E402
+import mediumlab_core as medium_codec  # noqa: E402  (the single-sourced frame gate)
 
 if __package__ in (None, ""):     # allow `python3 python/dcf/bridge.py` as well as `-m dcf.bridge`
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -40,7 +48,7 @@ CTRL_TYPE = 3            # CTRL frames (mesh/audio control) ride the priority la
 
 class Bridge:
     def __init__(self, transports, route="flood", uplink=None, on_frame=None,
-                 dedup_ttl=30.0, dedup_max=8192):
+                 dedup_ttl=30.0, dedup_max=8192, validate=True):
         self.transports = {t.name: t for t in transports}
         if uplink and uplink not in self.transports:
             raise ValueError(f"uplink {uplink!r} is not one of {list(self.transports)}")
@@ -51,8 +59,10 @@ class Bridge:
         self._seen = {}                 # frame_key -> monotonic ts
         self._fwd = {}                  # dst src_id -> (transport_name, ts)  (learned)
         self._lock = threading.Lock()
+        self.validate = validate
         self.relayed = 0
         self.deduped = 0
+        self.rejected = 0               # frames that failed the frame gate
 
     # lifecycle -----------------------------------------------------------------
     def start(self):
@@ -66,11 +76,19 @@ class Bridge:
 
     def inject(self, frame):
         """Originate a frame from this node (e.g. a local beacon/text)."""
+        if self.validate and not medium_codec.gate(bytes(frame)):
+            raise ValueError("inject: not a valid DeModFrame (sync 0xD3, version 1, CRC-16)")
         self._record(frame)
         self._forward(None, bytes(frame))
 
     # datapath ------------------------------------------------------------------
     def _on_frame(self, tname, frame, meta):
+        # Gate before anything else: a rejected frame is not recorded for dedup, not
+        # learned from, not delivered and not forwarded.
+        if self.validate and not medium_codec.gate(bytes(frame)):
+            with self._lock:
+                self.rejected += 1
+            return
         if not self._record(frame, learn_from=tname):
             self.deduped += 1
             return
@@ -130,7 +148,7 @@ class Bridge:
 
     @property
     def stats(self):
-        return {"relayed": self.relayed, "deduped": self.deduped,
+        return {"relayed": self.relayed, "deduped": self.deduped, "rejected": self.rejected,
                 "backlog": {n: t.backlog for n, t in self.transports.items()},
                 "dropped": {n: t.dropped for n, t in self.transports.items()}}
 
@@ -205,13 +223,16 @@ def main(argv=None):
     ap.add_argument("--text", help="originate a frame carrying up to 4 bytes of text")
     ap.add_argument("--seconds", type=float, default=None, help="run N seconds then exit")
     ap.add_argument("--demo", action="store_true", help="run the no-hardware multi-hop demo")
+    ap.add_argument("--no-validate", action="store_true",
+                    help="relay bytes that fail the DeModFrame gate (as `punctim io --no-validate`)")
     a = ap.parse_args(argv)
     if a.demo:
         return _demo()
     if not a.transport:
         ap.error("need at least one --transport (or --demo)")
     br = Bridge([_make_transport(s) for s in a.transport], route=a.route, uplink=a.uplink,
-                on_frame=lambda f, m: print(f"  recv {f.hex()} via {m.get('transport')}"))
+                on_frame=lambda f, m: print(f"  recv {f.hex()} via {m.get('transport')}"),
+                validate=not a.no_validate)
     br.start()
     try:
         if a.inject or a.text:
