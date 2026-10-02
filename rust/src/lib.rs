@@ -319,7 +319,6 @@ pub struct UdpEndpoint {
     running: Arc<AtomicBool>,
     stats: Arc<RwLock<NetworkStats>>,
     reliable_packets: Arc<Mutex<HashMap<u32, ReliablePacket>>>,
-    ack_received: Arc<Mutex<HashMap<u32, bool>>>,
     reliable_timeout_ms: u64,
     max_retries: u32,
 }
@@ -336,7 +335,6 @@ impl UdpEndpoint {
             running: Arc::new(AtomicBool::new(false)),
             stats: Arc::new(RwLock::new(NetworkStats::default())),
             reliable_packets: Arc::new(Mutex::new(HashMap::new())),
-            ack_received: Arc::new(Mutex::new(HashMap::new())),
             reliable_timeout_ms: DEFAULT_RELIABLE_TIMEOUT_MS,
             max_retries: DEFAULT_MAX_RETRIES,
         })
@@ -1326,7 +1324,12 @@ async fn handle_incoming_message(
                 let seq = u32::from_be_bytes([
                     msg.payload[0], msg.payload[1], msg.payload[2], msg.payload[3]
                 ]);
-                endpoint.ack_received.lock().insert(seq, true);
+                // Removing the outstanding packet IS the acknowledgement. An
+                // ACK used to be recorded in a separate `ack_received` map as
+                // well: never pruned (anyone could grow it by 2^32 keys), and
+                // an ACK for a sequence not yet sent pre-acknowledged it, so
+                // the retry loop dropped that packet on first sight. An ACK
+                // that matches nothing outstanding now does nothing.
                 endpoint.reliable_packets.lock().remove(&seq);
             }
         }
@@ -1414,14 +1417,7 @@ pub async fn run_reliable_handler(node: Arc<DcfNode>) -> Result<()> {
 
         {
             let mut reliable = endpoint.reliable_packets.lock();
-            let acks = endpoint.ack_received.lock();
-
             for (seq, packet) in reliable.iter_mut() {
-                if acks.contains_key(seq) {
-                    packets_to_remove.push(*seq);
-                    continue;
-                }
-
                 if packet.sent_time.elapsed() > timeout {
                     if packet.attempts < max_retries {
                         packet.attempts += 1;
