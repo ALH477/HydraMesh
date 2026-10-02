@@ -1165,7 +1165,10 @@ impl<N: Network, S: Storage + Clone, G: Gui> DcfFramework<N, S, G> {
         } else if data.starts_with(b"FILE:") {
             let parts = heapless::String::<U32>::from_utf8(data[5..].to_vec()).ok()?;
             let parts: heapless::Vec<heapless::String<U32>, U4> = parts.split(':').map(|s| s.into()).collect();
-            let filename = parts.get(1)?.as_str();
+            // A bare name only (core::proto::received_file_name): the name is
+            // an unauthenticated sender's, and it used to reach
+            // storage.open(.., "wb+") as any path -- dcf.streamdb included.
+            let filename = dcf_handheld_core::proto::received_file_name(parts.get(1)?.as_str())?;
             let size: usize = parts.get(2)?.parse().unwrap_or(0);
             if size > MAX_FILE_SIZE {
                 return None;
@@ -1193,33 +1196,24 @@ impl<N: Network, S: Storage + Clone, G: Gui> DcfFramework<N, S, G> {
             self.pending_acks.remove(&seq);
             return None;
         } else {
-            let mut cursor = 0;
-            let sequence = LittleEndian::read_u32(&data[cursor..]);
-            cursor += 4;
-            let timestamp = LittleEndian::read_u64(&data[cursor..]);
-            cursor += 8;
-            let sender = cstr_to_heapless(&data[cursor..]);
-            cursor += sender.len() + 1;
-            let recipient = cstr_to_heapless(&data[cursor..]);
-            cursor += recipient.len() + 1;
-            let data_end = data[cursor..].iter().position(|&b| b == 0).unwrap_or(data.len() - cursor);
-            let msg_data = heapless::Vec::from_slice(&data[cursor..cursor + data_end]).ok()?;
-            cursor += data_end + 1;
-            let redundancy_path = cstr_to_heapless(&data[cursor..]);
-            cursor += redundancy_path.len() + 1;
-            let group_id = cstr_to_heapless(&data[cursor..]);
-            if group_id != self.current_room {
+            // The host-tested, bounds-checked envelope parser in the core
+            // (core::proto::parse, the inverse of the layout send() writes).
+            // The hand-sliced copy that was here panicked on any datagram
+            // shorter than 12 bytes, and on a cursor past the end -- and with
+            // panic = "abort", one stray packet stopped the device.
+            let p = dcf_handheld_core::proto::parse(data)?;
+            if p.group_id != self.current_room {
                 return None;
             }
             let msg = DcfMessage {
-                sender,
-                recipient,
-                data: msg_data,
-                timestamp,
+                sender: p.sender,
+                recipient: p.recipient,
+                data: heapless::Vec::from_slice(&p.data).ok()?,
+                timestamp: p.timestamp,
                 sync: true,
-                sequence,
-                redundancy_path,
-                group_id,
+                sequence: p.sequence,
+                redundancy_path: p.redundancy_path,
+                group_id: p.group_id,
             };
             let processed = self.apply_middlewares(msg.clone(), Dir::Receive)?;
             if processed.sync {

@@ -390,12 +390,24 @@ impl Reassembler {
         if !self.have_desc {
             return None;
         }
+        // The descriptor is the sender's. A frag_total above MAX_FRAGS can
+        // never complete (frag_idx is 5 bits), exactly as in the canonical
+        // reassemblers (python/MCP/gamelab_core.py, codec/src/game.rs) --
+        // and must be refused before `1u32 << k` is reached with k >= 32.
+        if self.frag_total as usize > MAX_FRAGS {
+            return None;
+        }
         for k in 1..=(self.frag_total as usize) {
             if self.present & (1u32 << k) == 0 {
                 return None;
             }
         }
-        let len = self.payload_len as usize;
+        // The canonical payload is the reassembled fragments truncated to
+        // payload_len, so it is never longer than 4 * frag_total. Taking
+        // payload_len alone indexed a 124-byte buffer with up to 255: one
+        // CRC-valid descriptor frame with frag_total = 0 panicked, and with
+        // panic = "abort" that was the whole device.
+        let len = (self.payload_len as usize).min(self.frag_total as usize * 4);
         out[..len].copy_from_slice(&self.data[..len]);
         self.active = false;
         self.have_desc = false;
@@ -427,6 +439,34 @@ pub fn selftest() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn data_frame(seq: u16, payload: [u8; 4]) -> [u8; 17] {
+        Frame::new(1, FrameType::Data, seq, 0, 0, payload, 0).encode()
+    }
+
+    /// Descriptors a hostile sender can write. Each used to panic (an
+    /// out-of-range slice, or a shift by 32 or more); each now behaves as the
+    /// canonical reassembler does -- an empty or truncated message, or none.
+    #[test]
+    fn a_hostile_descriptor_never_panics() {
+        let mut out = [0u8; MAX_PAYLOAD];
+        // payload_len 255, frag_total 0: complete at once, payload empty.
+        let mut r = Reassembler::new();
+        assert_eq!(r.push(&data_frame(0, [255, 0, 0, 0]), &mut out), Some(0));
+        // payload_len 255, frag_total 1: truncated to the 4 bytes that exist.
+        let mut r = Reassembler::new();
+        assert_eq!(r.push(&data_frame(0, [255, 1, 0, 0]), &mut out), None);
+        assert_eq!(r.push(&data_frame(1, [1, 2, 3, 4]), &mut out), Some(4));
+        assert_eq!(&out[..4], &[1, 2, 3, 4]);
+        // frag_total 32..=255: can never complete.
+        for ft in [32u8, 33, 200, 255] {
+            let mut r = Reassembler::new();
+            assert_eq!(r.push(&data_frame(0, [124, ft, 0, 0]), &mut out), None, "{ft}");
+            for k in 1..=31u16 {
+                assert_eq!(r.push(&data_frame(k, [0; 4]), &mut out), None, "{ft}/{k}");
+            }
+        }
+    }
 
     #[test]
     fn crc_anchors() {

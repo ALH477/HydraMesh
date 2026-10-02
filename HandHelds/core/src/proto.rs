@@ -96,6 +96,30 @@ pub fn parse(data: &[u8]) -> Option<DcfMessage> {
     })
 }
 
+/// The name a received `FILE:` transfer may be stored under, or `None`.
+///
+/// The name arrives in an unauthenticated UDP datagram, and the device used to
+/// pass it straight to `storage.open(name, "wb+")`. So any sender on the Wi-Fi
+/// could choose the path and overwrite any file, including `dcf.streamdb`,
+/// which holds the device's config, peers and history. A received file is now
+/// a bare name: 1..=32 bytes of `[A-Za-z0-9._-]`, not starting with '.', and
+/// never the device's own database. That excludes '/', ':' (the DSi `fat:`
+/// and PSP `ms0:` device prefixes) and every path-shaped thing at once.
+pub fn received_file_name(name: &str) -> Option<&str> {
+    let ok = !name.is_empty()
+        && name.len() <= 32
+        && !name.starts_with('.')
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_' || b == b'-')
+        && !name.eq_ignore_ascii_case("dcf.streamdb");
+    if ok {
+        Some(name)
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,6 +155,42 @@ mod tests {
         let back = parse(&serialize(&m)).unwrap();
         assert_eq!(back.data.len(), 0);
         assert_eq!(back.group_id, m.group_id);
+    }
+
+    #[test]
+    fn received_file_names_are_bare_and_never_the_database() {
+        for ok in ["board.png", "save-1.dat", "a", "x_y.Z"] {
+            assert_eq!(received_file_name(ok), Some(ok));
+        }
+        for bad in [
+            "", "../dcf.streamdb", "/dcf.streamdb", "dcf.streamdb", "DCF.STREAMDB",
+            "fat:/boot.nds", "ms0:/PSP/GAME/x", "a/b", ".hidden", "a b", "a\\b",
+            "0123456789012345678901234567890123",
+        ] {
+            assert_eq!(received_file_name(bad), None, "{bad:?}");
+        }
+    }
+
+    /// Every short or truncated datagram the platform's old hand-sliced parser
+    /// panicked on is a clean `None` here.
+    #[test]
+    fn short_datagrams_are_none_not_a_panic() {
+        for n in 0..12 {
+            assert!(parse(&[0xAAu8; 12][..n]).is_none(), "{n}");
+        }
+        // Every prefix of a real envelope, and every single-byte change to
+        // it: parse returns, whatever it returns.
+        let full = serialize(&mk(b"MOVE:4"));
+        for n in 0..=full.len() {
+            let _ = parse(&full[..n]);
+        }
+        for i in 0..full.len() {
+            for v in [0u8, 0xff, b'A'] {
+                let mut m = full.clone();
+                m[i] = v;
+                let _ = parse(&m);
+            }
+        }
     }
 
     #[test]
