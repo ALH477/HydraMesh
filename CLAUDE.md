@@ -845,8 +845,12 @@ The certified `codec/` compiled to `wasm32` (`codec-wasm/`, a wasm-bindgen
 surface) drives the **same** redesigned comms UI (`client/src/App.vue`, shared via
 an `@ipc` alias) in the browser, delivered as **one self-contained `index.html`**
 (`web/`, base64-inlined wasm). Browsers can't open UDP, so a stateless WS↔UDP
-relay (`web/bridge/`, `dcf-ws-bridge`) carries opaque datagrams to the plaintext
-mesh — the codec runs in the browser, not the bridge. It speaks the bare-frame
+relay (`web/bridge/`, `dcf-ws-bridge`) carries datagrams to the plaintext mesh —
+the codec runs in the browser, not the bridge. The bridge **gates** every datagram
+both ways (valid 17-B frame or 32-B SuperPack only; the gate is Exsecutor's
+capability-free `custos` compiled to C, `web/bridge/custos/`, certified by
+`web/bridge/tests/certify_gate.rs`) and admits only loopback / non-browser /
+`--allow-origin` WebSocket origins. It speaks the bare-frame
 dialect of `JS/nodejs/src/node.js` (frames batched into SuperPacks, rendezvous on
 `dst`): Messages = DCF-Text on the active channel, Arena = DCF-Game on `active^1`,
 Jam = DCF-Audio PCM-diag (CTRL). Host-only Recording/Radio/Opus are gated off via

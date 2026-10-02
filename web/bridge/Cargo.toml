@@ -1,14 +1,20 @@
 # SPDX-License-Identifier: LGPL-3.0-only
 # dcf-ws-bridge — a minimal, stateless WebSocket↔UDP relay so a browser WASM
-# client can join the plaintext DCF mesh. It carries opaque datagrams only (the
-# DCF codec lives in the browser); it never parses a frame. Deploy behind
-# WireGuard — the wire is plaintext by design (Documentation/DCF_SECURITY_EXPOSURE.md).
+# client can join the plaintext DCF mesh. The DCF codec lives in the browser;
+# the bridge only GATES: every datagram, both directions, must be a valid
+# DeModFrame or SuperPack (custos/, Exsecutor's certified gate compiled to C)
+# or it is dropped. Deploy behind WireGuard — the wire is plaintext by design
+# (Documentation/DCF_SECURITY_EXPOSURE.md).
 [package]
 name = "dcf-ws-bridge"
 version = "0.1.0"
 edition = "2021"
 license = "LGPL-3.0-only"
 publish = false
+
+[lib]
+name = "dcf_ws_bridge"
+path = "src/lib.rs"
 
 [[bin]]
 name = "dcf-ws-bridge"
@@ -20,3 +26,11 @@ tokio-tungstenite = "0.21"
 futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+[build-dependencies]
+cc = "1"
+
+[dev-dependencies]
+# The Rust reference codec, for the differential certification of the gate
+# (tests/certify_gate.rs). Not linked into the bridge.
+dcf-wire-codec = { path = "../../codec" }

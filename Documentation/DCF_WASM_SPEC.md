@@ -19,18 +19,21 @@ dialect as the Node.js / Python text nodes.
 - **The browser owns the protocol** (encode / packetize / reassemble / channel)
   in WASM (`codec-wasm/`, a wasm-bindgen surface over `codec/`). Only opaque
   datagrams cross the socket.
-- **The bridge is dumb** (`web/bridge/`, `dcf-ws-bridge`): one UDP socket per WS
-  connection, a peer list set by JSON control messages, broadcast out / relay in.
-  It never parses a frame.
+- **The bridge is dumb, but it gates** (`web/bridge/`, `dcf-ws-bridge`): one UDP
+  socket per WS connection, a peer list set by JSON control messages, broadcast
+  out / relay in. It never decodes, routes or reassembles. It does check that
+  each datagram, in either direction, is something the bare dialect carries.
+  See *Security* below.
 
 ## Bridge protocol (browser ↔ `dcf-ws-bridge`)
 
 - **Control** — WS *text* frame, JSON: `{"op":"addpeer","host":"…","port":N}`,
   `{"op":"clear"}`.
-- **Data out** — WS *binary* frame = one UDP payload (a 17-byte DeModFrame, a
-  32-byte SuperPack, …). The bridge `send_to`s it to every peer.
-- **Data in** — each inbound UDP datagram from a known peer is delivered as a WS
-  *binary* frame. The browser unpacks SuperPacks and reassembles, deriving `src`
+- **Data out** — WS *binary* frame = one UDP payload: a 17-byte DeModFrame or a
+  32-byte SuperPack. The bridge `send_to`s it to every peer. Anything else is
+  dropped and counted.
+- **Data in** — each inbound UDP datagram from a known peer that passes the same
+  gate is delivered as a WS *binary* frame. The browser unpacks SuperPacks and reassembles, deriving `src`
   from the frame.
 
 ## Dialect & routing (what the browser emits/accepts)
@@ -58,7 +61,7 @@ use the same convention; Messages interoperate on the active channel directly
 and **Opus** is not in the WASM build. **Jam** runs **PCM-diag** end-to-end in
 WASM via Web Audio (needs a secure context — serve over http(s)/localhost, not
 `file://`, for mic access). Messages, Arena, and the Wire inspector work fully,
-including from `file://`. The shared `App.vue` hides the disabled bits.
+including from `file://` once the bridge admits that origin (`--allow-origin null`; see *Security*). The shared `App.vue` hides the disabled bits.
 
 ## Build & certify
 
@@ -80,7 +83,35 @@ what this job pins. Drift fails CI like the native certs.
 
 The DCF wire is plaintext by design (export compliance). The bridge adds no
 crypto — **run it behind WireGuard** or an operator-supplied tunnel, exactly as
-for any DCF node. See `DCF_SECURITY_EXPOSURE.md`. WebSocket TLS (`wss://`) under
+for any DCF node. See `DCF_SECURITY_EXPOSURE.md`.
+
+The bridge is a UDP socket on the user's machine, and browsers do not apply the
+same-origin rule to WebSockets. Before the two controls below, any web page the
+user visited could open `ws://127.0.0.1:7000`, `addpeer` any `host:port`, and send
+arbitrary bytes there: a general UDP sender for every website.
+
+- **The gate.** Each datagram, both directions, is admitted only if it is a valid
+  17-byte DeModFrame (sync, version 1, CRC) or a valid 32-byte SuperPack (sync,
+  sflags `0x15`, joint CRC, both cores version 1). This is `DCF_MEDIUM_SPEC.md`'s
+  `udp_bare` decode plus its frame gate. The gate's code is Exsecutor's
+  `examples/custos`. The Exsecutor compiler builds it as one unit with the
+  DeModFrame codec that passes Exsecutor's own run of the 246-vector certificate,
+  then emits it as C (`web/bridge/custos/`, provenance in `PROVENANCE.md`).
+  - **No authority.** It is pure under Exsecutor's capability rules: no
+    `poscit`, no capability parameter. The compiler refuses a variant that
+    draws ambient authority, with `EXS-E0421`.
+  - **Certified.** `web/bridge/tests/certify_gate.rs` holds it to the committed
+    golden, SuperPack and medium vectors, and to `dcf-wire-codec`'s
+    `bare_decode` + `gate` over 14,735 further datagrams.
+- **The origin check.** A WebSocket handshake is accepted only with no `Origin`
+  (a non-browser client), from a loopback page (`http(s)` on `localhost`,
+  `127.0.0.1` or `[::1]`), or from an origin named with `--allow-origin`.
+  - **`null` is not loopback.** A `file://` page sends `Origin: null`, and so
+    does a sandboxed iframe on any site. Admitting it reopens the hole, so it is
+    opt-in (`--allow-origin null`).
+
+Still open: `addpeer` resolves and accepts any `host:port`, so an admitted page
+can still direct valid frames at any address. WebSocket TLS (`wss://`) under
 the browser is fine and recommended; the plaintext DCF payload sits beneath it.
 
 ## Not yet (follow-ups)

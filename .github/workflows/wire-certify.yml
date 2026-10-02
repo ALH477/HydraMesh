@@ -309,6 +309,43 @@ jobs:
       - name: Certify WASM is byte-identical to the golden vectors
         run: node web/certify/certify_wasm.mjs
 
+  # dcf-ws-bridge's datagram gate (web/bridge/custos/: Exsecutor's capability-free
+  # `custos`, emitted as C) and its WebSocket origin check. The certification holds
+  # the gate to the committed vectors and to dcf-wire-codec's bare_decode + gate.
+  # Then the drift check: re-emit custos.gen.c from upstream with the pinned exsc.
+  # A difference is a warning, not a failure -- the certification above is what
+  # decides correctness; drift says the committed unit is no longer upstream's.
+  bridge-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: punctim
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Origin policy + gate certification
+        run: cd punctim/web/bridge && cargo test
+
+      - name: Check out Exsecutor
+        uses: actions/checkout@v4
+        with:
+          repository: ALH477/exsecutor
+          path: exsecutor
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: "experimental-features = nix-command flakes"
+
+      - name: custos.gen.c drift against upstream
+        continue-on-error: true
+        run: |
+          exsc="$(cd punctim && nix build .#exsc --no-link --print-out-paths)/bin/exsc"
+          EXSC="$exsc" EXSECUTOR="$PWD/exsecutor" punctim/web/bridge/custos/regen.sh \
+            || echo "::warning::custos.gen.c is not what upstream exsc emits today (see PROVENANCE.md)"
+
   certify-audio:
     runs-on: ubuntu-latest
     steps:

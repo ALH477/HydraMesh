@@ -28,7 +28,7 @@ WORKFLOW=.github/workflows/wire-certify.yml
 
 # The workflow's jobs, in workflow order. Keep in sync with $WORKFLOW (checked below).
 JOBS=(
-  certify-python certify-c c-sdk-unit certify-hydramodem certify-rust spa certify-wasm
+  certify-python certify-c c-sdk-unit certify-hydramodem certify-rust spa certify-wasm bridge-gate
   certify-audio certify-game certify-text certify-qkd qkd-bridge certify-sstv certify-snake
   certify-lua certify-go certify-haskell certify-java certify-minecraft certify-kotlin certify-node
   certify-perl certify-cpp certify-swift certify-lisp certify-medium io-matrix
@@ -243,6 +243,18 @@ certify-wasm() {
   node web/scripts/inline-wasm.mjs
   step "Certify WASM is byte-identical to the golden vectors"
   node web/certify/certify_wasm.mjs
+}
+
+bridge-gate() {
+  need cargo
+  step "Origin policy + gate certification"
+  ( cd web/bridge && cargo test )
+  step "custos.gen.c drift against upstream (needs \$EXSECUTOR; warning only, as in CI)"
+  if [ -n "${EXSECUTOR:-}" ]; then
+    web/bridge/custos/regen.sh || echo "warning: custos.gen.c differs from what \$EXSECUTOR's exsc emits"
+  else
+    echo "partial: \$EXSECUTOR unset -- drift check not run"
+  fi
 }
 
 certify-audio() {

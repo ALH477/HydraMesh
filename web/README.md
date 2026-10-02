@@ -5,7 +5,10 @@ The DCF protocol compiled to WebAssembly, driving the same redesigned comms UI a
 the desktop client (`client/src/App.vue`, shared via the `@ipc` alias), delivered
 as **one self-contained `index.html`** (the wasm is base64-inlined). Browsers
 can't open raw UDP, so it talks to the mesh through `dcf-ws-bridge` — a stateless
-WebSocket↔UDP relay that only shuttles datagrams; the codec runs in the browser.
+WebSocket↔UDP relay; the codec runs in the browser. The relay passes only valid
+DeModFrames and SuperPacks, in both directions, and accepts only loopback pages
+(plus any `--allow-origin`). A `file://` page sends `Origin: null`, so it needs
+`--allow-origin null` (see `bridge/custos/PROVENANCE.md` and DCF_WASM_SPEC.md).
 
 See `../Documentation/DCF_WASM_SPEC.md` for the full design, dialect, and routing.
 
@@ -27,7 +30,7 @@ npm run build                # → web/dist/index.html  (no other assets)
 # 1) start the relay (deploy behind WireGuard — the DCF wire is plaintext)
 cargo run --manifest-path bridge/Cargo.toml -- --listen 127.0.0.1:7000
 # 2) serve the file (Jam needs a secure context for the mic; Messages/Arena/Wire
-#    work from file:// too)
+#    also work from file://, if the relay was started with --allow-origin null)
 python3 -m http.server -d dist 8080      # open http://127.0.0.1:8080/
 ```
 

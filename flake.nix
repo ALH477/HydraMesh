@@ -296,7 +296,8 @@
           };
 
           # WS↔UDP bridge for the browser WASM client (web/bridge/). A stateless
-          # relay — it shuttles opaque datagrams; the DCF codec runs in the browser.
+          # relay; the DCF codec runs in the browser. It gates every datagram
+          # (web/bridge/custos/: Exsecutor-generated C, built by build.rs via cc).
           # Deploy behind WireGuard (the wire is plaintext). See DCF_WASM_SPEC.md.
           dcf-ws-bridge = pkgs.rustPlatform.buildRustPackage {
             pname = "dcf-ws-bridge";
