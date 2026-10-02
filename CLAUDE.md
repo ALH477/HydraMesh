@@ -911,6 +911,34 @@ brings the backends up together (`docker compose -f docker/docker-compose.yml up
 frame onto a shared volume, another demodulates it). Interop matrix:
 `docker/mesh-interop-test.sh`.
 
+## Security-relevant changes get an adversary pass, and a green cert is not enough
+
+DCF is plaintext by design (export posture), so its safety is a **proof the
+receiver checks**, not secrecy — and a proof is only as good as the attempt to
+break it. A change to a security boundary does **not** land on a passing cert or
+`make ci-local` alone. It gets a separate adversarial review whose job is to
+**break the specific guarantee with running programs**, not to read the diff.
+The boundaries this covers:
+
+- the self-auditing transport (the committed manifest / object digest, the Φ = N − |R|
+  completion proof, `ABORT_CHECKSUM`): an adversary must try to make the receiver
+  accept a tampered, truncated, injected or replayed object as complete — a forged
+  `DONE`, a digest collision attempt, a length-preserving corruption;
+- the `custos` gate on `web/bridge/` and any datagram boundary: feed it malformed,
+  oversized and boundary-length inputs and confirm the gate refuses, not the layer behind it;
+- SPA (`spa/`, `DCF_SPA_SPEC.md`): the authentication-only claim — an off-path or
+  replayed knock must not open the port; state plainly what SPA does NOT stop (an
+  already-admitted on-path frame);
+- the wire/adapter codecs: the certificate (`golden_vectors.json` et al.) proves
+  agreement on the sampled space; it does not prove a parser refuses what it should.
+
+A green certificate is necessary and not sufficient. The reviewer attacks a named
+guarantee, writes the attack, runs it, reports CONFIRMED / INSUFFICIENT / REGRESSED
+with the program's result as evidence, and re-reviews the fix (a fix is a new change
+to the same soft spot). Use a different agent than the author; do not merge on a
+self-report. Keep `DCF_SECURITY_EXPOSURE.md` honest about what each layer does and
+does not stop.
+
 ## Conventions when changing the wire/audio path
 
 - A change to any codec is a change to all of them. The certificate is the
