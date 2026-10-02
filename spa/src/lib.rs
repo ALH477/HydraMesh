@@ -174,11 +174,15 @@ impl Authorizer {
         self.policy.insert(device_id, ports);
     }
 
-    fn now_ms() -> u64 {
+    /// Wall-clock milliseconds, or `None` when the clock reads before the
+    /// epoch. That used to be `unwrap_or(0)`, which made `now = 0` and so made
+    /// a token stamped near `u64::MAX` look fresh. With no clock there is no
+    /// freshness judgement to make, so the caller refuses.
+    fn now_ms() -> Option<u64> {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
+            .ok()
             .map(|d| d.as_millis() as u64)
-            .unwrap_or(0)
     }
 
     /// Lazily drop nonce-cache entries older than `2 * window_ms`.
@@ -214,8 +218,14 @@ impl Authorizer {
             return Outcome::Rejected(Reject::BadTag);
         }
 
-        let now = now_ms_override.unwrap_or_else(Self::now_ms);
-        let skew = (now as i64 - hdr.timestamp_ms as i64).unsigned_abs();
+        let now = match now_ms_override.or_else(Self::now_ms) {
+            Some(n) => n,
+            None => return Outcome::Rejected(Reject::Stale),
+        };
+        // abs_diff, not `(now as i64 - ts as i64).unsigned_abs()`: the
+        // timestamp is the sender's, and a stamp at or above 2^63 overflowed
+        // that subtraction (a panic in a debug build).
+        let skew = now.abs_diff(hdr.timestamp_ms);
         if skew > self.window_ms {
             return Outcome::Rejected(Reject::Stale);
         }
@@ -354,6 +364,20 @@ mod tests {
         let tok = hmac_token(&base_header(), &KEY);
         let out = a.process(&tok, Ipv4Addr::new(192, 0, 2, 5), &mut g, Some(NOW - 40_000));
         assert_eq!(out, Outcome::Rejected(Reject::Stale));
+    }
+
+    #[test]
+    fn a_timestamp_near_u64_max_is_stale_not_a_panic() {
+        for ts in [1u64 << 63, u64::MAX, u64::MAX - 1] {
+            let mut a = auth();
+            let mut g = MockGranter::default();
+            let mut hdr = base_header();
+            hdr.timestamp_ms = ts;
+            let tok = hmac_token(&hdr, &KEY);
+            let out = a.process(&tok, Ipv4Addr::new(192, 0, 2, 5), &mut g, Some(NOW));
+            assert_eq!(out, Outcome::Rejected(Reject::Stale), "ts={ts}");
+            assert!(g.grants.is_empty());
+        }
     }
 
     #[test]
