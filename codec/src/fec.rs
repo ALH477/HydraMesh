@@ -273,10 +273,19 @@ pub fn decode_message(blob: &[u8]) -> Result<(Vec<u8>, usize), FecError> {
     let l = ((hdr[0] as usize) << 24) | ((hdr[1] as usize) << 16)
         | ((hdr[2] as usize) << 8) | (hdr[3] as usize);
     let np = hdr[4] as usize;
+    // The header is the sender's. np = 255 leaves no data bytes per codeword
+    // (maxk = 0): chunking() would divide by zero -- a panic here, the
+    // reference's ZeroDivisionError in feclab_core.py. Both are "not a
+    // message", so refuse it as one.
+    if np >= 255 {
+        return Err(FecError);
+    }
     let (nchunks, k) = chunking(l, np);
     let cwlen = k + np;
     let body = &blob[HDR_LEN..];
-    if body.len() != nchunks * cwlen {
+    // checked: on wasm32 (codec-wasm) usize is 32 bits, and a 4 GiB length
+    // claim times a codeword length wraps -- which could MATCH a short body.
+    if Some(body.len()) != nchunks.checked_mul(cwlen) {
         return Err(FecError);
     }
     let mut out = Vec::new();

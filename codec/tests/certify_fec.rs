@@ -130,3 +130,18 @@ fn interleave_roundtrip() {
     let back = deinterleave(&stream, 5, 17 + np);
     assert_eq!(back, cws);
 }
+
+/// A blob whose (correctly RS-protected) header claims nparity = 255 leaves
+/// no data bytes per codeword. The reference raises; this must be an error,
+/// not a division-by-zero panic in a decoder that codec-wasm exposes to
+/// whatever a page is handed.
+#[test]
+fn a_header_claiming_255_parity_is_an_error_not_a_panic() {
+    use dcf_wire_codec::fec::{decode_message, rs_encode, HDR_PARITY};
+    for l in [0u32, 1, 10, 4096] {
+        let hdr = [(l >> 24) as u8, (l >> 16) as u8, (l >> 8) as u8, l as u8, 255];
+        let mut blob = rs_encode(&hdr, HDR_PARITY);
+        blob.extend_from_slice(&[0u8; 300]);
+        assert!(decode_message(&blob).is_err(), "l={l}");
+    }
+}
