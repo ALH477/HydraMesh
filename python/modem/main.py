@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: LGPL-3.0-only
+# Copyright (c) 2025 DeMoD LLC.
 """
 DeMoD DCF Acoustic Modem - Handshakeless Over-Air Communication
 ================================================================
@@ -26,8 +28,8 @@ Requirements:
     - gcc (C compiler, on PATH)
     - pip: sounddevice, numpy
 
-License: LGPL-3.0 | Patent Pending
-Based on a secure protocol validated by the United States Air Force.
+License: LGPL-3.0-only
+Patent Pending
 Originally designed for DeMoD Guitars by Asher, founder of DeMoD LLC.
 (c) 2025 DeMoD LLC
 """
@@ -264,7 +266,7 @@ class AcousticModem:
 
         # JIT compile and load Faust DSP
         print(f"\n{C_BOLD}{C_CYAN}DeMoD DCF Acoustic Modem{C_RESET}")
-        print(f"{C_DIM}LGPL-3.0 | Patent Pending | USAF Validated{C_RESET}")
+        print(f"{C_DIM}LGPL-3.0-only | Patent Pending{C_RESET}")
         print(f"{C_DIM}Handshakeless over-air communication{C_RESET}\n")
         print(f"{C_VIOLET}[JIT]{C_RESET} Compiling Faust DSP to native code ...")
         self.dsp = FaustJIT(dsp_path, "DCFModem", SAMPLE_RATE)
@@ -835,7 +837,7 @@ BANNER = f"""
  |____/ \\___||_|  |_|\\___/|____/   \\____| |_|
 {C_RESET}
 {C_DIM}  Acoustic Modem - Handshakeless Over-Air Communication
-  LGPL-3.0 | Patent Pending | USAF Validated
+  LGPL-3.0-only | Patent Pending
   Created by Asher - DeMoD LLC{C_RESET}
 """
 

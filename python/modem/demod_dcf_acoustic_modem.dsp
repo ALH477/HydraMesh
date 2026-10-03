@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+// Copyright (c) 2025 DeMoD LLC.
 // ═══════════════════════════════════════════════════════════════════════════════
 // DeMoD DCF Acoustic Modem - Handshakeless Over-Air Communication
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -18,8 +20,8 @@
 //   S_xx  (S6.1)  Power spectral density  -> exponential PSD averaging
 //   F_H x F_P     (S7.4) Tensor product   -> independent header/payload detect
 //
-// License: LGPL-3.0 | Patent Pending
-// Based on a secure protocol validated by the United States Air Force.
+// License: LGPL-3.0-only
+// Patent Pending
 // Originally designed for DeMoD Guitars by Asher, founder of DeMoD LLC.
 //
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -27,7 +29,7 @@
 declare name        "DeMoD DCF Acoustic Modem";
 declare author      "Asher - DeMoD LLC";
 declare copyright   "(c) 2025 DeMoD LLC";
-declare license     "LGPL-3.0 | Patent Pending";
+declare license     "LGPL-3.0-only";
 declare version     "2.0.0";
 declare description "Acoustic FSK modem for handshakeless over-air DCF communication. Speaker-to-mic dial-up.";
 
