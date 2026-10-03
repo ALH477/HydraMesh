@@ -12,8 +12,9 @@
 # and a summary follows. Exit status is non-zero iff a job FAILED (SKIP does not fail).
 # A PASS with a "partial:" note ran every step except the ones named there.
 #
-# Hosted Actions have never run a real job for this repo (billing lock since 2026-06);
-# until that clears, this script + .github/LOCAL_CI_RESULTS.md are the path of record.
+# Hosted Actions run wire-certify.yml since 2026-09-25 (Actions had been disabled at
+# the repository level; Documentation/DCF_CODE_REVIEW.md R1). This script is the local
+# complement: the same jobs, without a push.
 #
 #   make ci-local                              # or: bash .github/ci-local.sh
 #   bash .github/ci-local.sh certify-medium io-matrix   # run only the named jobs

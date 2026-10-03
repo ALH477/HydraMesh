@@ -77,10 +77,13 @@ cd codec && cargo test --test certify              # Rust
 ```
 
 CI: `.github/workflows/wire-certify.yml` runs Python/C/Rust certs on push/PR to
-`main` and diffs regenerated vs committed vectors. **Hosted Actions has never executed a
-real job here** (all 57 runs, 2026-06-10→06-21, died at startup under an account billing
-lock; none since) — until billing is cleared, `make ci-local` + `.github/LOCAL_CI_RESULTS.md`
-is the attested certification path.
+`main` and diffs regenerated vs committed vectors. **Hosted Actions runs here since
+2026-09-25.** Before that, Actions was disabled at the repository level, which is why all
+57 runs of 2026-06-10→06-21 died at startup; the earlier "billing lock" reading was wrong
+(`Documentation/DCF_CODE_REVIEW.md` R1). On `main` at `09866ca` (2026-09-26) `Wire
+Certification`, `CI` and `CMake on multiple platforms` all passed, and `interop` runs
+daily on a schedule. `make ci-local` + `.github/LOCAL_CI_RESULTS.md` remain the local
+path, a complement to hosted runs.
 
 > Canonical Python lives in `python/MCP/` (the old `GUI/MCP/*` dangling symlinks
 > were removed). `C_SDK/tests/test_wire_certify.c` is fixed and certifies against

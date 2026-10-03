@@ -45,6 +45,13 @@
 > and `cmake-multi-platform.yml`, so a manual hosted run can be triggered as soon as
 > Actions is unblocked.
 
+> **Correction (2026-10-03): the note above is superseded.** The cause was not a billing
+> lock: GitHub Actions was disabled at the repository level, and it was re-enabled on
+> 2026-09-25 (`Documentation/DCF_CODE_REVIEW.md` R1). Hosted runs on `main` at `09866ca`
+> (2026-09-26): `Wire Certification` run `36275105961`, `CI` run `36275105998` and
+> `CMake on multiple platforms` run `36275106001` all passed. The attestations in this
+> file stay as dated local records.
+
 The Wire Certification workflow (`.github/workflows/wire-certify.yml`) was executed
 **locally**, job-for-job, instead of on GitHub Actions. Toolchains not installed on
 the host were supplied hermetically with Nix (`nix shell nixpkgs#…`), exactly the

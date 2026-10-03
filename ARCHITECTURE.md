@@ -102,10 +102,10 @@ pair of the five CLIs over file, stdio, UDP proto/bare and HydraModem WAV).
 The thing that keeps a polyglot codebase honest is a **finite golden-vector
 certificate**: matching all vectors ≡ agreeing with the reference on the entire
 input space. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the commands. CI
-(`.github/workflows/wire-certify.yml`) is written to regenerate and diff on every
-push/PR, but hosted Actions has never executed a job on this repository (an account
-billing lock); until that clears, `make ci-local` and the dated attestations in
-`.github/LOCAL_CI_RESULTS.md` are the certification path of record.
+(`.github/workflows/wire-certify.yml`) regenerates and diffs on every push/PR, and has
+run on hosted Actions since 2026-09-25 (Actions had been disabled at the repository level
+until then; `Documentation/DCF_CODE_REVIEW.md` R1). `make ci-local` and the dated
+attestations in `.github/LOCAL_CI_RESULTS.md` are the local complement.
 
 - `Documentation/golden_vectors.json` — 246-vector wire certificate.
 - `Documentation/audio_vectors.json` (+ `pm_param_vectors.json`) — audio L2 framing.
