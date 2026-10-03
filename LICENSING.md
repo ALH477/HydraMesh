@@ -1,7 +1,9 @@
 # Licensing
 
 This repository is **multi-licensed by scope**. When in doubt, the `SPDX-License-Identifier`
-header at the top of a file is authoritative for that file.
+header at the top of a file is authoritative for that file. Files without one are covered by
+[`REUSE.toml`](REUSE.toml), which records the holder and licence of every file in the tree
+(`reuse lint` checks it in CI); the licence texts are in [`LICENSES/`](LICENSES/).
 
 **Copyright.** DeMoD LLC holds the copyright in this repository, except for the contributions
 credited in [`AUTHORS`](AUTHORS), whose authors keep the copyright in them (today: the Spanish
@@ -165,7 +167,7 @@ be distributed under a licence of the distributor's choosing. Those files are th
 
 The embedded database the Lisp SDK loads ([`lisp/streamdb/`](lisp/streamdb/): `streamdb.c`,
 `streamdb.h`, `libstreamdb_wrapper.c`, `libstreamdb_wrapper.h`) is DeMoD LLC's and is licensed
-**LGPL-2.1-or-later**, as its file headers state.
+**LGPL-2.1-or-later**, as its file headers state (text: [`LICENSES/LGPL-2.1-or-later.txt`](LICENSES/LGPL-2.1-or-later.txt)).
 It is not GPLv3, which older README text said.
 
 ## Training data — an Apache-2.0 option on three files
@@ -211,5 +213,8 @@ Every source file should carry an SPDX header matching its scope:
 - Library / SDK / tooling: `SPDX-License-Identifier: LGPL-3.0-only`
 - `C_SDK/examples/DOOM/`: `SPDX-License-Identifier: GPL-3.0-only`
 - `lisp/streamdb/`: `SPDX-License-Identifier: LGPL-2.1-or-later`
+
+A file that cannot carry a header (generated code, golden vectors, binaries, JSON, anything a
+test hashes) is annotated in [`REUSE.toml`](REUSE.toml) instead; never add header lines to it.
 
 Copyright © DeMoD LLC.

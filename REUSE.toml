@@ -1,0 +1,157 @@
+# REUSE.toml — copyright and licence for every file in this repository
+# (REUSE Specification 3.3; checked by `reuse lint` in .github/workflows/ci.yml).
+#
+# Rules this file follows:
+# - A file's own SPDX header wins (precedence "closest") unless an annotation says
+#   "override". "override" is used only where the in-file SPDX text is an example, a
+#   pattern or quoted data rather than the file's own licence, or where the copyright
+#   lines inside the file belong to the material it describes, not to the file.
+# - When several annotations match a file, the LAST one in this file applies, so the
+#   catch-all comes first and the specific cases follow it.
+# - Never add header lines to generated files, golden vectors, test data or anything a
+#   test hashes: annotate them here instead.
+# - Licence texts are in LICENSES/. LICENSING.md explains the scopes in prose.
+
+version = 1
+
+# ── Catch-all: project-authored material ─────────────────────────────────────
+# DeMoD LLC holds the copyright in the tree (AUTHORS credits the exceptions) and
+# the tree is LGPL-3.0-only (LICENSE). This covers every file without its own
+# header: hydramodem's core sources, matrix-bridge, the docs and specs, build
+# files, lock files, images and logos, the golden-vector JSON and the generated
+# *.gen.h headers. The years are the repository's lifetime (created 2025-08).
+[[annotations]]
+path = "**"
+precedence = "closest"
+SPDX-FileCopyrightText = "2025-2026 DeMoD LLC"
+SPDX-License-Identifier = "LGPL-3.0-only"
+
+# ── Generated code ───────────────────────────────────────────────────────────
+# prost (rust/src/generated/) and protobuf-c (C_SDK/proto/*.pb-c.*) output is
+# generated from this project's own .proto files and embeds no library code: the
+# project licence applies.
+[[annotations]]
+path = ["rust/src/generated/**", "C_SDK/proto/messages.pb-c.c", "C_SDK/proto/messages.pb-c.h"]
+precedence = "closest"
+SPDX-FileCopyrightText = "2025-2026 DeMoD LLC"
+SPDX-License-Identifier = "LGPL-3.0-only"
+
+# Faust output. The compiler inlines Faust-library code; the metadata in these
+# files records maths.lib as "LGPL with exception" (GRAME), whose exception lets
+# the compiled code be distributed under the distributor's own licence. So the
+# project licence applies. dcf_pm_codec.gen.c is the hand-written FFI wrapper
+# around dcf_pm_faust.c. See LICENSING.md, "Faust-generated code".
+[[annotations]]
+path = ["codec/faust/dcf_pm_faust.c", "codec/faust/dcf_rf_modulator.gen.c", "codec/faust/dcf_pm_codec.gen.c"]
+precedence = "closest"
+SPDX-FileCopyrightText = "2025-2026 DeMoD LLC"
+SPDX-License-Identifier = "LGPL-3.0-only"
+
+# ── Outside contribution ─────────────────────────────────────────────────────
+# The Spanish README was contributed by webbrain-one (1850793, PR #29) under
+# LGPL-3.0-only, per the AUTHORS terms of the time; DeMoD LLC edited it later.
+# Credited in AUTHORS.
+[[annotations]]
+path = "README.es-ES.md"
+precedence = "closest"
+SPDX-FileCopyrightText = [
+  "2026 webbrain-one <https://github.com/webbrain-one>",
+  "2026 DeMoD LLC",
+]
+SPDX-License-Identifier = "LGPL-3.0-only"
+
+# ── Other licences inside the tree ───────────────────────────────────────────
+# StreamDB: the .c/.h headers grant LGPL-2.1-or-later. libstreamdb_wrapper.c
+# and StreamDB.nix carry no header; they are the same component (StreamDB.nix
+# itself declares lgpl21Plus).
+[[annotations]]
+path = "lisp/streamdb/**"
+precedence = "closest"
+SPDX-FileCopyrightText = "2025 DeMoD LLC"
+SPDX-License-Identifier = "LGPL-2.1-or-later"
+
+# The DOOM example directory (only a README today) is GPL-3.0-scoped; see
+# LICENSING.md.
+[[annotations]]
+path = "C_SDK/examples/DOOM/**"
+precedence = "closest"
+SPDX-FileCopyrightText = "2025 DeMoD LLC"
+SPDX-License-Identifier = "GPL-3.0-only"
+
+# Training data. TRAINING_DATA_LICENSE is the Apache-2.0 text plus a notice that
+# offers Apache-2.0 for exactly three JSONL files; those three are therefore
+# dual-licensed. The JSONL files quote source files, so the SPDX lines inside them
+# are data, not the files' own headers: "override".
+[[annotations]]
+path = "TRAINING_DATA_LICENSE"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 DeMoD LLC"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["punctim_*.jsonl"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025-2026 DeMoD LLC"
+SPDX-License-Identifier = "LGPL-3.0-only"
+
+[[annotations]]
+path = ["punctim_wire.jsonl", "punctim_adapter.jsonl", "punctim_certify.jsonl"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025-2026 DeMoD LLC"
+SPDX-License-Identifier = "LGPL-3.0-only OR Apache-2.0"
+
+# ── Third-party material ─────────────────────────────────────────────────────
+# GUI/Punctim-Comms-Review.html is a single-file bundle: DeMoD LLC's page and
+# scripts plus, verbatim, React/ReactDOM 18.3.1 (MIT), @babel/standalone 7.29.0
+# (MIT, bundling MIT, ISC, BSD-2-Clause and CC-BY-4.0 packages) and Inter and
+# JetBrains Mono woff2 subsets (OFL-1.1). Every holder is listed; details and the
+# licence texts are in GUI/THIRD_PARTY_NOTICES.md.
+[[annotations]]
+path = "GUI/Punctim-Comms-Review.html"
+precedence = "override"
+SPDX-FileCopyrightText = [
+  "2026 DeMoD LLC",
+  "Facebook, Inc. and its affiliates",
+  "2014-present Sebastian McKenzie and other contributors",
+  "2014-present Facebook, Inc. (regenerator-runtime)",
+  "Justin Ridgewell",
+  "2014-present Nicolò Ribaudo and other contributors",
+  "2014 Andrey Sitnik <andrey@sitnik.ru> and other contributors",
+  "Alexis Deveria (caniuse.com data, packaged as caniuse-lite by Ben Briggs)",
+  "2013 Thorsten Lorenz",
+  "2014-2025 Denis Pushkarev",
+  "2014-2017 TJ Holowaychuk <tj@vision-media.ca>",
+  "2018-2021 Josh Junon",
+  "2018 Kilian Valkhof",
+  "2018 Logan Smyth <loganfsmyth@gmail.com>",
+  "2014-2018 Simon Lydell",
+  "Mathias Bynens <https://mathiasbynens.be/>",
+  "Isaac Z. Schlueter and Contributors",
+  "2020 Vercel, Inc.",
+  "2021-2024 Oleksii Raspopov, Kostiantyn Denysov, Anton Verinov",
+  "2014-2020 Benjamin Tan <https://ofcr.se/>",
+  "Julian Viereck and Contributors",
+  "2016 The Inter Project Authors (https://github.com/rsms/inter)",
+  "2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)",
+]
+SPDX-License-Identifier = "LGPL-3.0-only AND MIT AND ISC AND BSD-2-Clause AND CC-BY-4.0 AND OFL-1.1"
+
+# ── In-file text that is not the file's own notice ───────────────────────────
+# These files quote SPDX lines as examples or patterns (licensing docs, a sed
+# pattern in CI, a header template in a build script), or quote third-party
+# copyright lines (the notices files). Their own holder and licence are DeMoD
+# LLC and LGPL-3.0-only.
+[[annotations]]
+path = [
+  "LICENSING.md",
+  "CONTRIBUTING.md",
+  "CHANGELOG.md",
+  "lua/LICENSING.md",
+  ".github/workflows/wire-certify.yml",
+  "web/scripts/inline-wasm.mjs",
+  "GUI/THIRD_PARTY_NOTICES.md",
+  "hydramodem/NOTICE",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2025-2026 DeMoD LLC"
+SPDX-License-Identifier = "LGPL-3.0-only"
