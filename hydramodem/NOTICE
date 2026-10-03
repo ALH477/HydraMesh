@@ -4,11 +4,28 @@ Copyright 2025-2026 DeMoD LLC
 This product includes software developed at DeMoD LLC.
 
 Licensed under the GNU Lesser General Public License v3.0 only (LGPL-3.0-only;
-see LICENSE), consistent with the rest of the Punctim / DCF tree. DeMoD LLC is
-the sole copyright holder and relicensed HydraModem from Apache-2.0 to
+see LICENSE), consistent with the rest of the Punctim / DCF tree. DeMoD LLC
+holds the copyright in HydraModem and relicensed it from Apache-2.0 to
 LGPL-3.0-only on integration into the Punctim monorepo.
 
-The Faust standard libraries referenced at build time (via the .dsp/.lib
-sources under faust/) are the property of their respective authors and are
-distributed under their own permissive licenses; they are not included in
-this source tree.
+Faust standard libraries. The Faust sources under faust/ import the Faust
+standard libraries (stdfaust.lib), which are not included in this source tree.
+The default build's DSP (src/hydra_dsp_ref.c) is hand-written C, not Faust
+output, and contains no generated library code. The optional
+Faust backend (`make faust`, `nix build .#hydramodem-faust`) has the Faust
+compiler inline library code into the C it generates, and the generated code
+records each library's licence in its metadata. Generated with Faust 2.85.5
+and its libraries, that metadata declares:
+
+  - maths.lib (TX and RX): Copyright GRAME, "LGPL with exception" -- the
+    LGPL-2.1-or-later plus GRAME's exception, which lets the compiled code be
+    distributed under a licence of the distributor's choosing.
+  - filters.lib dcblocker, pole and zero (TX only): Copyright (C) 2003-2019
+    by Julius O. Smith III <jos@ccrma.stanford.edu>, "MIT-style STK-4.3
+    license" (MIT terms plus a non-binding request to send modifications to
+    the author). Its copyright and permission notice must accompany copies of
+    the generated code.
+
+The other libraries named in that metadata (platform.lib, signals.lib) carry
+GRAME's same LGPL-with-exception header. The generated files are build output
+and are not committed here.

@@ -208,7 +208,8 @@
               runHook postInstall
             '';
             meta.description = "StreamDB embedded DB for the DCF Lisp SDK";
-            meta.license = pkgs.lib.licenses.lgpl3Only;
+            # The sources' own headers grant LGPL-2.1-or-later (see LICENSING.md).
+            meta.license = pkgs.lib.licenses.lgpl21Plus;
           };
 
           # SBCL with the SDK's Quicklisp systems pre-loaded via nixpkgs lispPackages

@@ -367,7 +367,10 @@ and the two-frame `duet` (`dcf-tools/poly_tx`/`poly_rx`).
 
 ## License
 
-LGPL-3.0-only (consistent with the Punctim / DCF tree; DeMoD LLC, the sole
-copyright holder, relicensed HydraModem from Apache-2.0 on integration). See
-LICENSE and NOTICE. The Faust standard libraries used at build time are under
-their own (permissive) licenses.
+LGPL-3.0-only (consistent with the Punctim / DCF tree; DeMoD LLC, which holds
+the copyright in it, relicensed HydraModem from Apache-2.0 on integration). See
+LICENSE and NOTICE. The Faust standard libraries used by the optional Faust
+backend are under their own licences, recorded in the generated code's metadata
+and in NOTICE: `maths.lib` is "LGPL with exception" (the exception covers the
+compiled code), and the three `filters.lib` functions the TX uses are
+"MIT-style STK-4.3".

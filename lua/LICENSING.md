@@ -3,16 +3,26 @@
 **SPDX-License-Identifier: `LGPL-3.0-only`**
 **Copyright © 2026 DeMoD LLC.**
 
-This Lua DCF-Audio framework (`dcf_audio.lua`, `dcf_jam.lua`, `selftest.lua`, and the
-sibling `GUI/audiolab.lua`) is **dual-licensed**:
+This Lua framework is **dual-licensed**. It is exactly the files that carry the
+commercial-licence notice in their header — every `.lua` file in `lua/` and the sibling
+`GUI/audiolab.lua`, nineteen in all:
+
+- `lua/dcf_agent.lua`, `lua/dcf_audio.lua`, `lua/dcf_fec.lua`, `lua/dcf_history.lua`,
+  `lua/dcf_jam.lua`, `lua/dcf_profile.lua`, `lua/dcf_snake.lua`, `lua/dcf_superpack.lua`,
+  `lua/dcf_talk.lua`, `lua/dcf_text.lua`, `lua/dcf_transport.lua`, `lua/dcf_voice.lua`
+- `lua/selftest.lua`, `lua/selftest_agent.lua`, `lua/selftest_profile.lua`,
+  `lua/selftest_snake.lua`, `lua/selftest_text.lua`, `lua/selftest_voice.lua`
+- `GUI/audiolab.lua`
+
+The two licences are:
 
 1. **Open source — GNU LGPL-3.0-only.** You may use, study, modify, and redistribute
    it under the terms of the GNU Lesser General Public License, version 3.0 (see the
    repository root `LICENSE`). This framework is intentionally open and
    reverse-engineerable; that is the point.
 
-2. **Commercial license — available from DeMoD LLC on request.** Because DeMoD LLC is
-   the sole copyright holder, it can also license this framework under separate
+2. **Commercial license — available from DeMoD LLC on request.** Because DeMoD LLC
+   holds the copyright in these files, it can also license this framework under separate
    commercial terms for organizations that cannot meet the LGPL's obligations (for
    example, certain static-linking or redistribution scenarios). Contact DeMoD LLC to
    arrange a commercial license.

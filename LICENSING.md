@@ -3,6 +3,11 @@
 This repository is **multi-licensed by scope**. When in doubt, the `SPDX-License-Identifier`
 header at the top of a file is authoritative for that file.
 
+**Copyright.** DeMoD LLC holds the copyright in this repository, except for the contributions
+credited in [`AUTHORS`](AUTHORS), whose authors keep the copyright in them (today: the Spanish
+README, `README.es-ES.md`, contributed by webbrain-one under `LGPL-3.0-only`). Third-party
+material keeps its own holders and licences; it is listed in the sections below.
+
 ## The library — LGPL-3.0-only
 
 All linkable library code — the wire codec (`codec/`, `C_SDK/`), the SDKs (`rust/`, `python/`,
@@ -26,25 +31,28 @@ incomplete without the GPLv3 it sits on top of. Both therefore ship here:
 | [`COPYING`](COPYING) | GNU General Public License v3.0 | the base terms LGPLv3 incorporates by reference |
 
 `COPYING` does **not** mean any part of the library is GPL-licensed — the library is
-`LGPL-3.0-only`, and the only GPL-scoped code in the repo is the DOOM example below. The FSF ships
+`LGPL-3.0-only`, and the only GPL-scoped file in the repo is the DOOM example's README below. The FSF ships
 these as `COPYING` + `COPYING.LESSER`; this repo keeps the LGPL text at `LICENSE` instead, because
 that path is referenced by `CPACK_RESOURCE_FILE_LICENSE`, the per-language manifests and the
 READMEs. Both files are verbatim FSF texts and must not be edited.
 
 ## The DOOM example — GPL-3.0
 
-The DOOM integration example under [`C_SDK/examples/DOOM/`](C_SDK/examples/DOOM/) is licensed
-**GPL-3.0**, because it links GPL-licensed game code. This is the *only* GPL-scoped part of the
-repository; it is an example, not part of the linkable library, and does not affect the license
-of anything else.
+[`C_SDK/examples/DOOM/`](C_SDK/examples/DOOM/) is scoped **GPL-3.0**. It currently holds only
+a README (`README.markdown`) describing a DOOM networking mod; no DOOM engine code and no mod
+source is in this tree. The GPL scope is for the mod that README describes, which would link
+id Software's GPL-licensed DOOM source (linuxdoom-1.10). This is the *only* GPL-scoped part of
+the repository; it is an example, not part of the linkable library, and does not affect the
+license of anything else.
 
 ## The Lua framework — dual-licensed
 
 The Lua DCF-Audio binding ([`lua/`](lua/), see [`lua/LICENSING.md`](lua/LICENSING.md)) is
 **dual-licensed**: `LGPL-3.0-only` for open-source use, or a commercial license available from
-DeMoD LLC on request. Dual-licensing is currently **scoped to Lua only**. DeMoD LLC is the sole
-copyright holder and may extend dual-licensing to other components in the future; until then,
-the rest of the tree is LGPL-3.0-only.
+DeMoD LLC on request. Dual-licensing is currently **scoped to Lua only**. DeMoD LLC holds the
+copyright in the Lua framework, and may extend dual-licensing to other components whose
+copyright it holds (everything except the contributions credited in [`AUTHORS`](AUTHORS)); until
+then, the rest of the tree is LGPL-3.0-only.
 
 ## DCF-JANUS — GPL-3.0 boundary (subprocess only)
 
@@ -93,8 +101,14 @@ The codec itself now lives in this tree, at [`exsecutor/`](exsecutor/):
 `probatio.exsc` (the driver) and `expecta.py` (the comparator). **Those files are
 `LGPL-3.0-only`**, by an explicit additional grant recorded in each file's header.
 
-DeMoD LLC is the **sole copyright holder of both Exsecutor and Punctim**, and a
-sole copyright holder may license their own work under more than one licence. So
+DeMoD LLC is the **sole copyright holder of Exsecutor**, and so of these files,
+which originate there; a sole copyright holder may license their own work under
+more than one licence. (In Punctim, DeMoD LLC holds the copyright in everything
+except the contributions credited in [`AUTHORS`](AUTHORS), none of which touches
+`exsecutor/`. The headers of those files say "sole copyright holder of both
+Exsecutor and Punctim" and are left exactly as granted; the Punctim half of that
+phrase is broader than the facts, but the grant rests only on DeMoD LLC's
+copyright in the files themselves.) So
 this is dual-licensing of specific files, not a conversion: the Exsecutor
 originals (`tests/conformance/entry23/…`) remain `GPL-3.0-or-later`, and **no
 other Exsecutor source is relicensed by implication.**
@@ -130,10 +144,47 @@ mutation and purity checks this repo does not reproduce.
 
 The [`hydramodem/`](hydramodem/) directory is a self-contained acoustic M-FSK modem that carries
 the 17-byte `DeModFrame` *opaquely* (a transport beneath the wire quantum). It originated as a
-standalone Apache-2.0 release; on integration into this monorepo DeMoD LLC — its sole copyright
-holder — **relicensed it to `LGPL-3.0-only`**, consistent with the rest of the tree
+standalone Apache-2.0 release; on integration into this monorepo DeMoD LLC — which holds the
+copyright in it — **relicensed it to `LGPL-3.0-only`**, consistent with the rest of the tree
 (`hydramodem/LICENSE`, `hydramodem/NOTICE`). Repo-specific glue under `hydramodem/dcf-tools/`
 carries the standard `LGPL-3.0-only` SPDX header.
+
+## Faust-generated code
+
+The Faust DSP sources (`codec/faust/*.dsp`, `hydramodem/faust/`, `python/modem/*.dsp`) are
+DeMoD LLC's, `LGPL-3.0-only`. The Faust compiler inlines code from the Faust standard
+libraries (GRAME and contributors, not vendored here) into the C it generates, and records
+each library's licence in the generated metadata. In the committed outputs
+(`codec/faust/dcf_pm_faust.c`, `codec/faust/dcf_rf_modulator.gen.c`) that is `maths.lib`,
+"LGPL with exception": LGPL-2.1-or-later plus GRAME's exception, which lets the compiled code
+be distributed under a licence of the distributor's choosing. Those files are therefore
+`LGPL-3.0-only` like their sources. What the HydraModem Faust backend pulls in is recorded in
+[`hydramodem/NOTICE`](hydramodem/NOTICE).
+
+## StreamDB — LGPL-2.1-or-later
+
+The embedded database the Lisp SDK loads ([`lisp/streamdb/`](lisp/streamdb/): `streamdb.c`,
+`streamdb.h`, `libstreamdb_wrapper.c`, `libstreamdb_wrapper.h`) is DeMoD LLC's and is licensed
+**LGPL-2.1-or-later**, as its file headers state.
+It is not GPLv3, which older README text said.
+
+## Training data — an Apache-2.0 option on three files
+
+[`TRAINING_DATA_LICENSE`](TRAINING_DATA_LICENSE) additionally offers **Apache-2.0** for
+exactly the three JSONL files it names — `punctim_wire.jsonl`, `punctim_adapter.jsonl` and
+`punctim_certify.jsonl` — "specifically for machine learning model training purposes". Those
+three are therefore `LGPL-3.0-only OR Apache-2.0`. The other JSONL files at the root
+(`punctim_unified.jsonl` and the `*_qwen.jsonl` variants) are not named in it and are
+`LGPL-3.0-only` like the rest of the tree.
+
+## The GUI review page — embedded third-party code and fonts
+
+[`GUI/Punctim-Comms-Review.html`](GUI/Punctim-Comms-Review.html) is a single-file bundle. Its
+own markup, styles and scripts are DeMoD LLC's (`LGPL-3.0-only`); it also embeds, verbatim,
+React and ReactDOM 18.3.1 and @babel/standalone 7.29.0 (MIT, the latter bundling packages under
+MIT, ISC, BSD-2-Clause and CC-BY-4.0), and woff2 subsets of the Inter and JetBrains Mono fonts
+(SIL OFL 1.1). Holders, licences and the required notices are in
+[`GUI/THIRD_PARTY_NOTICES.md`](GUI/THIRD_PARTY_NOTICES.md).
 
 ## Export compliance
 
@@ -159,5 +210,6 @@ Every source file should carry an SPDX header matching its scope:
 
 - Library / SDK / tooling: `SPDX-License-Identifier: LGPL-3.0-only`
 - `C_SDK/examples/DOOM/`: `SPDX-License-Identifier: GPL-3.0-only`
+- `lisp/streamdb/`: `SPDX-License-Identifier: LGPL-2.1-or-later`
 
 Copyright © DeMoD LLC.
