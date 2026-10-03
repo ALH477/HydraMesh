@@ -1,9 +1,20 @@
 # Authors and copyright holders
 
-Copyright © DeMoD LLC.
+DeMoD LLC holds the copyright in this repository, except for the contributions credited
+below, whose authors keep the copyright in them.
 
 DeMoD LLC (https://github.com/ALH477) — author and maintainer.
 
-See the git history and CODEOWNERS for per-area maintainership. Contributions are welcome under
-the terms in CONTRIBUTING.md; contributors retain copyright to their contributions, licensed to
-the project under LGPL-3.0-only (GPL-3.0 for C_SDK/examples/DOOM/). See LICENSING.md.
+## Outside contributors
+
+| Contributor | Contribution | Contributed under |
+|---|---|---|
+| webbrain-one (https://github.com/webbrain-one) | `README.es-ES.md`, the Spanish translation of the README (commit 1850793, PR #29, 2026). Later edits to that file are DeMoD LLC's. | LGPL-3.0-only |
+
+Contributions merged before the contributor licence agreement described in CONTRIBUTING.md
+were accepted on the terms this file stated at the time: the contributor keeps the copyright
+and licenses the contribution to the project under LGPL-3.0-only (GPL-3.0 for
+C_SDK/examples/DOOM/). For contributions from now on, see CONTRIBUTING.md.
+
+See the git history and CODEOWNERS for per-area maintainership, and LICENSING.md for what is
+licensed under which terms.

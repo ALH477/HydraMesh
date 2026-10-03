@@ -77,9 +77,11 @@ The files here are **`LGPL-3.0-only`**, like the rest of the linkable tree, by a
 explicit grant recorded in each file's header. They originate in the Exsecutor
 repository, which is `GPL-3.0-or-later`.
 
-DeMoD LLC is the sole copyright holder of both projects, and a sole copyright
-holder may license their own work under more than one licence — so this is
-dual-licensing of specific files, not a conversion. **The Exsecutor originals
+DeMoD LLC is the sole copyright holder of Exsecutor, and so of these files, and
+a sole copyright holder may license their own work under more than one licence —
+so this is dual-licensing of specific files, not a conversion. (In Punctim,
+DeMoD LLC holds the copyright in everything except the contributions credited
+in `../AUTHORS`, none of which touches this directory.) **The Exsecutor originals
 remain `GPL-3.0-or-later`, and no other Exsecutor source is relicensed by
 implication.**
 

@@ -155,8 +155,10 @@ The wire certificate is not regenerated — HydraModem adds a transport, not a c
 
 ## 7. License
 
-LGPL-3.0-only (DeMoD LLC). The DSP is authored in Faust; the Faust standard libraries used at
-build time are under their own permissive licenses.
+LGPL-3.0-only (DeMoD LLC). The DSP is authored in Faust. The Faust standard libraries used at
+build time are not permissive as a whole: `maths.lib` is "LGPL with exception" (LGPL-2.1-or-later
+plus GRAME's exception covering compiled code), and the three `filters.lib` functions the TX
+uses are "MIT-style STK-4.3". Details in `NOTICE`.
 
 ## How to cite
 

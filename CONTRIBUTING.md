@@ -68,6 +68,16 @@ are **quarantined** — don't expect them to build (see `ARCHITECTURE.md`).
   example only. New files should carry an `SPDX-License-Identifier: LGPL-3.0-only`
   header where the surrounding code does.
 
+## Copyright and outside contributions
+
+DeMoD LLC holds the copyright in this project (see [`AUTHORS`](AUTHORS) for the
+contributions credited to others, and [`LICENSING.md`](LICENSING.md) for what is licensed
+under which terms).
+
+Outside contributions will require a **contributor licence agreement (CLA) with DeMoD LLC**,
+which is being prepared. Until it is published, pull requests from outside contributors are
+not merged. Issues, bug reports and discussion are welcome in the meantime.
+
 ## Pull requests
 
 1. Branch off `main` (`git checkout -b feature/xyz`); never commit straight to `main`.

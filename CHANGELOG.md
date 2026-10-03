@@ -21,6 +21,12 @@ reserved for when the full advertised language set is green in CI.
   ABI), replacing the phantom `<dcf_sdk/...>` include path.
 
 ### Changed
+- **Licensing made checkable.** `REUSE.toml` and `LICENSES/` declare the holder and licence of
+  every file, and `reuse lint` runs in CI (`ci.yml`). `AUTHORS` credits the one outside
+  contribution (`README.es-ES.md`, webbrain-one); StreamDB is documented as LGPL-2.1-or-later,
+  as its headers say, not GPLv3; `GUI/THIRD_PARTY_NOTICES.md` lists the code and fonts the
+  review page embeds; the unsupported "USAF Validated" claim is removed; `CONTRIBUTING.md`
+  states the contributor-licence-agreement policy; `CODE_OF_CONDUCT.md` replaces a placeholder.
 - **UDP receive truncation closed** across all C paths (MTU buffers + `MSG_TRUNC` fail-closed);
   `dcf_proto_serialize` takes a capacity; connpool/logging races fixed; `dcf_once` added.
 - **Certification completed.** Haskell/Kotlin/Swift/Lisp are Certified (ungated `certify-*`

@@ -710,37 +710,37 @@ Tests unitaires par langage (là où ils existent) :
 > filaire certifié. Les sections ci-dessous décrivent ses bénéfices et son design
 > *visés*, pas une garantie de production.
 
-Alors que nous continuons à construire les SDK du monorepo Punctim (https://github.com/ALH477/DeMoD-Communication-Framework), l'intégration de StreamDB dans le SDK Punctim-Lisp est une étape expérimentale vers un stockage embarqué persistant. StreamDB, une base clé-valeur légère embarquée implémentée en Rust, est pour l'instant exclusive au SDK Punctim-Lisp, comme preuve de concept de la façon dont Punctim peut incorporer du stockage. Cette exclusivité permet d'itérer dans l'environnement expressif de Lisp avant toute extension aux autres SDK (p. ex. C, Python). Ci-dessous, les objectifs de design et bénéfices de StreamDB, avec des notes sur sa synergie avec le DSL Punctim-Lisp, tout en soulignant le rôle de DeMoD LLC dans le développement de la seule version GPLv3 complète pour démocratiser une techno de pointe.
+Alors que nous continuons à construire les SDK du monorepo Punctim (https://github.com/ALH477/DeMoD-Communication-Framework), l'intégration de StreamDB dans le SDK Punctim-Lisp est une étape expérimentale vers un stockage embarqué persistant. StreamDB, une base clé-valeur légère embarquée implémentée en Rust, est pour l'instant exclusive au SDK Punctim-Lisp, comme preuve de concept de la façon dont Punctim peut incorporer du stockage. Cette exclusivité permet d'itérer dans l'environnement expressif de Lisp avant toute extension aux autres SDK (p. ex. C, Python). Ci-dessous, les objectifs de design et bénéfices de StreamDB, avec des notes sur sa synergie avec le DSL Punctim-Lisp, tout en soulignant le rôle de DeMoD LLC dans le développement de la seule version LGPL-2.1-or-later complète pour démocratiser une techno de pointe.
 
 #### 1. **Persistance supérieure pour systèmes distribués tolérants aux pannes**
    - **Itération** : au-delà de la simple recovery d'état, le stockage paginé de StreamDB (pages 4 Ko avec chaînage jusqu'à 256 Mo de documents) et l'indexation reverse trie permettent des requêtes préfixe efficaces sur des données hiérarchiques (p. ex. `/state/peers/node1/rtt`). Dans Punctim-Lisp, les nœuds peuvent persister atomiquement des structures complexes (groupes de pairs, logs de messages), réduisant la fragmentation et supportant jusqu'à 8 To de bases — idéal pour scaler les réseaux Punctim.
    - **Spécifique Punctim-Lisp** : les macros du DSL (p. ex. `def-punctim-plugin`) encapsulent les opérations StreamDB de façon native (p. ex. `punctim-db-insert "/metrics/sends" count`). Cette compacité (~50 lignes) renforce la tolérance aux pannes en mode AUTO, où les bascules de rôles s'appuient sur des reloads d'état rapides depuis StreamDB.
-   - **Angle démocratisation** : la version GPLv3 complète de DeMoD garantit l'accès ouvert à des fonctions avancées comme la réparation automatique de chaînes, sans dépendances propriétaires.
+   - **Angle démocratisation** : la version LGPL-2.1-or-later complète de DeMoD garantit l'accès ouvert à des fonctions avancées comme la réparation automatique de chaînes, sans dépendances propriétaires.
 
 #### 2. **Accès données ultra-basse latence pour charges temps réel**
    - **Itération** : QuickAndDirtyMode de StreamDB (saut CRC pour lectures ~10× plus rapides, jusqu'à 100 Mo/s) et le cache LRU complètent la messagerie sub-ms de Punctim-Lisp. Nouveau : en edge, le fallback no-mmap assure une perf constante sur matériel contraint, avec lookups <1 ms pour les métriques RTT pendant le regroupement de pairs.
    - **Spécifique Punctim-Lisp** : intégré directement dans `punctim-node` (slot `streamdb`), il cache les résultats de `punctim-get-metrics` ou `punctim-group-peers`, réduisant les I/O dans les boucles haute fréquence. Le typage dynamique de Lisp s'accorde au support de flux binaires de StreamDB (p. ex. messages CLOS sérialisés).
-   - **Angle démocratisation** : en open-sourçant l'implémentation GPLv3 complète, DeMoD rend accessibles des bases embarquées haute vitesse, nivelant le terrain face à des solutions propriétaires comme Redis.
+   - **Angle démocratisation** : en open-sourçant l'implémentation LGPL-2.1-or-later complète, DeMoD rend accessibles des bases embarquées haute vitesse, nivelant le terrain face à des solutions propriétaires comme Redis.
 
 #### 3. **Extensibilité modulaire et synergie plugins**
    - **Itération** : le trait `DatabaseBackend` de StreamDB permet des backends custom (p. ex. in-memory pour les tests), étendant le système de plugins Punctim-Lisp. Nouveau : le middleware peut s'accrocher aux ops StreamDB (p. ex. sérialiser en JSON/CBOR avant insert), point d'extension unifié pour transports et stockage.
    - **Spécifique Punctim-Lisp** : backend cœur (pas un plugin, pour un couplage serré) — p. ex. `save-state` utilise des chemins StreamDB comme `/state/config`, interrogeables via `punctim-db-search "/state/"`. S'intègre aux transports (p. ex. Serial pour l'embarqué), stockant des données IoT localement avant sync.
-   - **Angle démocratisation** : la version GPLv3 DeMoD inclut des backends plugables, encourageant les extensions communautaires (p. ex. intégration S3).
+   - **Angle démocratisation** : la version LGPL-2.1-or-later DeMoD inclut des backends plugables, encourageant les extensions communautaires (p. ex. intégration S3).
 
 #### 4. **Optimisé pour déploiements contraints en ressources**
    - **Itération** : paramètres ajustables (taille de page, limites de cache) et dépendances minimales — parfait pour Punctim-Lisp sur Raspberry Pi. Nouveau : gestion des pages libres (first-fit LIFO avec consolidation) minimise la fragmentation pour des nœuds edge longue durée.
    - **Spécifique Punctim-Lisp** : l'efficacité ~700 lignes du DSL s'accorde à l'empreinte légère de StreamDB pour des déploiements IoT ARM. P. ex. persister des logs capteurs hors-ligne, sync via LoRaWAN à la reconnexion.
-   - **Angle démocratisation** : l'impl GPLv3 complète démocratise les bases embarquées (orphan collection, etc.) sans licences coûteuses, idéal pour l'open hardware.
+   - **Angle démocratisation** : l'impl LGPL-2.1-or-later complète démocratise les bases embarquées (orphan collection, etc.) sans licences coûteuses, idéal pour l'open hardware.
 
 #### 5. **Interopérabilité transparente inter-langages**
    - **Itération** : stockage fichier et FFI (via `libstreamdb.so`) permettent un accès partagé entre SDK Punctim. Nouveau : les nœuds Punctim-Lisp stockent des métriques JSON dans StreamDB, lisibles par les SDK C pour des réseaux hybrides.
    - **Spécifique Punctim-Lisp** : bindings CFFI dans `punctim.lisp` exposent StreamDB comme fonctions DSL (p. ex. `punctim-db-insert`), les macros Lisp renforçant l'interop sans complexité.
-   - **Angle démocratisation** : seule version GPLv3 complète (issue du repo C# incomplet d'Iain Ballard), l'impl Rust DeMoD promeut l'accès ouvert aux bases FFI avancées.
+   - **Angle démocratisation** : seule version LGPL-2.1-or-later complète (issue du repo C# incomplet d'Iain Ballard), l'impl Rust DeMoD promeut l'accès ouvert aux bases FFI avancées.
 
 #### 6. **Gestion d'erreurs robuste et recovery automatisée**
    - **Itération** : contrôles CRC32, monotonie de version et recovery (p. ex. rebuild d'index) renforcent `punctim-error`. Nouveau : s'intègre au failover (`punctim-heal`), récupérant l'état depuis StreamDB après crash.
    - **Spécifique Punctim-Lisp** : erreurs StreamDB wrappées dans `punctim-error`, loggées via `log4cl`, testées en FiveAM (p. ex. `streamdb-integration-test`).
-   - **Angle démocratisation** : GPLv3 assure des améliorations communautaires de la recovery.
+   - **Angle démocratisation** : LGPL-2.1-or-later assure des améliorations communautaires de la recovery.
 
 #### 7. **Monitoring et analytics avancés**
    - **Itération** : StreamDB stocke des métriques historiques (p. ex. `/metrics/sends`) pour l'analyse de tendances. Nouveau : recherches préfixe (`punctim-db-search "/metrics/"`) supportent l'optimisation IA en mode Master.
@@ -750,13 +750,13 @@ Alors que nous continuons à construire les SDK du monorepo Punctim (https://git
 #### 8. **Tests et validation rationalisés**
    - **Itération** : les tests StreamDB s'intègrent à FiveAM, vérifiant la persistance en scénarios réseau. Nouveau : assure la survie des données aux redémarrages, critique pour le mode AUTO.
    - **Spécifique Punctim-Lisp** : `streamdb-integration-test` valide CRUD et recovery.
-   - **Angle démocratisation** : GPLv3 favorise des outils de test partagés pour des déploiements Punctim fiables.
+   - **Angle démocratisation** : LGPL-2.1-or-later favorise des outils de test partagés pour des déploiements Punctim fiables.
 
 ### Exclusivité de StreamDB à Punctim-Lisp (pour l'instant)
 StreamDB n'est pour l'instant intégré qu'au SDK Punctim-Lisp pour prototyper ses bénéfices dans l'environnement dynamique de Lisp (p. ex. macros pour wrappers StreamDB). Cela permet d'itérer vite sur la persistance (p. ex. logging de messages dans `punctim-send`) avant portage aux autres SDK. Plans futurs : bindings CFFI pour le SDK C et wrappers Python, étendant StreamDB au monorepo.
 
-### StreamDB GPLv3 complet de DeMoD : démocratiser la techno de pointe
-DeMoD LLC a développé la seule version GPLv3 complète de StreamDB à partir du repo C# incomplet d'Iain Ballard, en le réimplémentant en Rust pour la sûreté et la performance. Cela rend librement disponibles des fonctions de pointe (indexation trie, versioning type MVCC), promeut l'innovation ouverte en stockage embarqué et s'aligne sur l'éthique FOSS d'Punctim. En open-sourçant sous GPLv3, DeMoD démocratise une techno souvent verrouillée dans des systèmes propriétaires.
+### StreamDB LGPL-2.1-or-later complet de DeMoD : démocratiser la techno de pointe
+DeMoD LLC a développé la seule version LGPL-2.1-or-later complète de StreamDB à partir du repo C# incomplet d'Iain Ballard, en le réimplémentant en Rust pour la sûreté et la performance. Cela rend librement disponibles des fonctions de pointe (indexation trie, versioning type MVCC), promeut l'innovation ouverte en stockage embarqué et s'aligne sur l'éthique FOSS d'Punctim. En open-sourçant sous LGPL-2.1-or-later, DeMoD démocratise une techno souvent verrouillée dans des systèmes propriétaires.
 
 ## Système multi-agents LangGraph (`langgraph_agents/`)
 
