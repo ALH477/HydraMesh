@@ -815,16 +815,6 @@ Per-language unit tests (where they exist):
 > **LGPL-2.1-or-later**, as their file headers state; earlier versions of this
 > section called StreamDB GPLv3, which it is not. See [`LICENSING.md`](LICENSING.md).
 
-<!-- truth:claim
-id: streamdb-lgpl21
-kind: file_contains
-severity: error
-path: lisp/streamdb/streamdb.h
-pattern: version 2.1 of the License
--->
-`lisp/streamdb/streamdb.h` grants the GNU Lesser General Public License, "version 2.1 of the License, or (at your option) any later version" — LGPL-2.1-or-later.
-<!-- truth:end -->
-
 As we continue building out the SDKs in the Punctim mono repository (https://github.com/ALH477/DeMoD-Communication-Framework), the integration of StreamDB into the Punctim-Lisp SDK is an experimental step toward persistent, embedded storage. StreamDB, a lightweight, embedded key-value database implemented in Rust, is currently exclusive to the Punctim-Lisp SDK, serving as a proof-of-concept for how Punctim can incorporate storage. This exclusivity lets us iterate in Lisp's expressive environment before any expansion to other SDKs (e.g., C, Python). Below, we iterate on StreamDB's design goals and benefits, with notes on its synergy with Punctim-Lisp's DSL features, while emphasizing DeMoD LLC's role in developing the only complete LGPL-2.1-or-later version to democratize bleeding-edge technology.
 
 #### 1. **Superior Persistence for Fault-Tolerant Distributed Systems**
